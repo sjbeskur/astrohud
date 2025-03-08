@@ -1,0 +1,8 @@
+
+[workspace]
+members = [
+    "astrohud-rest", "astrohud-client",
+    "astrohud-client", "astroview_wasm",
+    # Add more crates here
+]
+resolver = "3"

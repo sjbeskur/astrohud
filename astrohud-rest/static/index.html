@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Display</title>
+    <style>
+        img {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Latest Uploaded Image</h1>
+    <img id="latestImage" alt="Latest Image">
+    <script>
+        // Function to update the image
+        function updateImage() {
+            const img = document.getElementById('latestImage');
+            // Add a timestamp to prevent caching
+            img.src = '/image?' + new Date().getTime();
+        }
+
+        // Initial load
+        updateImage();
+
+        // Optional: Poll for new images every 5 seconds
+        setInterval(updateImage, 5000);
+    </script>
+</body>
+</html>

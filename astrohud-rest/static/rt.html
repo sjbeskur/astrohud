@@ -1,0 +1,36 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Image Display</title>
+    <style>
+        img {
+            max-width: 100%;
+        }
+    </style>
+</head>
+<body>
+    <h1>Latest Uploaded Image</h1>
+    <img id="latestImage" alt="Latest Image">
+    <script>
+        const ws = new WebSocket('ws://localhost:8080/ws/');
+        
+        ws.onopen = () => {
+            console.log('WebSocket connected');
+        };
+
+        ws.onmessage = (event) => {
+            if (event.data.startsWith('Image received')) {
+                updateImage();
+            }
+        };
+
+        function updateImage() {
+            const img = document.getElementById('latestImage');
+            img.src = '/image?' + new Date().getTime();
+        }
+
+        // Initial load
+        updateImage();
+    </script>
+</body>
+</html>

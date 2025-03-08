@@ -1,0 +1,30 @@
+[package]
+name = "astroview_wasm"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+wasm-bindgen = "0.2.45"
+js-sys = "0.3.26"
+console_error_panic_hook = "0.1"
+
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+    'console',
+    'WebSocket', 
+    'HtmlImageElement', 
+    'HtmlElement',
+    'CanvasRenderingContext2d',
+    'Document',
+    'Element',
+    'HtmlCanvasElement',
+    'Window',
+    "MessageEvent",
+    'CanvasRenderingContext2d',
+    'ImageData',
+    'Blob',
+    'Url'
+]
+[lib]
+crate-type = ["cdylib"]

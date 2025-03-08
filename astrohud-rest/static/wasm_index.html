@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>WASM Image Viewer</title>
+</head>
+<body>
+    <script type="module">
+        import init, { start_viewer } from './astroview_wasm.js';
+        async function run() {
+            await init();
+            start_viewer();
+        }
+        run();
+    </script>
+</body>
+</html>
