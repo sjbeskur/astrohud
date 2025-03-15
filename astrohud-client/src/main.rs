@@ -9,26 +9,27 @@ use bytes::Bytes;  // Add this import
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get image path from command line arguments
     let args: Vec<String> = std::env::args().collect();
-    if args.len() != 2 {
+    if args.len() != 3 {
         eprintln!("Usage: {} <image_path>", args[0]);
         std::process::exit(1);
     }
     
-    let image_path = &args[1];
+    let endpoint = &args[1];   // ip_address:port
+    let image_path = &args[2];
     if !Path::new(image_path).exists() {
         eprintln!("Image file does not exist: {}", image_path);
         std::process::exit(1);
     }
 
     // Connect to WebSocket server
-    let url = "ws://127.0.0.1:8080/ws/";
-    let (mut ws_stream, _) = match connect_async(url).await {
+    let url = format!("ws://{}/ws/", endpoint);
+    let (mut ws_stream, _) = match connect_async(&url).await {
         Ok((stream, response)) => {
             println!("Connected to WebSocket server: {:?}", response);
             (stream, response)
         }
         Err(e) => {
-            eprintln!("Failed to connect: {}", e);
+            eprintln!("Failed to connect to websocket endpoint at: {} \n Error: {}", &url, e);
             std::process::exit(1);
         }
     };

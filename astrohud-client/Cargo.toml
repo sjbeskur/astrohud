@@ -5,7 +5,7 @@ edition = "2024"
 
 [dependencies]
 tokio = { version = "1", features = ["full"] }
-tungstenite = "0.21"  # WebSocket client library
-tokio-tungstenite = "0.26"
+tungstenite = "0.26.2"  # WebSocket client library
+tokio-tungstenite = "0.26.2"
 futures-util = "0.3"
 bytes = "1.0"
