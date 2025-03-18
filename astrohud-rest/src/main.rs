@@ -8,8 +8,8 @@ use astrohud_rest::*;
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState {
-        todos: Mutex::new(vec![Todo { id: 1, title: "Learn Rust".to_string(), completed: false }]),
-        images: Mutex::new(Vec::new()),
+        // todos: Mutex::new(vec![Todo { id: 1, title: "Learn Rust".to_string(), completed: false }]),
+        // images: Mutex::new(Vec::new()),
         clients: Mutex::new(HashSet::new()),
     });
     
@@ -22,14 +22,14 @@ async fn main() -> std::io::Result<()> {
             .app_data(app_state.clone())
             // Existing todo routes (omitted for brevity)
             .route("/ws/", web::get().to(ws_handler))  // WebSocket endpoint
-            .route("/images/count", web::get().to(get_image_count))  // Check image count
+            // .route("/images/count", web::get().to(get_image_count))  // Check image count
+            // .route("/image", web::get().to(get_latest_image))  // New endpoint for image
 
-            .route("/todos", web::get().to(get_todos))
-            .route("/todos", web::post().to(create_todo))
-            .route("/todos/{id}", web::get().to(get_todo))
-            .route("/todos/{id}", web::put().to(update_todo))
-            .route("/todos/{id}", web::delete().to(delete_todo))            
-            .route("/image", web::get().to(get_latest_image))  // New endpoint for image
+            // .route("/todos", web::get().to(get_todos))
+            // .route("/todos", web::post().to(create_todo))
+            // .route("/todos/{id}", web::get().to(get_todo))
+            // .route("/todos/{id}", web::put().to(update_todo))
+            // .route("/todos/{id}", web::delete().to(delete_todo))            
             //.route("/", web::get().to(index))  // Simple HTML page  
             // Serve static files from the "static" directory
             //.service(Files::new("/", "./static").index_file("canvas.html"))          

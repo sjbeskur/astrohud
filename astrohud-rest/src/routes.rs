@@ -1,20 +1,21 @@
 use actix_web::{web, HttpResponse, Responder};
 use crate::app_state::{AppState, Todo};
 
-pub async fn get_image_count(data: web::Data<AppState>) -> impl Responder {
-    let images = data.images.lock().unwrap();
-    HttpResponse::Ok().body(format!("Number of images: {}", images.len()))
-}
+// pub async fn get_image_count(data: web::Data<AppState>) -> impl Responder {
+//     let images = data.images.lock().unwrap();
+//     HttpResponse::Ok().body(format!("Number of images: {}", images.len()))
+// }
 
-pub async fn get_latest_image(data: web::Data<AppState>) -> impl Responder {
-    let images = data.images.lock().unwrap();
-    match images.last() {
-        Some(image) => HttpResponse::Ok().content_type("image/jpeg").body(image.clone()),
-        None => HttpResponse::NotFound().body("No images available"),
-    }
-}
+// pub async fn get_latest_image(data: web::Data<AppState>) -> impl Responder {
+//     let images = data.images.lock().unwrap();
+//     match images.last() {
+//         Some(image) => HttpResponse::Ok().content_type("image/jpeg").body(image.clone()),
+//         None => HttpResponse::NotFound().body("No images available"),
+//     }
+// }
 
-
+/*
+ 
 // Todo Routes
 // Handler to get all todos
 pub async fn get_todos(data: web::Data<AppState>) -> impl Responder {
@@ -81,3 +82,5 @@ pub async fn delete_todo(
         HttpResponse::NotFound().body("Todo not found")
     }
 }
+
+*/

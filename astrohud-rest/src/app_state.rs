@@ -14,16 +14,16 @@ pub struct Todo {
 }
 
 pub struct AppState {
-    pub todos: Mutex<Vec<Todo>>,
-    pub images: Mutex<Vec<Bytes>>,  // Store received images
+    // pub todos: Mutex<Vec<Todo>>,
+    // pub images: Mutex<Vec<Bytes>>,  // Store received images
     pub clients: Mutex<HashSet<Addr<ImageWebSocket>>>, //    
 }
 
 impl AppState {
     pub fn new() -> Self {
         AppState {            
-            todos: Mutex::new(vec![Todo { id: 1, title: "Finish AstroHud".to_string(), completed: false }]),
-            images: Mutex::new(Vec::new()),
+            //todos: Mutex::new(vec![Todo { id: 1, title: "Finish AstroHud".to_string(), completed: false }]),
+            //images: Mutex::new(Vec::new()),
             clients: Mutex::new(HashSet::new()),
         }
     }
