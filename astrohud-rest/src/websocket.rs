@@ -36,8 +36,8 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ImageWebSocket {
             Ok(ws::Message::Text(text)) => ctx.text(format!("Echo: {}", text)),
             Ok(ws::Message::Binary(bin)) => {
                 println!("Received binary data of size: {} bytes", bin.len());
-                let mut images = self.app_state.images.lock().unwrap();
-                images.push(bin.clone());
+                // let mut images = self.app_state.images.lock().unwrap();
+                // images.push(bin.clone());
                 ctx.text(format!("Image received ({} bytes)", bin.len()));
                 // Broadcast the image to all clients
                 let clients = self.app_state.clients.lock().unwrap();
