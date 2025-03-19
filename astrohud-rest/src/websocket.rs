@@ -2,14 +2,11 @@ use actix::prelude::*;
 use actix_web::{web, HttpResponse};
 use actix_web_actors::ws;
 use bytes::Bytes;
-
 use crate::app_state::AppState;
-
 
 pub struct ImageWebSocket {
     app_state: web::Data<AppState>,
 }
-
 
 impl Actor for ImageWebSocket {
     type Context = ws::WebsocketContext<Self>;
@@ -54,8 +51,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ImageWebSocket {
         }
     }
 }
-
-
 
 // Message to broadcast image
 #[derive(Message)]
