@@ -14,7 +14,10 @@ async fn main() -> std::io::Result<()> {
     let static_path = std::env::current_dir().unwrap().join("static");
     println!("Looking for static files at: {}", static_path.display());
 
-    println!("Server starting on http://127.0.0.1:8080");
+    let args = Cli::parse_args();
+
+
+    println!("Server starting on http://{}:{}", args.ip_address, args.port);
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
@@ -26,7 +29,7 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/", env!("CARGO_MANIFEST_DIR").to_string() + "/static").index_file("wasm_index.html"))
 
     })
-    .bind(("127.0.0.1", 8080))?
+    .bind((args.ip_address, args.port))?
     .run()
     .await
 }

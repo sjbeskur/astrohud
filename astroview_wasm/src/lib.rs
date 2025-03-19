@@ -38,7 +38,7 @@ pub fn start_viewer() {
     heading.set_inner_html("Latest Uploaded Image");
     body.insert_before(&heading, Some(&img)).expect("failed to insert heading");
 
-    let ws = WebSocket::new("ws://localhost:8080/ws/").expect("failed to create WebSocket");
+    let ws = WebSocket::new("ws://192.168.88.118:8080/ws/").expect("failed to create WebSocket");
 
     Reflect::set(
         &ws,
