@@ -1,5 +1,5 @@
-use actix_web::{web, HttpResponse, Responder};
-use crate::app_state::{AppState, Todo};
+//use actix_web::{web, HttpResponse, Responder};
+//use crate::app_state::{AppState, Todo};
 
 // pub async fn get_image_count(data: web::Data<AppState>) -> impl Responder {
 //     let images = data.images.lock().unwrap();

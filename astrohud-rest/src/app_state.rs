@@ -1,5 +1,4 @@
 use actix::prelude::*;
-use bytes::Bytes;
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
 use std::collections::HashSet;

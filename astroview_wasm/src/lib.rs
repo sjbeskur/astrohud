@@ -1,6 +1,6 @@
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, Event, HtmlImageElement, WebSocket};
-use js_sys::{ArrayBuffer, Object, Reflect};
+use web_sys::{ Event, HtmlImageElement, WebSocket};
+use js_sys::Reflect;
 
 #[wasm_bindgen]
 extern "C" {
