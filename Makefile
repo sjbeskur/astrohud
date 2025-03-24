@@ -5,4 +5,4 @@ build:
 serve:
 #	@python3 -m http.server 8000
 #	@python3 -m http.server 8000 --bind
-	./target/release/astrohud-rest
+	./target/release/astrohud-rest 0.0.0.0:8080
