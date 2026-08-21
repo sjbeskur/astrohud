@@ -27,7 +27,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         Err(e) => {
             eprintln!(
                 "Failed to connect to websocket endpoint at: {} \n Error: {}",
-                &url, e
+                url, e
             );
             std::process::exit(1);
         }

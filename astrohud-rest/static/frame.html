@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AstroHUD Frame</title>
+  <style>
+    html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; background: #05070c; color: white; font-family: system-ui, sans-serif; }
+    #photo { width: 100%; height: 100%; object-fit: contain; opacity: 0; transition: opacity 900ms ease; }
+    #photo.ready { opacity: 1; }
+    #empty { position: fixed; inset: 0; display: grid; place-content: center; text-align: center; padding: 2rem; }
+    #empty h1 { margin-bottom: .25rem; }
+    #empty p { color: #aeb5c4; }
+    #place { position: fixed; left: 1.25rem; bottom: 1rem; padding: .45rem .7rem; border-radius: 999px; background: #080b12aa; font-size: .8rem; }
+  </style>
+</head>
+<body>
+  <img id="photo" alt="Shared photograph">
+  <div id="empty"><h1>AstroHUD</h1><p>Waiting for a photo…</p></div>
+  <div id="place"></div>
+  <script>
+    const frameId = new URLSearchParams(location.search).get('frame') || 'demo-frame';
+    const photo = document.querySelector('#photo');
+    const empty = document.querySelector('#empty');
+    const place = document.querySelector('#place');
+    let photos = [], current = -1, signature = '';
+
+    async function refresh() {
+      const response = await fetch(`/api/frames/${encodeURIComponent(frameId)}/manifest`, {cache: 'no-store'});
+      if (!response.ok) throw new Error(await response.text());
+      const manifest = await response.json();
+      place.textContent = manifest.place_name;
+      const nextSignature = manifest.photos.map(item => item.id).join(',');
+      if (nextSignature !== signature) {
+        signature = nextSignature;
+        photos = manifest.photos;
+        current = -1;
+        if (photos.length) showNext();
+      }
+      empty.hidden = photos.length > 0;
+    }
+
+    function showNext() {
+      if (!photos.length) return;
+      current = (current + 1) % photos.length;
+      photo.classList.remove('ready');
+      const next = new Image();
+      next.onload = () => {
+        photo.src = next.src;
+        photo.classList.add('ready');
+        empty.hidden = true;
+      };
+      next.src = photos[current].url;
+    }
+
+    refresh().catch(console.error);
+    setInterval(() => refresh().catch(console.error), 3000);
+    setInterval(showNext, 12000);
+  </script>
+</body>
+</html>

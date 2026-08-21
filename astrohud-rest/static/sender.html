@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Send to AstroHUD</title>
+  <style>
+    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
+    body { margin: 0; background: #0c1324; color: #f4f6fb; }
+    main { width: min(32rem, calc(100% - 2rem)); margin: 3rem auto; }
+    h1 { margin-bottom: .25rem; }
+    p { color: #aebbd2; }
+    section { padding: 1.25rem; margin: 1rem 0; background: #162039; border-radius: 1rem; }
+    label { display: block; margin: .8rem 0 .35rem; font-weight: 650; }
+    input, select, button { box-sizing: border-box; width: 100%; min-height: 3rem; border-radius: .65rem; border: 1px solid #405073; padding: .7rem; font: inherit; }
+    input, select { background: #0f1830; color: inherit; }
+    button { margin-top: 1rem; border: 0; background: #79a7ff; color: #071020; font-weight: 750; cursor: pointer; }
+    button:disabled { opacity: .55; cursor: wait; }
+    #status { min-height: 1.5rem; color: #a9f0c0; }
+    .inline { display: grid; grid-template-columns: 1fr auto; gap: .6rem; align-items: end; }
+    .inline button { width: auto; }
+  </style>
+</head>
+<body>
+  <main>
+    <h1>Send a moment</h1>
+    <p>Choose where this photo belongs.</p>
+    <section>
+      <form id="channel-form">
+        <label for="channel-name">New channel</label>
+        <div class="inline">
+          <input id="channel-name" maxlength="80" placeholder="Family" required>
+          <button type="submit">Create</button>
+        </div>
+      </form>
+    </section>
+    <section>
+      <form id="photo-form">
+        <label for="channel">Channel</label>
+        <select id="channel" name="channel_id" required></select>
+        <label for="photo">Photo</label>
+        <input id="photo" name="photo" type="file" accept="image/*" required>
+        <button type="submit">Send to frame</button>
+      </form>
+      <p id="status" role="status"></p>
+    </section>
+  </main>
+  <script>
+    const channelSelect = document.querySelector('#channel');
+    const status = document.querySelector('#status');
+
+    async function loadChannels(selectedId) {
+      const response = await fetch('/api/channels');
+      const channels = await response.json();
+      channelSelect.replaceChildren(...channels.map(channel => {
+        const option = document.createElement('option');
+        option.value = channel.id;
+        option.textContent = channel.name;
+        option.selected = channel.id === selectedId;
+        return option;
+      }));
+      if (!channels.length) {
+        const option = document.createElement('option');
+        option.textContent = 'Create a channel first';
+        option.disabled = true;
+        option.selected = true;
+        channelSelect.append(option);
+      }
+    }
+
+    document.querySelector('#channel-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const input = document.querySelector('#channel-name');
+      const response = await fetch('/api/channels', {
+        method: 'POST', headers: {'content-type': 'application/json'},
+        body: JSON.stringify({name: input.value})
+      });
+      if (!response.ok) return status.textContent = await response.text();
+      const channel = await response.json();
+      input.value = '';
+      status.textContent = `Created ${channel.name}.`;
+      await loadChannels(channel.id);
+    });
+
+    document.querySelector('#photo-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.target.querySelector('button');
+      button.disabled = true;
+      status.textContent = 'Sending…';
+      const response = await fetch('/api/photos', {method: 'POST', body: new FormData(event.target)});
+      button.disabled = false;
+      if (!response.ok) return status.textContent = await response.text();
+      event.target.querySelector('#photo').value = '';
+      status.textContent = 'Sent. It should appear on the frame shortly.';
+    });
+
+    loadChannels().catch(error => status.textContent = error.message);
+  </script>
+</body>
+</html>

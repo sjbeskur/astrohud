@@ -18,7 +18,7 @@ impl Cli {
 
         Cli {
             ip_address: ip,
-            port: port,
+            port,
         }
     }
 }
