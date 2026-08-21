@@ -3,7 +3,7 @@ pub struct Cli {
     pub port: u16,
 }
 
-impl Cli{
+impl Cli {
     pub fn parse_args() -> Cli {
         let args: Vec<String> = std::env::args().collect();
 
@@ -20,6 +20,5 @@ impl Cli{
             ip_address: ip,
             port: port,
         }
-
     }
 }

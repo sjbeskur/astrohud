@@ -1,8 +1,8 @@
 
 [workspace]
 members = [
-    "astrohud-rest", "astrohud-client",
-    "astrohud-client", "astroview_wasm",
-    # Add more crates here
+    "astrohud-rest",
+    "astrohud-client",
+    "astroview_wasm",
 ]
 resolver = "3"

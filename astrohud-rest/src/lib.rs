@@ -1,8 +1,7 @@
-mod websocket;
 mod app_state;
 mod cli;
+mod websocket;
 
-pub use cli::Cli;
 pub use app_state::*;
+pub use cli::Cli;
 pub use websocket::*;
-

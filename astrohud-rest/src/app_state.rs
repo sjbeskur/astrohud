@@ -1,17 +1,16 @@
-use actix::prelude::*;
-use std::sync::Mutex;
-use std::collections::HashSet;
 use crate::websocket::ImageWebSocket;
-
+use actix::prelude::*;
+use std::collections::HashSet;
+use std::sync::Mutex;
 
 pub struct AppState {
-    pub clients: Mutex<HashSet<Addr<ImageWebSocket>>>, //    
+    pub clients: Mutex<HashSet<Addr<ImageWebSocket>>>, //
 }
 
 impl AppState {
     pub fn new() -> Self {
-        AppState {            
+        AppState {
             clients: Mutex::new(HashSet::new()),
         }
     }
-}   
+}
