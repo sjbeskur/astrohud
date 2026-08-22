@@ -95,6 +95,12 @@ sudo astrohud-enter-setup  # intentionally disconnects household Wi-Fi
 sudo astrohud-exit-setup   # cancels and restores the protected profile
 ```
 
+The production reset button is intentionally deferred until hardware is
+available. The proposed SparkFun panel-mount switch, GPIO17-to-ground wiring,
+medium-hold Wi-Fi recovery, long-hold factory reset, and validation checklist
+are captured in [`RESET_BUTTON.md`](RESET_BUTTON.md). Nothing currently watches
+a GPIO pin or performs a factory reset.
+
 The complete attended flow was verified on 2026-08-22 with a ten-minute
 automatic rollback armed: the phone discovered `AstroHUD-MSCKK8`, received an
 address, opened the captive portal, selected the household network, and caused
@@ -114,6 +120,8 @@ failures still restart the viewer.
 - Branch: `feature/picture-frame-poc`
 - Product-direction commit: `2a72915`
 - Persistent local-frame slice commit: `626a9f3`
+- Native frame/provisioning POC commit: `938ac77`
+- QR-guided onboarding commit: `951b87c`
 - Existing user change remains uncommitted: `astrohud-rest/static/wasm_index.html`
 - Do not overwrite or accidentally include that pre-existing change.
 

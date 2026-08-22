@@ -72,6 +72,13 @@ sudo systemctl enable --now astrohud-provisioner.service
 Enabling the service on an already provisioned device is non-disruptive: it
 ensures device identity exists, sees the household profile/backup, and exits.
 
+## Planned physical reset
+
+The reference frame does not yet have a GPIO reset button. The planned control
+uses a medium hold for recoverable Wi-Fi setup and a much longer hold for a
+privacy-preserving factory reset. See [`../RESET_BUTTON.md`](../RESET_BUTTON.md)
+for the selected prototype hardware, wiring, state model, and validation plan.
+
 The reference Pi Zero 2 W deployment has been tested end to end from a phone:
 AP discovery, DHCP, captive DNS/portal, candidate connection, atomic commit,
 image synchronization, and reboot from the newly created profile all passed.

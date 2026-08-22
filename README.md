@@ -120,6 +120,10 @@ active NetworkManager profile and its recovery backup. See
 [`astrohud-provisioner/README.md`](astrohud-provisioner/README.md) for the state
 model, security boundaries, and deployment files.
 
+A physical recovery/factory-reset button is planned but not implemented. The
+proposed part, GPIO wiring, hold behavior, security boundaries, and hardware
+test procedure are documented in [`RESET_BUTTON.md`](RESET_BUTTON.md).
+
 ## Local vertical-slice API
 
 - `GET /api/health`
