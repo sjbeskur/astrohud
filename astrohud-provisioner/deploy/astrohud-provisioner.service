@@ -5,6 +5,7 @@ After=NetworkManager.service
 
 [Service]
 Type=simple
+Group=astrohud
 ExecStart=/usr/local/sbin/astrohud-provisioner
 Restart=on-failure
 RestartSec=5

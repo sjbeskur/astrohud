@@ -6,15 +6,19 @@ frame. On an unprovisioned device, or after an explicit local reset, it:
 1. creates a stable random device code and setup password;
 2. scans nearby Wi-Fi networks;
 3. starts the protected `AstroHUD-XXXXXX` access point;
-4. serves a phone-friendly captive portal at `http://10.42.0.1/`;
-5. stops the AP and tests the selected household network;
-6. atomically commits both the NetworkManager profile and protected backup; or
-7. restores the setup AP when the candidate connection fails.
+4. shows a large Wi-Fi QR code on the frame for one-tap joining;
+5. serves a phone-friendly captive portal at `http://10.42.0.1/`;
+6. stops the AP and tests the selected household network;
+7. atomically commits both the NetworkManager profile and protected backup; or
+8. restores the setup AP when the candidate connection fails.
 
 The setup suffix uses uppercase characters without `0/O` or `1/I/L`. The
 suffix is an identifier, not a credential. A separate 16-character random
 password protects the setup AP and is included in the standard Wi-Fi QR
-payload.
+payload. The SDL viewer watches `/var/lib/astrohud/setup-screen.ppm`, gives the
+setup card priority over photos while it exists, and resumes the slideshow
+after successful provisioning. The SSID and password appear on the card only
+as a fallback for phones that cannot scan Wi-Fi QR codes.
 
 The service stays dormant when either a persistent household profile or its
 recovery backup exists. To enter setup mode locally:

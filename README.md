@@ -114,10 +114,11 @@ configuration, cache semantics, and the physical-Pi validation checklist.
 
 `astrohud-provisioner` supplies the no-mobile-app first-boot path. An
 unprovisioned frame broadcasts a protected, per-device `AstroHUD-XXXXXX`
-network and serves a local Wi-Fi selection page. It tests candidate credentials
-before atomically replacing the active NetworkManager profile and its recovery
-backup. See [`astrohud-provisioner/README.md`](astrohud-provisioner/README.md)
-for the state model, security boundaries, and deployment files.
+network, displays a scannable Wi-Fi QR setup card, and serves a local Wi-Fi
+selection page. It tests candidate credentials before atomically replacing the
+active NetworkManager profile and its recovery backup. See
+[`astrohud-provisioner/README.md`](astrohud-provisioner/README.md) for the state
+model, security boundaries, and deployment files.
 
 ## Local vertical-slice API
 

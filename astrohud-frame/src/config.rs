@@ -14,6 +14,7 @@ pub struct Config {
     pub server_url: String,
     pub frame_id: String,
     pub cache_dir: PathBuf,
+    pub setup_screen: PathBuf,
     pub cache_limit_bytes: u64,
     pub sync_interval: Duration,
     pub slide_interval: Duration,
@@ -22,13 +23,17 @@ pub struct Config {
 
 impl Config {
     pub fn from_env_and_args() -> Result<Self, BoxError> {
+        let cache_dir = env::var_os("ASTROHUD_FRAME_CACHE_DIR")
+            .map(PathBuf::from)
+            .unwrap_or_else(|| PathBuf::from("astrohud-frame-data"));
         let defaults = Self {
             server_url: env::var("ASTROHUD_SERVER_URL")
                 .unwrap_or_else(|_| DEFAULT_SERVER.to_owned()),
             frame_id: env::var("ASTROHUD_FRAME_ID").unwrap_or_else(|_| DEFAULT_FRAME_ID.to_owned()),
-            cache_dir: env::var_os("ASTROHUD_FRAME_CACHE_DIR")
+            setup_screen: env::var_os("ASTROHUD_SETUP_SCREEN")
                 .map(PathBuf::from)
-                .unwrap_or_else(|| PathBuf::from("astrohud-frame-data")),
+                .unwrap_or_else(|| cache_dir.join("setup-screen.ppm")),
+            cache_dir,
             cache_limit_bytes: parse_env_u64("ASTROHUD_CACHE_MIB", DEFAULT_CACHE_MIB)?
                 .checked_mul(1024 * 1024)
                 .ok_or("ASTROHUD_CACHE_MIB is too large")?,
@@ -58,6 +63,10 @@ impl Config {
                 "--frame" => config.frame_id = required_value(&mut args, "--frame")?,
                 "--cache-dir" => {
                     config.cache_dir = PathBuf::from(required_value(&mut args, "--cache-dir")?)
+                }
+                "--setup-screen" => {
+                    config.setup_screen =
+                        PathBuf::from(required_value(&mut args, "--setup-screen")?)
                 }
                 "--cache-mib" => {
                     config.cache_limit_bytes =
@@ -124,6 +133,7 @@ pub fn usage() -> &'static str {
        --server URL          AstroHUD service URL\n\
        --frame ID            Frame identity (default: demo-frame)\n\
        --cache-dir PATH      Persistent cache directory\n\
+       --setup-screen PATH   Provisioning card displayed during setup\n\
        --cache-mib N         Cache size in MiB (default: 1024)\n\
        --sync-seconds N      Manifest refresh interval (default: 5)\n\
        --slide-seconds N     Time per photo (default: 12)\n\
@@ -131,7 +141,8 @@ pub fn usage() -> &'static str {
        -h, --help            Print this help\n\
      \n\
      The same settings can be supplied with ASTROHUD_SERVER_URL,\n\
-     ASTROHUD_FRAME_ID, ASTROHUD_FRAME_CACHE_DIR, ASTROHUD_CACHE_MIB,\n\
+     ASTROHUD_FRAME_ID, ASTROHUD_FRAME_CACHE_DIR, ASTROHUD_SETUP_SCREEN,\n\
+     ASTROHUD_CACHE_MIB,\n\
      ASTROHUD_SYNC_SECONDS, and ASTROHUD_SLIDE_SECONDS."
 }
 
@@ -144,6 +155,7 @@ mod tests {
             server_url: DEFAULT_SERVER.to_owned(),
             frame_id: DEFAULT_FRAME_ID.to_owned(),
             cache_dir: PathBuf::from("cache"),
+            setup_screen: PathBuf::from("cache/setup-screen.ppm"),
             cache_limit_bytes: DEFAULT_CACHE_MIB * 1024 * 1024,
             sync_interval: Duration::from_secs(DEFAULT_SYNC_SECONDS),
             slide_interval: Duration::from_secs(DEFAULT_SLIDE_SECONDS),
@@ -162,6 +174,8 @@ mod tests {
                 "kitchen",
                 "--cache-mib",
                 "64",
+                "--setup-screen",
+                "/tmp/astrohud-setup.ppm",
                 "--windowed",
             ],
         )
@@ -170,6 +184,10 @@ mod tests {
         assert_eq!(config.server_url, "http://frame.test:8080");
         assert_eq!(config.frame_id, "kitchen");
         assert_eq!(config.cache_limit_bytes, 64 * 1024 * 1024);
+        assert_eq!(
+            config.setup_screen,
+            PathBuf::from("/tmp/astrohud-setup.ppm")
+        );
         assert!(config.windowed);
     }
 

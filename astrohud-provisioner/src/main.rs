@@ -1,5 +1,6 @@
 mod identity;
 mod network;
+mod setup_display;
 mod web;
 
 use network::{NetworkManager, ProvisioningPaths};
@@ -32,6 +33,8 @@ fn run() -> Result<(), String> {
             .map_err(|error| format!("could not request setup mode: {error}"))?;
     }
     if !paths.provisioning_required() {
+        setup_display::remove(Path::new(setup_display::SETUP_SCREEN_PATH))
+            .map_err(|error| format!("could not remove stale setup screen: {error}"))?;
         return Ok(());
     }
 
@@ -40,9 +43,13 @@ fn run() -> Result<(), String> {
         .map_err(|error| format!("could not persist setup state: {error}"))?;
     let manager = NetworkManager::new(paths);
     let networks = manager.start_setup_ap(&identity)?;
+    setup_display::write(&identity, Path::new(setup_display::SETUP_SCREEN_PATH))
+        .map_err(|error| format!("could not create setup screen: {error}"))?;
     eprintln!(
         "provisioning access point {} is ready at http://10.42.0.1/",
         identity.setup_ssid
     );
-    web::serve(identity, manager, networks)
+    web::serve(identity, manager, networks)?;
+    setup_display::remove(Path::new(setup_display::SETUP_SCREEN_PATH))
+        .map_err(|error| format!("could not remove setup screen: {error}"))
 }

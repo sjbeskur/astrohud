@@ -11,6 +11,7 @@ use sdl2::rect::Rect;
 use sdl2::render::Canvas;
 use sdl2::video::Window;
 use std::env;
+use std::fs;
 use std::io;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
@@ -91,6 +92,8 @@ fn run_viewer(
     let mut events = sdl.event_pump().map_err(other)?;
     let mut current = None;
     let mut next_slide = Instant::now();
+    let mut next_setup_check = Instant::now();
+    let mut setup_active = false;
     let mut running = true;
 
     while running {
@@ -126,9 +129,25 @@ fn run_viewer(
             }
         }
 
-        if !playlist.photos.is_empty() && Instant::now() >= next_slide {
+        let now = Instant::now();
+        if now >= next_setup_check {
+            let setup_present = fs::metadata(&config.setup_screen).is_ok();
+            if setup_present && !setup_active {
+                match render_photo(&mut canvas, &config.setup_screen) {
+                    Ok(()) => setup_active = true,
+                    Err(error) => eprintln!("could not display setup screen: {error}"),
+                }
+            } else if !setup_present && setup_active {
+                setup_active = false;
+                current = None;
+                next_slide = now;
+            }
+            next_setup_check = now + Duration::from_millis(500);
+        }
+
+        if !setup_active && !playlist.photos.is_empty() && now >= next_slide {
             current = show_next(&mut canvas, &playlist, current);
-            next_slide = Instant::now() + config.slide_interval;
+            next_slide = now + config.slide_interval;
         }
 
         thread::sleep(Duration::from_millis(20));
