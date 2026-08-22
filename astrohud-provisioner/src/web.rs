@@ -206,20 +206,26 @@ fn setup_page(
         "Connect your AstroHUD",
         &format!(
             r#"
-            <p class="eyebrow">{ssid}</p>
-            <h1>Connect your frame</h1>
-            <p>Choose the Wi-Fi network this frame should use. Your phone will disconnect from the AstroHUD setup network while the frame tests it.</p>
+            <section class="intro">
+              <p class="signal-label"><span></span> Setup / {device_code}</p>
+              <h1>Bring your frame <em>online.</em></h1>
+              <p>Choose the Wi-Fi network this frame should use. Your phone will leave the temporary AstroHUD link while the frame tests it.</p>
+            </section>
             {status_message}
-            <form method="post" action="/configure">
-              <label for="ssid">Nearby network</label>
-              <select id="ssid" name="ssid">{options}</select>
-              <label for="manual_ssid">Or enter a network name manually</label>
-              <input id="manual_ssid" name="manual_ssid" maxlength="32" autocomplete="off">
-              <label for="password">Wi-Fi password</label>
-              <input id="password" name="password" type="password" maxlength="63" autocomplete="current-password">
-              <button type="submit">Connect frame</button>
-            </form>
-            <p class="fine">Device {device_code}. Setup remains available if the connection fails.</p>
+            <section class="instrument-panel">
+              <div class="instrument-heading"><span><b>01</b> / Network link</span><span>Protected setup</span></div>
+              <form method="post" action="/configure">
+                <label for="ssid">Nearby network</label>
+                <select id="ssid" name="ssid">{options}</select>
+                <label for="manual_ssid">Or enter a network name manually</label>
+                <input id="manual_ssid" name="manual_ssid" maxlength="32" autocomplete="off">
+                <label for="password">Wi-Fi password</label>
+                <input id="password" name="password" type="password" maxlength="63" autocomplete="current-password">
+                <button type="submit">Connect frame <span aria-hidden="true">→</span></button>
+              </form>
+            </section>
+            <p class="status-line"><i></i> Setup link active / {ssid}</p>
+            <p class="fine">If the connection fails, reconnect to this AstroHUD setup link and try again.</p>
             "#,
             ssid = escape_html(&identity.setup_ssid),
             device_code = escape_html(&identity.device_code),
@@ -231,7 +237,7 @@ fn connecting_page(ssid: &str) -> String {
     page_shell(
         "Connecting",
         &format!(
-            "<p class=\"eyebrow\">AstroHUD setup</p><h1>Connecting…</h1><p>The frame is testing <strong>{}</strong>. Your phone will leave this setup network. If the test fails, reconnect to the same AstroHUD setup network and try again.</p>",
+            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Network link / Testing</p><h1>Connecting<span class=\"ellipsis\">…</span></h1><p>The frame is testing <strong>{}</strong>. Your phone will leave this setup link. If the test fails, reconnect to the same AstroHUD network and try again.</p><p class=\"status-line pending\"><i></i> Connection test active</p></section>",
             escape_html(ssid)
         ),
     )
@@ -241,7 +247,7 @@ fn message_page(title: &str, message: &str) -> String {
     page_shell(
         title,
         &format!(
-            "<h1>{}</h1><p>{}</p><p><a href=\"/\">Return to setup</a></p>",
+            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Setup / Attention</p><h1>{}</h1><p>{}</p><p><a class=\"signal-button\" href=\"/\">Return to setup <span aria-hidden=\"true\">→</span></a></p></section>",
             escape_html(title),
             escape_html(message)
         ),
@@ -250,19 +256,34 @@ fn message_page(title: &str, message: &str) -> String {
 
 fn page_shell(title: &str, content: &str) -> String {
     format!(
-        r#"<!doctype html>
+        r##"<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#070910">
 <title>{}</title><style>
-:root {{ color-scheme: light; font-family: ui-rounded, system-ui, sans-serif; background:#f3eee5; color:#18201b; }}
-body {{ margin:0; min-height:100vh; display:grid; place-items:center; }}
-main {{ width:min(36rem,calc(100% - 2rem)); margin:1rem; box-sizing:border-box; background:#fffdf8; border:1px solid #d9d0c1; border-radius:1.5rem; padding:clamp(1.4rem,5vw,3rem); box-shadow:0 1rem 3rem #4037251f; }}
-h1 {{ font-size:clamp(2rem,8vw,3.5rem); line-height:.95; letter-spacing:-.05em; margin:.25rem 0 1.25rem; }}
-p {{ line-height:1.55; }} .eyebrow {{ color:#69756c; font-weight:700; letter-spacing:.08em; text-transform:uppercase; font-size:.78rem; }}
-label {{ display:block; font-weight:700; margin:1.1rem 0 .4rem; }} select,input,button {{ width:100%; box-sizing:border-box; border-radius:.8rem; padding:.9rem 1rem; font:inherit; }}
-select,input {{ border:1px solid #b8b3a8; background:white; }} button {{ margin-top:1.4rem; border:0; background:#175f45; color:white; font-weight:800; cursor:pointer; }}
-.fine {{ color:#69756c; font-size:.82rem; margin-top:1.5rem; }} .notice {{ border-radius:.8rem; padding:.9rem; background:#e8f2ed; }} .error {{ background:#f9e5df; color:#772b20; }}
-a {{ color:#175f45; font-weight:700; }}
-</style></head><body><main>{}</main></body></html>"#,
+:root {{ color-scheme:dark; --void:#070910; --surface:#101520; --raised:#171e2b; --line:#303a4b; --text:#edf2f7; --muted:#99a6b8; --amber:#efb46a; --salmon:#e98c77; --lavender:#ad96d8; --blue:#70a9d6; --green:#69d59b; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
+* {{ box-sizing:border-box; }} html {{ min-height:100%; background:var(--void); }}
+body {{ margin:0; min-height:100vh; color:var(--text); background:radial-gradient(circle at 82% 0%,#252b48 0,transparent 30rem),var(--void); }}
+body::before {{ position:fixed; inset:0 auto 0 0; width:5px; background:linear-gradient(var(--amber) 0 22%,var(--salmon) 22% 48%,var(--lavender) 48% 74%,var(--blue) 74%); content:""; }}
+.nav {{ border-bottom:1px solid var(--line); background:#070910eb; }} .nav-row {{ display:flex; width:min(42rem,calc(100% - 2rem)); min-height:58px; margin:auto; align-items:center; justify-content:space-between; gap:1rem; }}
+.brand {{ display:inline-flex; min-height:42px; align-items:center; gap:.65rem; margin-left:-1rem; border-radius:0 22px 22px 0; padding:.4rem 1.15rem .4rem 1rem; color:#17120d; background:var(--amber); font-size:.75rem; font-weight:900; letter-spacing:.13em; }}
+.mark {{ display:grid; width:28px; height:28px; place-items:center; border:2px solid currentcolor; border-radius:50%; font-size:.55rem; letter-spacing:-.04em; }}
+.nav-state,.signal-label,.instrument-heading,.status-line {{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }}
+.nav-state {{ display:flex; align-items:center; gap:.5rem; color:var(--muted); font-size:.55rem; }} .nav-state i,.status-line i {{ width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px #69d59b80; }}
+main {{ width:min(42rem,calc(100% - 2rem)); margin:auto; padding:clamp(3rem,10vw,5.5rem) 0 4rem; }}
+.signal-label {{ display:flex; align-items:center; gap:.65rem; margin:0 0 1rem; color:var(--amber); font-size:.62rem; }} .signal-label span {{ width:28px; height:2px; background:currentcolor; }}
+h1 {{ margin:0 0 1.25rem; font-size:clamp(2.8rem,12vw,5rem); font-weight:650; letter-spacing:-.065em; line-height:.94; }} h1 em {{ color:var(--lavender); font-family:Iowan Old Style,Baskerville,"Times New Roman",serif; font-weight:400; }}
+p {{ line-height:1.65; }} .intro>p:last-child,.message-panel>p {{ color:var(--muted); }}
+.instrument-panel,.message-panel {{ position:relative; margin-top:2rem; border:1px solid var(--line); border-left:7px solid var(--salmon); border-radius:6px 26px 26px 6px; padding:clamp(1.25rem,5vw,2rem); background:linear-gradient(145deg,var(--raised),var(--surface)); box-shadow:14px 14px 0 #0d111b; }}
+.instrument-panel::before,.message-panel::before {{ position:absolute; top:-1px; left:-7px; width:7px; height:72px; border-radius:5px 0 0; background:var(--amber); content:""; }}
+.instrument-heading {{ display:flex; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; color:var(--muted); font-size:.55rem; }} .instrument-heading b {{ color:var(--salmon); }}
+label {{ display:block; margin:1rem 0 .4rem; font-size:.78rem; font-weight:800; }} select,input,button {{ width:100%; min-height:50px; border-radius:5px 17px 17px 5px; padding:.75rem .9rem; color:var(--text); font:inherit; }}
+select,input {{ border:1px solid #465269; background:#0b0f18; }} button,.signal-button {{ display:flex; align-items:center; justify-content:space-between; margin-top:1.4rem; border:0; padding:.8rem 1.2rem; color:#17120d; background:var(--lavender); font-size:.8rem; font-weight:900; text-decoration:none; cursor:pointer; }}
+.fine {{ margin-top:1.3rem; color:var(--muted); font-size:.75rem; }} .notice {{ margin:1.5rem 0; border:1px solid var(--line); border-left:5px solid var(--salmon); border-radius:4px 18px 18px 4px; padding:.9rem 1rem; background:#171e2b; }} .error {{ color:#ffc0b5; }}
+.status-line {{ display:flex; align-items:center; gap:.55rem; margin:1px 0 0; border:1px solid var(--line); border-radius:5px 20px 20px 5px; padding:1rem 1.2rem; color:var(--green); background:#0b0e16; font-size:.56rem; }} .status-line.pending {{ color:var(--blue); }} .status-line.pending i {{ background:var(--blue); box-shadow:0 0 10px #70a9d680; }}
+.message-panel {{ margin-top:0; }} .message-panel .signal-button {{ margin-top:2rem; }} strong {{ color:var(--text); }}
+@media(max-width:520px) {{ .nav-row,main {{ width:min(100% - 1.5rem,42rem); }} .brand {{ margin-left:-.75rem;padding-left:.75rem; }} .nav-state {{ letter-spacing:.04em; }} .instrument-heading {{ flex-direction:column; }} }}
+@media(prefers-reduced-motion:reduce) {{ *,*::before,*::after {{ transition-duration:.01ms!important; }} }}
+</style></head><body><header class="nav"><div class="nav-row"><div class="brand"><span class="mark">AH</span> ASTROHUD</div><div class="nav-state"><i></i> Setup link / Active</div></div></header><main>{}</main></body></html>"##,
         escape_html(title),
         content
     )
@@ -292,5 +313,32 @@ mod tests {
     #[test]
     fn html_escaping_covers_form_values() {
         assert_eq!(escape_html("<A&B \"C\">"), "&lt;A&amp;B &quot;C&quot;&gt;");
+    }
+
+    #[test]
+    #[ignore = "writes a manual preview artifact to /tmp"]
+    fn write_portal_preview() {
+        let identity = DeviceIdentity {
+            device_code: "AB23CD".to_owned(),
+            setup_ssid: "AstroHUD-AB23CD".to_owned(),
+            setup_password: "23456789ABCDEFGH".to_owned(),
+        };
+        let networks = vec![
+            WifiNetwork {
+                ssid: "Grandma's Wi-Fi".to_owned(),
+                signal: 92,
+                security: "WPA2".to_owned(),
+            },
+            WifiNetwork {
+                ssid: "Guest Network".to_owned(),
+                signal: 68,
+                security: "WPA2".to_owned(),
+            },
+        ];
+        std::fs::write(
+            "/tmp/astrohud-portal-preview.html",
+            setup_page(&identity, &networks, &ProvisioningStatus::Ready),
+        )
+        .expect("write portal preview");
     }
 }

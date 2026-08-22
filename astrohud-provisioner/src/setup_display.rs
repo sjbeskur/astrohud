@@ -13,11 +13,18 @@ const WIDTH: usize = 1280;
 const HEIGHT: usize = 720;
 const QUIET_ZONE_MODULES: usize = 4;
 
-const BACKGROUND: [u8; 3] = [243, 238, 229];
-const CARD: [u8; 3] = [255, 253, 248];
-const INK: [u8; 3] = [24, 32, 27];
-const MUTED: [u8; 3] = [91, 108, 97];
-const ACCENT: [u8; 3] = [23, 95, 69];
+const VOID: [u8; 3] = [7, 9, 16];
+const SURFACE: [u8; 3] = [16, 21, 32];
+const RAISED: [u8; 3] = [23, 30, 43];
+const LINE: [u8; 3] = [48, 58, 75];
+const TEXT: [u8; 3] = [237, 242, 247];
+const MUTED: [u8; 3] = [153, 166, 184];
+const AMBER: [u8; 3] = [239, 180, 106];
+const SALMON: [u8; 3] = [233, 140, 119];
+const LAVENDER: [u8; 3] = [173, 150, 216];
+const BLUE: [u8; 3] = [112, 169, 214];
+const GREEN: [u8; 3] = [105, 213, 155];
+const WHITE: [u8; 3] = [255, 255, 255];
 
 pub fn write(identity: &DeviceIdentity, path: &Path) -> Result<(), String> {
     let pixels = render(identity)?;
@@ -33,30 +40,51 @@ pub fn remove(path: &Path) -> io::Result<()> {
 }
 
 fn render(identity: &DeviceIdentity) -> Result<Vec<u8>, String> {
-    let mut canvas = Canvas::new(WIDTH, HEIGHT, BACKGROUND);
-    canvas.fill_rect(48, 42, WIDTH - 96, HEIGHT - 84, CARD);
-    canvas.fill_rect(48, 42, 12, HEIGHT - 84, ACCENT);
+    let mut canvas = Canvas::new(WIDTH, HEIGHT, VOID);
 
-    canvas.text(105, 94, 3, "ASTROHUD SETUP", ACCENT);
-    canvas.text(105, 170, 5, "SCAN WITH", INK);
-    canvas.text(105, 224, 5, "YOUR PHONE", INK);
-    canvas.text(105, 325, 2, "1  OPEN YOUR CAMERA", MUTED);
-    canvas.text(105, 360, 2, "2  POINT AT THE QR CODE", MUTED);
-    canvas.text(105, 395, 2, "3  TAP JOIN", MUTED);
-    canvas.text(105, 430, 2, "4  CHOOSE HOME WI-FI", MUTED);
+    canvas.fill_rect(0, 0, 9, 158, AMBER);
+    canvas.fill_rect(0, 158, 9, 187, SALMON);
+    canvas.fill_rect(0, 345, 9, 187, LAVENDER);
+    canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
 
-    canvas.text(105, 500, 2, "CAN'T SCAN? JOIN MANUALLY", ACCENT);
-    canvas.text(105, 540, 2, &identity.setup_ssid, INK);
-    canvas.text(105, 575, 2, &identity.setup_password, INK);
+    canvas.fill_rect(40, 30, 455, 62, AMBER);
+    canvas.text(70, 49, 3, "AH / ASTROHUD", VOID);
+    canvas.text(900, 52, 2, "SETUP LINK / ACTIVE", GREEN);
+
+    canvas.fill_rect(40, 112, 1200, 568, LINE);
+    canvas.fill_rect(41, 113, 1198, 566, SURFACE);
+    canvas.fill_rect(40, 112, 8, 568, SALMON);
+    canvas.fill_rect(40, 112, 8, 82, AMBER);
+
     canvas.text(
-        105,
-        625,
-        1,
-        "THE SETUP PAGE SHOULD OPEN AUTOMATICALLY",
-        MUTED,
+        86,
+        151,
+        2,
+        &format!("SETUP / {}", identity.device_code),
+        AMBER,
     );
+    canvas.text(86, 218, 5, "SCAN WITH", TEXT);
+    canvas.text(86, 272, 5, "YOUR PHONE", LAVENDER);
+    canvas.text(86, 367, 2, "1  OPEN YOUR CAMERA", MUTED);
+    canvas.text(86, 402, 2, "2  POINT AT THE QR CODE", MUTED);
+    canvas.text(86, 437, 2, "3  TAP JOIN", MUTED);
+    canvas.text(86, 472, 2, "4  CHOOSE HOME WI-FI", MUTED);
 
-    canvas.qr_code(690, 105, 500, &identity.wifi_qr_payload())?;
+    canvas.fill_rect(72, 526, 566, 119, RAISED);
+    canvas.fill_rect(72, 526, 6, 119, LAVENDER);
+    canvas.text(98, 547, 1, "MANUAL CONNECTION", LAVENDER);
+    canvas.text(98, 577, 2, &identity.setup_ssid, TEXT);
+    canvas.text(98, 610, 2, &identity.setup_password, TEXT);
+
+    canvas.qr_code(706, 137, 490, &identity.wifi_qr_payload())?;
+    canvas.fill_rect(720, 638, 9, 9, GREEN);
+    canvas.text(
+        744,
+        637,
+        1,
+        "SCAN TO JOIN / PORTAL OPENS AUTOMATICALLY",
+        GREEN,
+    );
     Ok(canvas.pixels)
 }
 
@@ -145,7 +173,7 @@ impl Canvas {
             return Err("setup QR code does not fit the display".to_owned());
         }
         let size = total_modules * scale;
-        self.fill_rect(x, y, size, size, [255, 255, 255]);
+        self.fill_rect(x, y, size, size, WHITE);
         for row in 0..modules {
             for column in 0..modules {
                 if code[(column, row)] == Color::Dark {
@@ -154,7 +182,7 @@ impl Canvas {
                         y + (row + QUIET_ZONE_MODULES) * scale,
                         scale,
                         scale,
-                        INK,
+                        VOID,
                     );
                 }
             }
@@ -179,8 +207,9 @@ mod tests {
     fn setup_card_has_expected_dimensions_and_contrast() {
         let pixels = render(&identity()).expect("render setup screen");
         assert_eq!(pixels.len(), WIDTH * HEIGHT * 3);
-        assert!(pixels.chunks_exact(3).any(|pixel| pixel == INK));
-        assert!(pixels.chunks_exact(3).any(|pixel| pixel == [255, 255, 255]));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == TEXT));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == WHITE));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == AMBER));
     }
 
     #[test]
@@ -197,5 +226,15 @@ mod tests {
         );
         remove(&path).expect("remove setup screen");
         fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    #[ignore = "writes a manual preview artifact to /tmp"]
+    fn write_setup_card_preview() {
+        write(
+            &identity(),
+            Path::new("/tmp/astrohud-setup-card-preview.ppm"),
+        )
+        .expect("write setup card preview");
     }
 }

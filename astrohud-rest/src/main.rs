@@ -40,7 +40,7 @@ async fn main() -> std::io::Result<()> {
             .service(Files::new("/media", media_dir.clone()))
             .service(
                 Files::new("/", env!("CARGO_MANIFEST_DIR").to_string() + "/static")
-                    .index_file("wasm_index.html"),
+                    .index_file("sender.html"),
             )
     })
     .bind((args.ip_address, args.port))?

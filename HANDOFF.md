@@ -114,10 +114,33 @@ The native service was changed from `Restart=always` to `Restart=on-failure`.
 Pressing Escape now provides a deliberate maintenance exit, while unexpected
 failures still restart the viewer.
 
+### ADM-aligned UI refresh
+
+Branch `feature/ui-refresh` adapts the operational design language from
+`~/repos/nemesis/adm-website` branch `feature/company-homepage-refresh` across
+the current AstroHUD product surfaces. Shared tokens and usage rules live in
+`UI_THEME.md`.
+
+- `/` and `/sender.html` use the refreshed photo-transmission interface.
+- `/frame.html` keeps photos primary and adds restrained connection/place
+  telemetry plus a themed empty state.
+- The captive portal is self-contained and uses the same offline-safe palette,
+  typography, panel geometry, and explicit status language.
+- The native 1280×720 setup card uses the same palette while preserving a pure
+  black-on-white QR matrix and full quiet zone.
+- The legacy `/wasm_index.html` experiment remains available and its existing
+  uncommitted user edits were not changed or included.
+
+The ARM64 themed provisioner was installed while dormant; its SHA-256 is
+`92a5836e0d120659f3592be63b9783258ca13ed0f7b013308d4408b28ce08755`.
+The frame remained active and connected at `192.168.50.57`. A live setup-mode
+visual review is still required before calling the physical provisioning UI
+final.
+
 ## Current project state
 
 - Repository: `/home/sbeskur/repos/adm/astro-hud`
-- Branch: `feature/picture-frame-poc`
+- Branch: `feature/ui-refresh`
 - Product-direction commit: `2a72915`
 - Persistent local-frame slice commit: `626a9f3`
 - Native frame/provisioning POC commit: `938ac77`

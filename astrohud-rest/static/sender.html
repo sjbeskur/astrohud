@@ -3,54 +3,80 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
   <title>Send to AstroHUD</title>
-  <style>
-    :root { color-scheme: dark; font-family: system-ui, sans-serif; }
-    body { margin: 0; background: #0c1324; color: #f4f6fb; }
-    main { width: min(32rem, calc(100% - 2rem)); margin: 3rem auto; }
-    h1 { margin-bottom: .25rem; }
-    p { color: #aebbd2; }
-    section { padding: 1.25rem; margin: 1rem 0; background: #162039; border-radius: 1rem; }
-    label { display: block; margin: .8rem 0 .35rem; font-weight: 650; }
-    input, select, button { box-sizing: border-box; width: 100%; min-height: 3rem; border-radius: .65rem; border: 1px solid #405073; padding: .7rem; font: inherit; }
-    input, select { background: #0f1830; color: inherit; }
-    button { margin-top: 1rem; border: 0; background: #79a7ff; color: #071020; font-weight: 750; cursor: pointer; }
-    button:disabled { opacity: .55; cursor: wait; }
-    #status { min-height: 1.5rem; color: #a9f0c0; }
-    .inline { display: grid; grid-template-columns: 1fr auto; gap: .6rem; align-items: end; }
-    .inline button { width: auto; }
-  </style>
+  <link rel="stylesheet" href="/astrohud-theme.css">
 </head>
 <body>
-  <main>
-    <h1>Send a moment</h1>
-    <p>Choose where this photo belongs.</p>
-    <section>
-      <form id="channel-form">
-        <label for="channel-name">New channel</label>
-        <div class="inline">
-          <input id="channel-name" maxlength="80" placeholder="Family" required>
-          <button type="submit">Create</button>
+  <header class="hud-nav">
+    <div class="hud-shell hud-nav-row">
+      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-link-state"><i class="status-light"></i> Frame link / Ready</div>
+    </div>
+  </header>
+
+  <main class="hud-shell sender-main">
+    <header class="sender-intro">
+      <p class="signal-label">Transmit / Shared display</p>
+      <h1>Send a <em>moment.</em></h1>
+      <p>Choose a destination, select a photograph, and AstroHUD will carry it to the frame.</p>
+    </header>
+
+    <div class="instrument-stack">
+      <section class="instrument-panel" aria-labelledby="channel-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">01</span> / Destination registry</p>
+          <p class="instrument-label">Optional</p>
         </div>
-      </form>
-    </section>
-    <section>
-      <form id="photo-form">
-        <label for="channel">Channel</label>
-        <select id="channel" name="channel_id" required></select>
-        <label for="photo">Photo</label>
-        <input id="photo" name="photo" type="file" accept="image/*" required>
-        <button type="submit">Send to frame</button>
-      </form>
-      <p id="status" role="status"></p>
-    </section>
+        <h2 id="channel-title">Create a channel</h2>
+        <p class="instrument-copy">Add a new stream for a person, place, or group.</p>
+        <form id="channel-form">
+          <label for="channel-name">Channel name</label>
+          <div class="field-row">
+            <input id="channel-name" maxlength="80" placeholder="Family" required>
+            <button class="signal-button" type="submit">Create →</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="instrument-panel" aria-labelledby="photo-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">02</span> / Image transfer</p>
+          <p class="instrument-label">Secure uplink</p>
+        </div>
+        <h2 id="photo-title">Choose the frame</h2>
+        <p class="instrument-copy">Your image is prepared for the display and added to its local rotation.</p>
+        <form id="photo-form">
+          <div class="field-grid">
+            <div>
+              <label for="channel">Destination channel</label>
+              <select id="channel" name="channel_id" required></select>
+            </div>
+            <div>
+              <label for="photo">Photograph</label>
+              <input id="photo" name="photo" type="file" accept="image/*" required>
+              <p class="field-hint">JPEG or PNG / Display optimized automatically</p>
+            </div>
+          </div>
+          <button class="signal-button secondary full-width" type="submit">Send to frame →</button>
+        </form>
+      </section>
+    </div>
+    <p id="status" class="status-line" role="status">System standby / Choose a destination and image.</p>
   </main>
+
   <script>
     const channelSelect = document.querySelector('#channel');
     const status = document.querySelector('#status');
 
+    function setStatus(message, state = 'ready') {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
     async function loadChannels(selectedId) {
       const response = await fetch('/api/channels');
+      if (!response.ok) throw new Error(await response.text());
       const channels = await response.json();
       channelSelect.replaceChildren(...channels.map(channel => {
         const option = document.createElement('option');
@@ -71,30 +97,39 @@
     document.querySelector('#channel-form').addEventListener('submit', async event => {
       event.preventDefault();
       const input = document.querySelector('#channel-name');
-      const response = await fetch('/api/channels', {
-        method: 'POST', headers: {'content-type': 'application/json'},
-        body: JSON.stringify({name: input.value})
-      });
-      if (!response.ok) return status.textContent = await response.text();
-      const channel = await response.json();
-      input.value = '';
-      status.textContent = `Created ${channel.name}.`;
-      await loadChannels(channel.id);
+      try {
+        const response = await fetch('/api/channels', {
+          method: 'POST', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({name: input.value})
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const channel = await response.json();
+        input.value = '';
+        setStatus(`Registry updated / ${channel.name} is ready.`);
+        await loadChannels(channel.id);
+      } catch (error) {
+        setStatus(`Channel error / ${error.message}`, 'error');
+      }
     });
 
     document.querySelector('#photo-form').addEventListener('submit', async event => {
       event.preventDefault();
       const button = event.target.querySelector('button');
       button.disabled = true;
-      status.textContent = 'Sending…';
-      const response = await fetch('/api/photos', {method: 'POST', body: new FormData(event.target)});
-      button.disabled = false;
-      if (!response.ok) return status.textContent = await response.text();
-      event.target.querySelector('#photo').value = '';
-      status.textContent = 'Sent. It should appear on the frame shortly.';
+      setStatus('Transfer active / Preparing image…', 'sending');
+      try {
+        const response = await fetch('/api/photos', {method: 'POST', body: new FormData(event.target)});
+        if (!response.ok) throw new Error(await response.text());
+        event.target.querySelector('#photo').value = '';
+        setStatus('Transfer complete / The frame will update shortly.');
+      } catch (error) {
+        setStatus(`Transfer error / ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+      }
     });
 
-    loadChannels().catch(error => status.textContent = error.message);
+    loadChannels().catch(error => setStatus(`Link error / ${error.message}`, 'error'));
   </script>
 </body>
 </html>

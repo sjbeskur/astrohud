@@ -20,6 +20,10 @@ vertical slice persists channel images locally, and the native frame caches
 them offline. Authentication, pairing, and hosted media storage are not yet
 implemented.
 
+AstroHUD's shared visual tokens and interface rules are documented in
+[`UI_THEME.md`](UI_THEME.md). They adapt the operational design language from
+the Advanced Data Machines company homepage while keeping photographs primary.
+
 ## Prerequisites
 
 - A current stable Rust toolchain
@@ -53,12 +57,14 @@ cargo run --package astrohud-rest -- 0.0.0.0:8080
 
 The rehabilitation branch currently exposes three browser views:
 
-- `http://localhost:8080/sender.html` creates channels and publishes photos.
+- `http://localhost:8080/` creates channels and publishes photos. The explicit
+  `/sender.html` path serves the same interface.
 - `http://localhost:8080/frame.html` displays the persistent manifest for the
   proof-of-concept frame named `Grandma's kitchen`.
-- `http://localhost:8080/` preserves the original WebSocket/WASM transport
-  demo. It derives its WebSocket endpoint from the page URL, so remote viewers
-  can use the host's LAN address without rebuilding the WASM module.
+- `http://localhost:8080/wasm_index.html` preserves the original WebSocket/WASM
+  transport demo. It derives its WebSocket endpoint from the page URL, so
+  remote viewers can use the host's LAN address without rebuilding the WASM
+  module.
 
 Persistent proof-of-concept data defaults to `astrohud-rest/data`. Set
 `ASTROHUD_DATA_DIR` to use another directory:
