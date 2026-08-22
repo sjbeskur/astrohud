@@ -18,6 +18,16 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant};
 
+const FRAME_MARGIN: u32 = 24;
+const FRAME_GAP: i32 = 8;
+const FRAME_RAIL: u32 = 5;
+const HUD_LINE: Color = Color::RGB(48, 58, 75);
+const HUD_AMBER: Color = Color::RGB(239, 180, 106);
+const HUD_SALMON: Color = Color::RGB(233, 140, 119);
+const HUD_LAVENDER: Color = Color::RGB(173, 150, 216);
+const HUD_BLUE: Color = Color::RGB(112, 169, 214);
+const HUD_ACCENTS: [Color; 4] = [HUD_AMBER, HUD_SALMON, HUD_LAVENDER, HUD_BLUE];
+
 fn main() -> Result<(), BoxError> {
     if env::args().any(|argument| matches!(argument.as_str(), "--help" | "-h")) {
         println!("{}", usage());
@@ -133,7 +143,7 @@ fn run_viewer(
         if now >= next_setup_check {
             let setup_present = fs::metadata(&config.setup_screen).is_ok();
             if setup_present && !setup_active {
-                match render_photo(&mut canvas, &config.setup_screen) {
+                match render_image(&mut canvas, &config.setup_screen, None) {
                     Ok(()) => setup_active = true,
                     Err(error) => eprintln!("could not display setup screen: {error}"),
                 }
@@ -162,7 +172,8 @@ fn show_next(
 ) -> Option<usize> {
     for offset in 1..=playlist.photos.len() {
         let index = (current.unwrap_or(playlist.photos.len() - 1) + offset) % playlist.photos.len();
-        match render_photo(canvas, &playlist.photos[index].path) {
+        let photo = &playlist.photos[index];
+        match render_image(canvas, &photo.path, Some(&photo.id)) {
             Ok(()) => return Some(index),
             Err(error) => eprintln!(
                 "could not display {}: {error}",
@@ -173,7 +184,11 @@ fn show_next(
     None
 }
 
-fn render_photo(canvas: &mut Canvas<Window>, path: &Path) -> Result<(), BoxError> {
+fn render_image(
+    canvas: &mut Canvas<Window>,
+    path: &Path,
+    chrome_seed: Option<&str>,
+) -> Result<(), BoxError> {
     let reader = ImageReader::open(path)?.with_guessed_format()?;
     let mut decoder = reader.into_decoder()?;
     let orientation = decoder
@@ -193,12 +208,141 @@ fn render_photo(canvas: &mut Canvas<Window>, path: &Path) -> Result<(), BoxError
         .map_err(other)?;
 
     let (output_width, output_height) = canvas.output_size().map_err(other)?;
-    let destination = contain_rect(source_width, source_height, output_width, output_height);
+    let destination = if chrome_seed.is_some() {
+        framed_contain_rect(source_width, source_height, output_width, output_height)
+    } else {
+        contain_rect(source_width, source_height, output_width, output_height)
+    };
     canvas.set_draw_color(Color::RGB(5, 7, 12));
     canvas.clear();
+    if let Some(seed) = chrome_seed {
+        render_frame_chrome(canvas, destination, seed)?;
+    }
     canvas.copy(&texture, None, destination).map_err(other)?;
     canvas.present();
     Ok(())
+}
+
+fn framed_contain_rect(
+    source_width: u32,
+    source_height: u32,
+    output_width: u32,
+    output_height: u32,
+) -> Rect {
+    let margin = FRAME_MARGIN
+        .min(output_width.saturating_sub(1) / 2)
+        .min(output_height.saturating_sub(1) / 2);
+    let available_width = output_width.saturating_sub(margin * 2).max(1);
+    let available_height = output_height.saturating_sub(margin * 2).max(1);
+    let contained = contain_rect(
+        source_width,
+        source_height,
+        available_width,
+        available_height,
+    );
+    Rect::new(
+        contained.x() + margin as i32,
+        contained.y() + margin as i32,
+        contained.width(),
+        contained.height(),
+    )
+}
+
+fn render_frame_chrome(
+    canvas: &mut Canvas<Window>,
+    image: Rect,
+    seed: &str,
+) -> Result<(), BoxError> {
+    let chrome = frame_chrome(image, seed);
+    canvas.set_draw_color(HUD_LINE);
+    canvas.draw_rect(chrome.outline).map_err(other)?;
+    canvas.set_draw_color(HUD_ACCENTS[chrome.rail_color]);
+    canvas.fill_rect(chrome.rail).map_err(other)?;
+    canvas.set_draw_color(HUD_ACCENTS[chrome.first_signal_color]);
+    canvas.fill_rect(chrome.first_signal).map_err(other)?;
+    canvas.set_draw_color(HUD_ACCENTS[chrome.second_signal_color]);
+    canvas.fill_rect(chrome.second_signal).map_err(other)?;
+    Ok(())
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct FrameChrome {
+    outline: Rect,
+    rail: Rect,
+    first_signal: Rect,
+    second_signal: Rect,
+    rail_color: usize,
+    first_signal_color: usize,
+    second_signal_color: usize,
+}
+
+fn frame_chrome(image: Rect, seed: &str) -> FrameChrome {
+    let outline = Rect::new(
+        image.x() - FRAME_GAP,
+        image.y() - FRAME_GAP,
+        image.width() + (FRAME_GAP as u32 * 2),
+        image.height() + (FRAME_GAP as u32 * 2),
+    );
+    let hash = stable_hash(seed);
+    let rail_on_right = hash & 1 != 0;
+    let first_on_bottom = hash & 2 != 0;
+    let first_at_end = hash & 4 != 0;
+    let second_at_end = hash & 8 == 0;
+    let length_variation = ((hash >> 8) % 81) as u32;
+    let signal_length = (outline.width() / 5 + length_variation).clamp(72, 260);
+    let signal_x = |at_end| {
+        if at_end {
+            outline.x() + outline.width() as i32 - signal_length as i32
+        } else {
+            outline.x()
+        }
+    };
+    let signal_y = |on_bottom| {
+        if on_bottom {
+            outline.y() + outline.height() as i32 - FRAME_RAIL as i32
+        } else {
+            outline.y()
+        }
+    };
+    let palette_offset = ((hash >> 16) as usize) % HUD_ACCENTS.len();
+    FrameChrome {
+        outline,
+        rail: Rect::new(
+            if rail_on_right {
+                outline.x() + outline.width() as i32 - FRAME_RAIL as i32
+            } else {
+                outline.x()
+            },
+            outline.y(),
+            FRAME_RAIL,
+            outline.height(),
+        ),
+        first_signal: Rect::new(
+            signal_x(first_at_end),
+            signal_y(first_on_bottom),
+            signal_length,
+            FRAME_RAIL,
+        ),
+        second_signal: Rect::new(
+            signal_x(second_at_end),
+            signal_y(!first_on_bottom),
+            signal_length,
+            FRAME_RAIL,
+        ),
+        rail_color: palette_offset,
+        first_signal_color: (palette_offset + 1) % HUD_ACCENTS.len(),
+        second_signal_color: (palette_offset + 2) % HUD_ACCENTS.len(),
+    }
+}
+
+/// FNV-1a gives a stable visual identity across processes, builds, and reboots.
+fn stable_hash(value: &str) -> u64 {
+    let mut hash = 0xcbf2_9ce4_8422_2325_u64;
+    for byte in value.bytes() {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
+    }
+    hash
 }
 
 fn contain_rect(
@@ -250,5 +394,50 @@ mod tests {
             contain_rect(900, 1600, 1920, 1080),
             Rect::new(656, 0, 607, 1080)
         );
+    }
+
+    #[test]
+    fn framed_landscape_leaves_room_for_chrome() {
+        assert_eq!(
+            framed_contain_rect(1600, 900, 1024, 768),
+            Rect::new(24, 109, 976, 549)
+        );
+    }
+
+    #[test]
+    fn framed_portrait_leaves_room_for_chrome() {
+        assert_eq!(
+            framed_contain_rect(900, 1600, 1920, 1080),
+            Rect::new(670, 24, 580, 1032)
+        );
+    }
+
+    #[test]
+    fn chrome_stays_outside_the_photo() {
+        let chrome = frame_chrome(Rect::new(100, 80, 800, 450), "photo-1");
+        assert_eq!(chrome.outline, Rect::new(92, 72, 816, 466));
+        assert!(chrome.rail.x() == 92 || chrome.rail.x() == 903);
+        for signal in [chrome.first_signal, chrome.second_signal] {
+            assert!(signal.x() >= chrome.outline.x());
+            assert!(signal.right() <= chrome.outline.right());
+            assert!(signal.y() == 72 || signal.y() == 533);
+        }
+    }
+
+    #[test]
+    fn chrome_is_stable_for_a_photo() {
+        let image = Rect::new(100, 80, 800, 450);
+        assert_eq!(
+            frame_chrome(image, "photo-42"),
+            frame_chrome(image, "photo-42")
+        );
+    }
+
+    #[test]
+    fn chrome_varies_between_photos() {
+        let image = Rect::new(100, 80, 800, 450);
+        let variants =
+            ["photo-1", "photo-2", "photo-3", "photo-4"].map(|seed| frame_chrome(image, seed));
+        assert!(variants.windows(2).any(|pair| pair[0] != pair[1]));
     }
 }

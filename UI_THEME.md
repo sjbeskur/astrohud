@@ -20,6 +20,9 @@ of `~/repos/nemesis/adm-website`.
    work in progress, and green confirms a healthy link.
 5. The visual reference is a calm, original retro-futurist console—not copied
    franchise logos, insignia, typefaces, or terminology.
+6. Native photo chrome may vary its accent colors and edge positions by photo,
+   but the variation must be derived from the photo ID. A photo should retain
+   the same visual signature across redraws and device reboots.
 
 ## Core palette
 
