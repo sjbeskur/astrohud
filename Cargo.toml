@@ -3,6 +3,8 @@
 members = [
     "astrohud-rest",
     "astrohud-client",
+    "astrohud-frame",
+    "astrohud-provisioner",
     "astroview_wasm",
 ]
 resolver = "3"

@@ -1,0 +1,8 @@
+[env]
+# SDL 2.30 declares an old policy floor that CMake 4 no longer accepts by
+# default. The compatibility floor avoids patching SDL's vendored source.
+CMAKE_POLICY_VERSION_MINIMUM = "3.5"
+
+# Build only the console-oriented SDL backend needed by the frame. This avoids
+# pulling X11 or Wayland development packages into a Raspberry Pi OS Lite image.
+SDL2_TOOLCHAIN = { value = "astrohud-frame/cmake/sdl2-toolchain.cmake", relative = true }

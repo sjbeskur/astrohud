@@ -11,10 +11,14 @@ boundaries, and proof-of-concept milestones.
 
 - `astrohud-rest`: Actix server, static display page, and WebSocket relay
 - `astrohud-client`: command-line image sender
+- `astrohud-frame`: native SDL2 frame with an offline, size-bounded disk cache
+- `astrohud-provisioner`: native setup-AP and captive Wi-Fi provisioning service
 - `astroview_wasm`: browser display client
 
-This is still a transport demonstration. It does not yet persist images,
-authenticate clients, model channels, or cache media offline.
+The original WebSocket path remains a transport demonstration. The newer
+vertical slice persists channel images locally, and the native frame caches
+them offline. Authentication, pairing, and hosted media storage are not yet
+implemented.
 
 ## Prerequisites
 
@@ -72,6 +76,48 @@ cargo run --package astrohud-client -- 127.0.0.1:8080 path/to/photo.jpg
 The command-line sender and root view still use the original transient
 WebSocket broadcast. The responsive sender and frame views use the new
 persistent channel API.
+
+## Native frame MVP
+
+`astrohud-frame` is the replacement path for running a frame without Chromium.
+It synchronizes the existing frame manifest, downloads JPEG and PNG images
+atomically, retains the newest images within a configurable disk budget, and
+starts from its saved manifest when the server is unavailable.
+
+Build it on a Raspberry Pi or Linux workstation:
+
+```sh
+cargo build --release --package astrohud-frame
+```
+
+Run a desktop/headless development smoke test with SDL's dummy display:
+
+```sh
+SDL_VIDEODRIVER=dummy cargo run --package astrohud-frame -- \
+  --windowed \
+  --server http://127.0.0.1:8080
+```
+
+Run directly on the Pi's console display after stopping any compositor:
+
+```sh
+SDL_VIDEODRIVER=kmsdrm ./target/release/astrohud-frame \
+  --server http://192.168.50.144:8080 \
+  --frame demo-frame \
+  --cache-dir /var/lib/astrohud
+```
+
+See [`astrohud-frame/README.md`](astrohud-frame/README.md) for dependencies,
+configuration, cache semantics, and the physical-Pi validation checklist.
+
+## Device provisioning MVP
+
+`astrohud-provisioner` supplies the no-mobile-app first-boot path. An
+unprovisioned frame broadcasts a protected, per-device `AstroHUD-XXXXXX`
+network and serves a local Wi-Fi selection page. It tests candidate credentials
+before atomically replacing the active NetworkManager profile and its recovery
+backup. See [`astrohud-provisioner/README.md`](astrohud-provisioner/README.md)
+for the state model, security boundaries, and deployment files.
 
 ## Local vertical-slice API
 

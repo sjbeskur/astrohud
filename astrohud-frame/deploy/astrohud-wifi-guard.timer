@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically verify AstroHUD Wi-Fi connectivity
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=10s
+Persistent=true
+Unit=astrohud-wifi-guard.service
+
+[Install]
+WantedBy=timers.target

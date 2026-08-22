@@ -2,13 +2,54 @@ use crate::AppState;
 use actix_multipart::Multipart;
 use actix_web::{HttpResponse, Result, error, web};
 use futures_util::StreamExt;
+use image::codecs::jpeg::JpegEncoder;
+use image::{DynamicImage, ImageDecoder, ImageReader, imageops::FilterType};
 use rusqlite::{Connection, params};
 use serde::{Deserialize, Serialize};
 use std::fs;
+use std::io::Cursor;
 use uuid::Uuid;
 
 const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
+// Frames display at up to 1080p; anything wider than this just costs decode
+// time and blur on the Pi's software renderer for no visible benefit.
+const MAX_PHOTO_LONG_EDGE: u32 = 1600;
+const PHOTO_JPEG_QUALITY: u8 = 87;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
+
+/// Downscales an oversized photo to `MAX_PHOTO_LONG_EDGE` and re-encodes it as
+/// JPEG, applying any EXIF orientation first so the baked-in pixels match
+/// what a browser would have shown for the original. Returns `None` (keep
+/// the original bytes as-is) when the image is already small enough, or if
+/// it can't be decoded — resizing is an optimization, not a requirement.
+fn downscale_if_oversized(bytes: &[u8]) -> Option<(Vec<u8>, &'static str, &'static str)> {
+    let mut reader = ImageReader::new(Cursor::new(bytes))
+        .with_guessed_format()
+        .ok()?;
+    reader.no_limits();
+    let mut decoder = reader.into_decoder().ok()?;
+    let orientation = decoder
+        .orientation()
+        .unwrap_or(image::metadata::Orientation::NoTransforms);
+    let mut img = DynamicImage::from_decoder(decoder).ok()?;
+    img.apply_orientation(orientation);
+
+    let long_edge = img.width().max(img.height());
+    if long_edge <= MAX_PHOTO_LONG_EDGE {
+        return None;
+    }
+
+    let scale = MAX_PHOTO_LONG_EDGE as f32 / long_edge as f32;
+    let new_width = ((img.width() as f32 * scale).round() as u32).max(1);
+    let new_height = ((img.height() as f32 * scale).round() as u32).max(1);
+    let resized = img.resize(new_width, new_height, FilterType::Lanczos3);
+
+    let mut out = Vec::new();
+    let encoder = JpegEncoder::new_with_quality(&mut out, PHOTO_JPEG_QUALITY);
+    resized.into_rgb8().write_with_encoder(encoder).ok()?;
+
+    Some((out, "jpg", "image/jpeg"))
+}
 
 #[derive(Debug, Serialize)]
 pub struct Channel {
@@ -192,8 +233,13 @@ pub async fn upload_photo(
         .filter(|kind| kind.mime_type().starts_with("image/"))
         .ok_or_else(|| error::ErrorUnsupportedMediaType("file is not a supported image"))?;
 
+    let (image, extension, mime_type) = match downscale_if_oversized(&image) {
+        Some((resized, extension, mime_type)) => (resized, extension, mime_type),
+        None => (image, kind.extension(), kind.mime_type()),
+    };
+
     let photo_id = Uuid::new_v4().to_string();
-    let storage_key = format!("{photo_id}.{}", kind.extension());
+    let storage_key = format!("{photo_id}.{extension}");
     let path = state.media_dir.join(&storage_key);
     fs::write(&path, &image).map_err(error::ErrorInternalServerError)?;
 
@@ -216,7 +262,7 @@ pub async fn upload_photo(
     if let Err(err) = database.execute(
         "INSERT INTO photos (id, channel_id, storage_key, mime_type)
          VALUES (?1, ?2, ?3, ?4)",
-        params![photo_id, channel_id, storage_key, kind.mime_type()],
+        params![photo_id, channel_id, storage_key, mime_type],
     ) {
         let _ = fs::remove_file(path);
         return Err(error::ErrorInternalServerError(err));
@@ -233,7 +279,7 @@ pub async fn upload_photo(
         id: photo_id,
         channel_id,
         url: format!("/media/{storage_key}"),
-        mime_type: kind.mime_type().to_owned(),
+        mime_type: mime_type.to_owned(),
         created_at,
     }))
 }

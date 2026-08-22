@@ -1,0 +1,28 @@
+[Unit]
+Description=AstroHUD native picture frame
+Wants=network-online.target
+After=network-online.target
+Conflicts=getty@tty1.service
+
+[Service]
+Type=simple
+User=astrohud
+Group=astrohud
+SupplementaryGroups=video render input
+StateDirectory=astrohud
+Environment=SDL_VIDEODRIVER=kmsdrm
+Environment=ASTROHUD_SERVER_URL=http://192.168.50.144:8080
+Environment=ASTROHUD_FRAME_ID=demo-frame
+Environment=ASTROHUD_FRAME_CACHE_DIR=/var/lib/astrohud
+ExecStart=/usr/local/bin/astrohud-frame
+# Escape is an intentional maintenance exit; restart only after a crash.
+Restart=on-failure
+RestartSec=3
+StandardInput=tty
+TTYPath=/dev/tty1
+TTYReset=yes
+TTYVHangup=yes
+TTYVTDisallocate=yes
+
+[Install]
+WantedBy=multi-user.target

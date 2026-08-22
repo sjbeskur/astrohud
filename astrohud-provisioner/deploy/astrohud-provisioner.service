@@ -1,0 +1,25 @@
+[Unit]
+Description=AstroHUD Wi-Fi provisioning portal
+Wants=NetworkManager.service
+After=NetworkManager.service
+
+[Service]
+Type=simple
+ExecStart=/usr/local/sbin/astrohud-provisioner
+Restart=on-failure
+RestartSec=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/astrohud
+ReadWritePaths=/etc/NetworkManager/system-connections
+ReadWritePaths=/var/lib/astrohud
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
+
+[Install]
+WantedBy=multi-user.target
