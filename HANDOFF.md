@@ -9,7 +9,7 @@ the Pi.
 
 - Binary: `/usr/local/bin/astrohud-frame`
 - Unit: `/etc/systemd/system/astrohud-frame.service`
-- Cache: `/var/lib/astrohud` (five images plus the manifest at deployment)
+- Cache: `/var/lib/astrohud` (display images plus the saved manifest)
 - Source: `http://192.168.50.144:8080`, frame `demo-frame`
 - State: `astrohud-frame.service` enabled, active, and verified after a Pi reboot
 - Display: DRM reports the app owns a `1920x1080` XR24 framebuffer on `HDMI-A-1`
@@ -24,9 +24,10 @@ Rebuild with:
 ```
 
 The deployable artifact is
-`target/pi-bookworm/aarch64-unknown-linux-gnu/release/astrohud-frame`. Its
-deployed SHA-256 was
-`381e5f5bdbd5b1cf5c12e4b8e9ba1a141be44b37fadb159204bf75c3a33bbc13`.
+`target/pi-bookworm/aarch64-unknown-linux-gnu/release/astrohud-frame`. The
+currently deployed UI/location build has SHA-256
+`6cc3eae1ff8d67d640d28ec8b88d889131419c77b253eb7285f5addcec35ab13`
+and a maximum glibc requirement of `GLIBC_2.34`.
 
 To roll back to the preserved browser kiosk:
 
@@ -38,10 +39,12 @@ sudo systemctl start getty@tty1.service
 The original labwc autostart remains in place, and its deployment-time backup
 is `~/.config/labwc/autostart.chromium-backup-20260822` on the Pi.
 
-The REST server on the workstation is still started manually with
-`cargo run --package astrohud-rest -- 0.0.0.0:8080`. It is running for this
-deployment session but will not survive a workstation reboot until a separate
-service is added. Cached photos continue to display while it is unavailable.
+The REST server on the workstation is still started manually. The current
+debug build is running as `target/debug/astrohud-rest 0.0.0.0:8080`; a future
+manual start can use
+`cargo run --package astrohud-rest -- 0.0.0.0:8080`. It will not survive a
+workstation reboot until a separate service is added. Cached photos continue to
+display while it is unavailable.
 
 ### Wi-Fi recovery and maintenance access
 
@@ -137,6 +140,43 @@ The frame remained active and connected at `192.168.50.57`. A live setup-mode
 visual review is still required before calling the physical provisioning UI
 final.
 
+### Native photo chrome and location metadata
+
+The SDL viewer now leaves breathing room around each image and draws restrained
+ADM-themed chrome outside it. Rail side, signal positions, segment length, and
+accent rotation are derived from the photo ID, so different photos vary while
+the same photo remains stable across redraws and reboots. The provisioning QR
+screen deliberately bypasses photo chrome.
+
+Photo uploads now offer an unchecked `Display approximate location` control.
+When selected, `astrohud-rest` reads EXIF GPS before resizing strips metadata,
+stores the coordinates server-side, and publishes only a one-decimal display
+label such as `40.0 N / 105.3 W` in the frame manifest. The native viewer
+renders that optional value in a compact, asymmetric data tab attached to the
+lower image edge. Photos without a label receive no tab. The path was verified
+end to end with a synthetic geotagged upload; the test database row, server
+media copy, and Pi cache entry were removed after visual confirmation.
+
+Human-readable city/region reverse geocoding is intentionally shelved. It is
+recorded as future item `C-202` and must remain server-side, round coordinates
+before a provider request, cache results, satisfy attribution and usage rules,
+and fall back to the existing coordinate label.
+
+### Product burndown
+
+`PRODUCT_BURNDOWN.md` is the living delivery backlog. It separates the Pi
+appliance, cloud software/user engagement, and mobile application into three
+tracks with product gates, priorities, relative sizes, dependencies, and
+acceptance evidence. The agreed sequence is:
+
+1. finish the unattended appliance, physical reset, regular Pi Zero benchmark,
+   reproducible image, and resilience testing;
+2. establish hosted identity, secure pairing, authorization, invitations, and
+   durable media, then prove outside-the-home sending through the responsive
+   web experience; and
+3. begin a thin native mobile client only after those API and product flows are
+   stable.
+
 ## Current project state
 
 - Repository: `/home/sbeskur/repos/adm/astro-hud`
@@ -145,6 +185,11 @@ final.
 - Persistent local-frame slice commit: `626a9f3`
 - Native frame/provisioning POC commit: `938ac77`
 - QR-guided onboarding commit: `951b87c`
+- ADM-aligned UI commit: `ccf8617`
+- Native photo chrome commit: `d0da0c0`
+- Opt-in location tab commit: `18e4a15`
+- Shelved reverse-geocoding roadmap commit: `2eadfd2`
+- Three-track product burndown commit/current HEAD: `6b7f931`
 - Existing user change remains uncommitted: `astrohud-rest/static/wasm_index.html`
 - Do not overwrite or accidentally include that pre-existing change.
 
