@@ -85,6 +85,15 @@ consumer launch, once the interaction model has earned that investment.
 - Complex fleet management and unattended operating-system updates
 - Microservices or Kubernetes
 
+## Future feature candidates
+
+- **Human-readable photo locations.** Replace the current opt-in, rounded
+  latitude/longitude tab with a city-and-region label such as
+  `Boulder, Colorado`. Reverse geocoding belongs on the server, never the Pi.
+  Before implementation, choose a configurable provider, round coordinates
+  before transmission, cache results, provide required attribution, and retain
+  the current coordinate label as the offline/failure fallback.
+
 ## Competitive boundary
 
 Immich with ImmichFrame or Immich Kiosk is the reference implementation for a
