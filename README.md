@@ -5,7 +5,9 @@ Actix WebSocket service and displaying it in a browser through WebAssembly.
 
 The project is being rehabilitated as the foundation for a channel-based
 digital picture frame. See [VISION.md](VISION.md) for the product thesis,
-boundaries, and proof-of-concept milestones.
+boundaries, and proof-of-concept milestones. The living
+[product burndown](PRODUCT_BURNDOWN.md) tracks the Pi appliance, hosted
+software/user engagement, and mobile application as separate delivery streams.
 
 ## Current components
 
