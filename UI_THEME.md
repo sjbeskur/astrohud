@@ -23,6 +23,9 @@ of `~/repos/nemesis/adm-website`.
 6. Native photo chrome may vary its accent colors and edge positions by photo,
    but the variation must be derived from the photo ID. A photo should retain
    the same visual signature across redraws and device reboots.
+7. Optional photo context belongs in a compact data tab attached to the image
+   border. Location is opt-in and approximate; exact GPS coordinates must not
+   be included in the frame manifest.
 
 ## Core palette
 

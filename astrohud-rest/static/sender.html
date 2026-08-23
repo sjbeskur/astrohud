@@ -57,6 +57,10 @@
               <input id="photo" name="photo" type="file" accept="image/*" required>
               <p class="field-hint">JPEG or PNG / Display optimized automatically</p>
             </div>
+            <label class="privacy-option" for="include-location">
+              <input id="include-location" name="include_location" type="checkbox" value="true">
+              <span><strong>Display approximate location</strong><small>Uses embedded photo GPS when available. Exact coordinates stay off the frame.</small></span>
+            </label>
           </div>
           <button class="signal-button secondary full-width" type="submit">Send to frame →</button>
         </form>

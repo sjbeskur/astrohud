@@ -100,6 +100,11 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .status-line[data-state="error"] { color: var(--hud-danger); }
 .status-line[data-state="sending"] { color: var(--hud-blue); }
 .field-hint { margin: 0.45rem 0 0; color: var(--hud-muted); font-size: 0.55rem; }
+.privacy-option { display: flex; align-items: flex-start; gap: 0.8rem; margin: 0.2rem 0 0; border: 1px solid var(--hud-line); border-left: 5px solid var(--hud-blue); border-radius: 5px 18px 18px 5px; padding: 0.85rem 1rem; background: #0b0f18; cursor: pointer; }
+.privacy-option input { width: 1.05rem; min-height: auto; height: 1.05rem; margin: 0.18rem 0 0; accent-color: var(--hud-lavender); }
+.privacy-option span { display: grid; gap: 0.25rem; }
+.privacy-option strong { font-size: 0.75rem; letter-spacing: 0.025em; }
+.privacy-option small { color: var(--hud-muted); font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-size: 0.55rem; font-weight: 700; letter-spacing: 0.06em; line-height: 1.5; text-transform: uppercase; }
 
 .frame-view { width: 100%; height: 100vh; overflow: hidden; background: #05070c; }
 .frame-view::after { position: fixed; z-index: 2; inset: 0; pointer-events: none; background: linear-gradient(180deg, #05070ca8 0, transparent 20%, transparent 74%, #05070ccc 100%); content: ""; }

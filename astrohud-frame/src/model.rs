@@ -8,6 +8,8 @@ pub struct Photo {
     pub url: String,
     pub mime_type: String,
     pub created_at: String,
+    #[serde(default)]
+    pub location_label: Option<String>,
 }
 
 impl Photo {
@@ -27,6 +29,7 @@ pub struct FrameManifest {
 pub struct CachedPhoto {
     pub id: String,
     pub path: PathBuf,
+    pub location_label: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]

@@ -3,6 +3,7 @@ use astrohud_frame::cache::CacheStore;
 use astrohud_frame::config::{Config, usage};
 use astrohud_frame::model::Playlist;
 use astrohud_frame::sync::{ServerClient, sync_once};
+use font8x8::{BASIC_FONTS, UnicodeFonts};
 use image::{DynamicImage, ImageDecoder, ImageReader};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -22,6 +23,8 @@ const FRAME_MARGIN: u32 = 24;
 const FRAME_GAP: i32 = 8;
 const FRAME_RAIL: u32 = 5;
 const HUD_LINE: Color = Color::RGB(48, 58, 75);
+const HUD_SURFACE: Color = Color::RGB(16, 21, 32);
+const HUD_TEXT: Color = Color::RGB(237, 242, 247);
 const HUD_AMBER: Color = Color::RGB(239, 180, 106);
 const HUD_SALMON: Color = Color::RGB(233, 140, 119);
 const HUD_LAVENDER: Color = Color::RGB(173, 150, 216);
@@ -143,7 +146,7 @@ fn run_viewer(
         if now >= next_setup_check {
             let setup_present = fs::metadata(&config.setup_screen).is_ok();
             if setup_present && !setup_active {
-                match render_image(&mut canvas, &config.setup_screen, None) {
+                match render_image(&mut canvas, &config.setup_screen, None, None) {
                     Ok(()) => setup_active = true,
                     Err(error) => eprintln!("could not display setup screen: {error}"),
                 }
@@ -173,7 +176,12 @@ fn show_next(
     for offset in 1..=playlist.photos.len() {
         let index = (current.unwrap_or(playlist.photos.len() - 1) + offset) % playlist.photos.len();
         let photo = &playlist.photos[index];
-        match render_image(canvas, &photo.path, Some(&photo.id)) {
+        match render_image(
+            canvas,
+            &photo.path,
+            Some(&photo.id),
+            photo.location_label.as_deref(),
+        ) {
             Ok(()) => return Some(index),
             Err(error) => eprintln!(
                 "could not display {}: {error}",
@@ -188,6 +196,7 @@ fn render_image(
     canvas: &mut Canvas<Window>,
     path: &Path,
     chrome_seed: Option<&str>,
+    location_label: Option<&str>,
 ) -> Result<(), BoxError> {
     let reader = ImageReader::open(path)?.with_guessed_format()?;
     let mut decoder = reader.into_decoder()?;
@@ -219,6 +228,9 @@ fn render_image(
         render_frame_chrome(canvas, destination, seed)?;
     }
     canvas.copy(&texture, None, destination).map_err(other)?;
+    if let (Some(seed), Some(location_label)) = (chrome_seed, location_label) {
+        render_location_tab(canvas, destination, seed, location_label)?;
+    }
     canvas.present();
     Ok(())
 }
@@ -345,6 +357,147 @@ fn stable_hash(value: &str) -> u64 {
     hash
 }
 
+fn render_location_tab(
+    canvas: &mut Canvas<Window>,
+    image: Rect,
+    seed: &str,
+    location_label: &str,
+) -> Result<(), BoxError> {
+    let (output_width, _) = canvas.output_size().map_err(other)?;
+    let tab = location_tab(image, output_width, seed, location_label);
+
+    canvas.set_draw_color(HUD_SURFACE);
+    canvas.fill_rect(tab.body).map_err(other)?;
+    canvas.fill_rect(tab.cap_inner).map_err(other)?;
+    canvas.fill_rect(tab.cap_outer).map_err(other)?;
+    canvas.set_draw_color(HUD_LINE);
+    canvas.draw_rect(tab.body).map_err(other)?;
+    canvas.set_draw_color(HUD_ACCENTS[tab.accent_color]);
+    canvas.fill_rect(tab.rail).map_err(other)?;
+    canvas.fill_rect(tab.signal).map_err(other)?;
+    draw_bitmap_text(
+        canvas,
+        tab.text_x,
+        tab.text_y,
+        tab.text_scale,
+        &tab.text,
+        HUD_TEXT,
+    )
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct LocationTab {
+    body: Rect,
+    cap_inner: Rect,
+    cap_outer: Rect,
+    rail: Rect,
+    signal: Rect,
+    text_x: i32,
+    text_y: i32,
+    text_scale: u32,
+    text: String,
+    accent_color: usize,
+}
+
+fn location_tab(image: Rect, output_width: u32, seed: &str, label: &str) -> LocationTab {
+    let outline = frame_chrome(image, seed).outline;
+    let available_width = outline.width().min(output_width.saturating_sub(32)).max(80);
+    let text_scale = if available_width >= 620 { 2 } else { 1 };
+    let horizontal_padding = 18_u32;
+    let cap_width = 10_u32;
+    let max_chars =
+        available_width.saturating_sub(horizontal_padding * 2 + cap_width) / (9 * text_scale);
+    let text = location_tab_text(label, max_chars as usize);
+    let text_width = text.chars().count() as u32 * 9 * text_scale;
+    let height = 8 * text_scale + 16;
+    let width = (text_width + horizontal_padding * 2 + cap_width).min(available_width);
+    let align_right = stable_hash(seed) & 0x20 != 0;
+    let x = if align_right {
+        outline.right() - width as i32
+    } else {
+        outline.x()
+    }
+    .max(0);
+    let y = (outline.bottom() - height as i32 + 1).max(0);
+    let body_width = width.saturating_sub(cap_width);
+    let accent_color = ((stable_hash(seed) >> 20) as usize) % HUD_ACCENTS.len();
+
+    LocationTab {
+        body: Rect::new(x, y, body_width, height),
+        cap_inner: Rect::new(x + body_width as i32, y + 3, 5, height.saturating_sub(6)),
+        cap_outer: Rect::new(
+            x + body_width as i32 + 5,
+            y + 7,
+            5,
+            height.saturating_sub(14),
+        ),
+        rail: Rect::new(x, y, 5, height),
+        signal: Rect::new(x, y, (width / 4).clamp(38, 110), 3),
+        text_x: x + horizontal_padding as i32,
+        text_y: y + 8,
+        text_scale,
+        text,
+        accent_color,
+    }
+}
+
+fn location_tab_text(label: &str, max_chars: usize) -> String {
+    let sanitized = label
+        .trim()
+        .to_uppercase()
+        .chars()
+        .map(|character| {
+            if character.is_ascii_graphic() || character == ' ' {
+                character
+            } else {
+                '?'
+            }
+        })
+        .collect::<String>();
+    let text = format!("LOCATION // {sanitized}");
+    if text.chars().count() <= max_chars {
+        return text;
+    }
+    if max_chars <= 3 {
+        return ".".repeat(max_chars);
+    }
+    let mut truncated = text.chars().take(max_chars - 3).collect::<String>();
+    truncated.push_str("...");
+    truncated
+}
+
+fn draw_bitmap_text(
+    canvas: &mut Canvas<Window>,
+    x: i32,
+    y: i32,
+    scale: u32,
+    text: &str,
+    color: Color,
+) -> Result<(), BoxError> {
+    canvas.set_draw_color(color);
+    let mut cursor = x;
+    for character in text.chars() {
+        if let Some(glyph) = BASIC_FONTS.get(character) {
+            for (row, bits) in glyph.iter().enumerate() {
+                for column in 0..8 {
+                    if bits & (1 << column) != 0 {
+                        canvas
+                            .fill_rect(Rect::new(
+                                cursor + column * scale as i32,
+                                y + row as i32 * scale as i32,
+                                scale,
+                                scale,
+                            ))
+                            .map_err(other)?;
+                    }
+                }
+            }
+        }
+        cursor += 9 * scale as i32;
+    }
+    Ok(())
+}
+
 fn contain_rect(
     source_width: u32,
     source_height: u32,
@@ -439,5 +592,27 @@ mod tests {
         let variants =
             ["photo-1", "photo-2", "photo-3", "photo-4"].map(|seed| frame_chrome(image, seed));
         assert!(variants.windows(2).any(|pair| pair[0] != pair[1]));
+    }
+
+    #[test]
+    fn location_tab_is_attached_to_the_lower_photo_edge() {
+        let image = Rect::new(100, 80, 800, 450);
+        let tab = location_tab(image, 1024, "photo-1", "40.0 N / 105.3 W");
+        let outline = frame_chrome(image, "photo-1").outline;
+        assert_eq!(
+            tab.body.y() + tab.body.height() as i32 - 1,
+            outline.bottom()
+        );
+        assert!(tab.body.x() >= outline.x());
+        assert!(tab.cap_outer.right() <= outline.right());
+        assert_eq!(tab.text, "LOCATION // 40.0 N / 105.3 W");
+    }
+
+    #[test]
+    fn long_location_labels_are_safely_truncated() {
+        assert_eq!(
+            location_tab_text("A very long location name", 16),
+            "LOCATION // A..."
+        );
     }
 }

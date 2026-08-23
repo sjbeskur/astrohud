@@ -134,6 +134,7 @@ impl CacheStore {
             photos.push(CachedPhoto {
                 id: photo.id.clone(),
                 path,
+                location_label: photo.location_label.clone(),
             });
         }
 
@@ -248,6 +249,7 @@ mod tests {
             url: format!("/media/{id}.png"),
             mime_type: "image/png".to_owned(),
             created_at: "2026-08-22 00:00:00".to_owned(),
+            location_label: None,
         }
     }
 
