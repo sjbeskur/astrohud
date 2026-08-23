@@ -1,5 +1,32 @@
 # AstroHUD desktop handoff
 
+## Release consolidation (2026-08-23)
+
+The repository now has a clean release boundary on `master`:
+
+- annotated `v0.1.0` points to `922dbe6`, the original WebSocket/WASM
+  prototype at the former `master` tip;
+- `feature/ui-refresh` was merged into `master` with the explicit merge commit
+  `dede9f8`; and
+- annotated `v0.2.0` points to `dede9f8`, the validated native picture-frame,
+  provisioning, UI, location-tab, and product-planning POC.
+
+`feature/picture-frame-poc` and `refactor/cleanup_rm_vestigials` were already
+ancestors of `feature/ui-refresh`, so no duplicate merges were required. The
+feature branches remain available for history. The merged workspace passed
+`cargo test --workspace` and
+`cargo clippy --workspace --all-targets -- -D warnings` before `v0.2.0` was
+created. `master`, `v0.1.0`, and `v0.2.0` were subsequently confirmed on
+`origin`.
+
+The original developer worktree remains on `feature/ui-refresh` at `6ecae82`.
+It contained a pre-existing uncommitted
+`astrohud-rest/static/wasm_index.html` edit throughout the release work, and
+that edit was never staged or included in `v0.2.0`. At the final handoff check,
+the worktree was clean and that file matched the branch, so the earlier local
+edit had been resolved outside the isolated release operation. Resume new work
+from `master`.
+
 ## Native SDL frame deployment (2026-08-22)
 
 The Pi Zero 2 W at `192.168.50.57` now runs the native `astrohud-frame`
@@ -180,7 +207,9 @@ acceptance evidence. The agreed sequence is:
 ## Current project state
 
 - Repository: `/home/sbeskur/repos/adm/astro-hud`
-- Branch: `feature/ui-refresh`
+- Release branch: `master`
+- Release commit/tag: `dede9f8` / `v0.2.0`
+- Preserved development worktree: `feature/ui-refresh` at `6ecae82`
 - Product-direction commit: `2a72915`
 - Persistent local-frame slice commit: `626a9f3`
 - Native frame/provisioning POC commit: `938ac77`
@@ -189,9 +218,11 @@ acceptance evidence. The agreed sequence is:
 - Native photo chrome commit: `d0da0c0`
 - Opt-in location tab commit: `18e4a15`
 - Shelved reverse-geocoding roadmap commit: `2eadfd2`
-- Three-track product burndown commit/current HEAD: `6b7f931`
-- Existing user change remains uncommitted: `astrohud-rest/static/wasm_index.html`
-- Do not overwrite or accidentally include that pre-existing change.
+- Three-track product burndown commit: `6b7f931`
+- Final pre-release handoff commit: `6ecae82`
+- Release merge commit: `dede9f8`
+- Final developer-worktree check: clean; the earlier local
+  `astrohud-rest/static/wasm_index.html` edit was not included in the release.
 
 The workstation proof of concept includes persistent SQLite channels, frames,
 subscriptions and photo metadata; filesystem image storage; `/sender.html`;
