@@ -1,10 +1,9 @@
-mod websocket;
+mod api;
 mod app_state;
-mod routes;
+mod cli;
+mod websocket;
 
+pub use api::*;
 pub use app_state::*;
-pub use routes::*;
+pub use cli::Cli;
 pub use websocket::*;
-
-
-// App state

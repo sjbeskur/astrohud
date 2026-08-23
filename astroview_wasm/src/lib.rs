@@ -1,6 +1,6 @@
+use js_sys::Reflect;
 use wasm_bindgen::prelude::*;
-use web_sys::{Element, Event, HtmlImageElement, WebSocket};
-use js_sys::{ArrayBuffer, Object, Reflect};
+use web_sys::{Event, HtmlImageElement, WebSocket};
 
 #[wasm_bindgen]
 extern "C" {
@@ -25,7 +25,7 @@ pub fn start_viewer() {
     //     .set_property("max-width", "100%")
     //     .expect("failed to set max-width style");
 
-        let img = img_element
+    let img = img_element
         .dyn_into::<HtmlImageElement>()
         .expect("failed to cast to HtmlImageElement");
     body.append_child(&img).expect("failed to append image");
@@ -36,15 +36,25 @@ pub fn start_viewer() {
         .dyn_into::<web_sys::HtmlElement>()
         .expect("failed to cast to HtmlElement");
     heading.set_inner_html("Latest Uploaded Image");
-    body.insert_before(&heading, Some(&img)).expect("failed to insert heading");
+    body.insert_before(&heading, Some(&img))
+        .expect("failed to insert heading");
 
-    let ws = WebSocket::new("ws://localhost:8080/ws/").expect("failed to create WebSocket");
+    let location = window.location();
+    let protocol = if location.protocol().as_deref() == Ok("https:") {
+        "wss"
+    } else {
+        "ws"
+    };
+    let host = location.host().expect("page location should have a host");
+    let websocket_url = format!("{protocol}://{host}/ws/");
+    let ws = WebSocket::new(&websocket_url).expect("failed to create WebSocket");
 
     Reflect::set(
         &ws,
         &JsValue::from_str("binaryType"),
         &JsValue::from_str("blob"),
-    ).expect("failed to set binaryType");
+    )
+    .expect("failed to set binaryType");
 
     let img_clone = img.clone();
     let onmessage_callback = Closure::wrap(Box::new(move |e: web_sys::MessageEvent| {

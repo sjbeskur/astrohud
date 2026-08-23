@@ -1,41 +1,40 @@
-use tokio_tungstenite::{connect_async, tungstenite::protocol::Message};
-use futures_util::{StreamExt, SinkExt};
+use bytes::Bytes;
+use futures_util::{SinkExt, StreamExt};
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
-use bytes::Bytes;  // Add this import
+use tokio_tungstenite::{connect_async, tungstenite::protocol::Message}; // Add this import
+mod cli;
+use cli::Cli;
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Get image path from command line arguments
-    let args: Vec<String> = std::env::args().collect();
-    if args.len() != 3 {
-        eprintln!("Usage: {} <image_path>", args[0]);
-        std::process::exit(1);
-    }
-    
-    let endpoint = &args[1];   // ip_address:port
-    let image_path = &args[2];
-    if !Path::new(image_path).exists() {
-        eprintln!("Image file does not exist: {}", image_path);
+    let args = Cli::parse_args();
+
+    if !Path::new(&args.image_path).exists() {
+        eprintln!("Image file does not exist: {}", args.image_path);
         std::process::exit(1);
     }
 
     // Connect to WebSocket server
-    let url = format!("ws://{}/ws/", endpoint);
+    let url = format!("ws://{}/ws/", args.endpoint);
     let (mut ws_stream, _) = match connect_async(&url).await {
         Ok((stream, response)) => {
             println!("Connected to WebSocket server: {:?}", response);
             (stream, response)
         }
         Err(e) => {
-            eprintln!("Failed to connect to websocket endpoint at: {} \n Error: {}", &url, e);
+            eprintln!(
+                "Failed to connect to websocket endpoint at: {} \n Error: {}",
+                url, e
+            );
             std::process::exit(1);
         }
     };
 
     // Read and send the image
-    match send_image(&mut ws_stream, image_path).await {
+    match send_image(&mut ws_stream, &args.image_path).await {
         Ok(()) => println!("Image sent successfully"),
         Err(e) => eprintln!("Failed to send image: {}", e),
     }
@@ -53,12 +52,14 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     if let Err(e) = ws_stream.close(None).await {
         eprintln!("Error closing connection: {}", e);
     }
-    
+
     Ok(())
 }
 
 async fn send_image(
-    ws_stream: &mut tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>,
+    ws_stream: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
     image_path: &str,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut file = File::open(image_path)?;

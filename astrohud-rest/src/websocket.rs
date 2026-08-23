@@ -1,19 +1,12 @@
-use actix::prelude::*;
-use actix_web::{web, App, HttpServer, HttpResponse, Responder};
-use actix_web_actors::ws;
-use actix_files::Files;
-use bytes::Bytes;
-use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
-use std::collections::HashSet;
-
 use crate::app_state::AppState;
-
+use actix::prelude::*;
+use actix_web::{HttpResponse, web};
+use actix_web_actors::ws;
+use bytes::Bytes;
 
 pub struct ImageWebSocket {
     app_state: web::Data<AppState>,
 }
-
 
 impl Actor for ImageWebSocket {
     type Context = ws::WebsocketContext<Self>;
@@ -25,7 +18,11 @@ impl Actor for ImageWebSocket {
 
     fn stopped(&mut self, ctx: &mut Self::Context) {
         println!("WebSocket connection stopped");
-        self.app_state.clients.lock().unwrap().remove(&ctx.address());
+        self.app_state
+            .clients
+            .lock()
+            .unwrap()
+            .remove(&ctx.address());
     }
 }
 
@@ -59,8 +56,6 @@ impl StreamHandler<Result<ws::Message, ws::ProtocolError>> for ImageWebSocket {
     }
 }
 
-
-
 // Message to broadcast image
 #[derive(Message)]
 #[rtype(result = "()")]
@@ -74,9 +69,15 @@ impl Handler<BroadcastImage> for ImageWebSocket {
     }
 }
 
-
-pub async fn ws_handler(req: actix_web::HttpRequest, stream: web::Payload, data: web::Data<AppState>) -> Result<HttpResponse, actix_web::Error> {
-    let ws = ImageWebSocket { app_state: data.clone() };
-    ws::WsResponseBuilder::new(ws, &req, stream).frame_size(10 * 1024 * 1024).start()
+pub async fn ws_handler(
+    req: actix_web::HttpRequest,
+    stream: web::Payload,
+    data: web::Data<AppState>,
+) -> Result<HttpResponse, actix_web::Error> {
+    let ws = ImageWebSocket {
+        app_state: data.clone(),
+    };
+    ws::WsResponseBuilder::new(ws, &req, stream)
+        .frame_size(10 * 1024 * 1024)
+        .start()
 }
-

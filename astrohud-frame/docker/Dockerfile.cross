@@ -1,0 +1,17 @@
+FROM rust:1.97.1-bookworm
+
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
+        cmake \
+        g++-aarch64-linux-gnu \
+        gcc-aarch64-linux-gnu \
+        libdrm-dev \
+        libegl-dev \
+        libgbm-dev \
+        libgles-dev \
+        libudev-dev \
+        pkg-config \
+    && rustup target add aarch64-unknown-linux-gnu \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /workspace

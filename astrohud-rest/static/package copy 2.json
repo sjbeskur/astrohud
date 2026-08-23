@@ -1,0 +1,15 @@
+{
+  "name": "astroview_wasm",
+  "type": "module",
+  "version": "0.1.0",
+  "files": [
+    "astroview_wasm_bg.wasm",
+    "astroview_wasm.js",
+    "astroview_wasm.d.ts"
+  ],
+  "main": "astroview_wasm.js",
+  "types": "astroview_wasm.d.ts",
+  "sideEffects": [
+    "./snippets/*"
+  ]
+}

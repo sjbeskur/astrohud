@@ -1,0 +1,13 @@
+[package]
+name = "astrohud-frame"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+image = { version = "0.25.10", default-features = false, features = ["jpeg", "png", "pnm"] }
+font8x8 = "0.3"
+sdl2 = { version = "0.38.0", features = ["bundled", "static-link"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12.1", default-features = false, features = ["tls"] }
+url = "2.5"
