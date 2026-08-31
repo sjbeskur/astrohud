@@ -1,0 +1,6 @@
+# wasm-pack writes generated artifacts into this directory. Keep those ignored,
+# but track the hand-authored browser interfaces that the server ships.
+*
+!.gitignore
+!*.html
+!astrohud-theme.css

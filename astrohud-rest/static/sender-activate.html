@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
+  <title>Open AstroHUD invitation</title>
+  <link rel="stylesheet" href="/astrohud-theme.css">
+</head>
+<body>
+  <header class="hud-nav">
+    <div class="hud-shell hud-nav-row">
+      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-link-state"><i class="status-light"></i> Private invitation</div>
+    </div>
+  </header>
+
+  <main class="hud-shell sender-main">
+    <header class="sender-intro">
+      <p class="signal-label">Invitation / Establishing link</p>
+      <h1>Opening the <em>frame.</em></h1>
+      <p id="message">Checking this private photo invitation…</p>
+    </header>
+    <p id="status" class="status-line" data-state="sending" role="status">Secure link in progress.</p>
+  </main>
+
+  <script>
+    const message = document.querySelector('#message');
+    const status = document.querySelector('#status');
+
+    async function activate() {
+      const token = location.hash.slice(1);
+      history.replaceState(null, '', '/sender-activate.html');
+      if (!token) throw new Error('This invitation link is incomplete. Ask the frame owner for a new link.');
+      const response = await fetch('/api/beta/sender/session', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({token})
+      });
+      if (!response.ok) throw new Error('This invitation is invalid or has been disabled by the frame owner.');
+      location.replace('/send.html');
+    }
+
+    activate().catch(error => {
+      message.textContent = 'We could not open this photo invitation.';
+      status.textContent = error.message;
+      status.dataset.state = 'error';
+    });
+  </script>
+</body>
+</html>

@@ -1,24 +1,33 @@
+use std::net::SocketAddr;
+
 pub struct Cli {
-    pub ip_address: String,
-    pub port: u16,
+    pub endpoint: SocketAddr,
 }
 
 impl Cli {
     pub fn parse_args() -> Cli {
         let args: Vec<String> = std::env::args().collect();
 
-        if args.len() != 2 {
-            eprintln!("Usage: {} <endpoint>", args[0]);
-            std::process::exit(1);
-        }
-        let endpoint = args[1].to_string();
-        let parts = endpoint.split(":").collect::<Vec<&str>>();
-        let port = parts[1].parse::<u16>().unwrap();
-        let ip = parts[0].to_string();
+        let endpoint = match args.as_slice() {
+            [_, endpoint] => endpoint.clone(),
+            [_] => match std::env::var("PORT") {
+                Ok(port) => format!("0.0.0.0:{port}"),
+                Err(_) => {
+                    eprintln!("Usage: {} <endpoint> (or set PORT)", args[0]);
+                    std::process::exit(1);
+                }
+            },
+            _ => {
+                eprintln!("Usage: {} <endpoint> (or set PORT)", args[0]);
+                std::process::exit(1);
+            }
+        };
 
-        Cli {
-            ip_address: ip,
-            port,
-        }
+        let endpoint = endpoint.parse::<SocketAddr>().unwrap_or_else(|error| {
+            eprintln!("Invalid server endpoint {endpoint:?}: {error}");
+            std::process::exit(1);
+        });
+
+        Cli { endpoint }
     }
 }

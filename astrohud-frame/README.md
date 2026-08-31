@@ -6,7 +6,9 @@ continuing to use `astrohud-rest` as the source of the frame manifest and media.
 
 ## MVP behavior
 
-- Fetches `/api/frames/{frame_id}/manifest` every five seconds.
+- Fetches an authenticated device manifest every five seconds when a device
+  credential is configured. It retains the legacy frame-ID endpoint for local
+  development without a credential.
 - Downloads JPEG and PNG images into a persistent on-device cache.
 - Writes downloads and the manifest to temporary files before atomically
   renaming them, so an interruption cannot expose partial state.
@@ -66,14 +68,17 @@ Command-line arguments override environment variables.
 | --- | --- | --- |
 | `--server URL` | `ASTROHUD_SERVER_URL` | `http://127.0.0.1:8080` |
 | `--frame ID` | `ASTROHUD_FRAME_ID` | `demo-frame` |
+| `--credential-file PATH` | `ASTROHUD_DEVICE_CREDENTIAL_FILE` | unset |
 | `--cache-dir PATH` | `ASTROHUD_FRAME_CACHE_DIR` | `./astrohud-frame-data` |
 | `--cache-mib N` | `ASTROHUD_CACHE_MIB` | `1024` |
 | `--sync-seconds N` | `ASTROHUD_SYNC_SECONDS` | `5` |
 | `--slide-seconds N` | `ASTROHUD_SLIDE_SECONDS` | `12` |
 | `--windowed` | — | fullscreen |
 
-HTTPS is supported. The current LAN proof of concept has no device credential,
-so it must not be exposed publicly.
+HTTPS is supported. When a credential file is configured, its trimmed contents
+are sent as a bearer credential for both manifest and media requests. Keep that
+file readable only by the frame service account. A public deployment must use
+HTTPS so the credential is encrypted in transit.
 
 ## Test without a display
 
@@ -174,7 +179,7 @@ logs so the cause of a future outage survives a reboot.
 ## Deliberately deferred
 
 - Lightweight WebSocket/SSE change notifications
-- Pairing and revocable device credentials
+- Automatic first-boot pairing and credential rotation
 - Checksums and byte sizes in the manifest
 - Server-created, resolution-aware display variants
 - Cache observability and remote diagnostics

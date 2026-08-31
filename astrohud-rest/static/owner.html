@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
+  <title>Set up your AstroHUD</title>
+  <link rel="stylesheet" href="/astrohud-theme.css">
+</head>
+<body>
+  <header class="hud-nav">
+    <div class="hud-shell hud-nav-row">
+      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-link-state"><i class="status-light"></i> Owner link / Private</div>
+    </div>
+  </header>
+
+  <main class="hud-shell sender-main">
+    <header class="sender-intro">
+      <p class="signal-label">Frame activation / <span id="household-name">Loading</span></p>
+      <h1>Connect your <em>place.</em></h1>
+      <p>Enter the code shown on the television and give the destination a name people will recognize.</p>
+    </header>
+
+    <div class="instrument-stack">
+      <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">01</span> / Appliance link</p>
+          <p class="instrument-label">About two minutes</p>
+        </div>
+        <h2 id="claim-title">Claim your frame</h2>
+        <p class="instrument-copy">Keep this private owner page available on your phone while connecting the appliance to Wi-Fi. When the television shows its claim QR, scan it to return here with the code filled in.</p>
+        <form id="claim-form">
+          <div class="field-grid">
+            <div>
+              <label for="claim-code">Code on television</label>
+              <input id="claim-code" name="claim_code" inputmode="text" autocomplete="one-time-code" maxlength="8" placeholder="AB23CD45" required>
+            </div>
+            <div>
+              <label for="place-name">Where is this frame?</label>
+              <input id="place-name" name="place_name" maxlength="80" placeholder="Mom's living room" required>
+              <p class="field-hint">Senders will see this destination name.</p>
+            </div>
+          </div>
+          <button class="signal-button full-width" type="submit">Connect frame →</button>
+        </form>
+      </section>
+
+      <section id="connected-panel" class="instrument-panel" hidden aria-labelledby="connected-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">✓</span> / Appliance linked</p>
+          <p class="instrument-label">Ready</p>
+        </div>
+        <h2 id="connected-title">Your frame is connected</h2>
+        <p class="instrument-copy">Create a separate private link for each person you trust to send photos.</p>
+        <div id="frames" class="connection-summary"></div>
+      </section>
+
+      <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">02</span> / Sender access</p>
+          <p class="instrument-label">Private links</p>
+        </div>
+        <h2 id="invite-title">Invite friends and family</h2>
+        <p class="instrument-copy">Name the person so you can disable only their link later. They will not need an account or an app.</p>
+        <form id="invite-form">
+          <label for="sender-name">Who is this link for?</label>
+          <div class="field-row">
+            <input id="sender-name" name="label" maxlength="80" placeholder="Alice" required>
+            <button class="signal-button" type="submit">Create link →</button>
+          </div>
+        </form>
+        <div id="new-invitation" class="link-reveal" hidden>
+          <strong>Private link ready</strong>
+          <p>Send this only to the person named above.</p>
+          <div class="field-row">
+            <input id="invitation-url" readonly aria-label="New private sender link">
+            <button id="copy-link" class="signal-button secondary" type="button">Copy link</button>
+          </div>
+        </div>
+        <div class="invitation-heading">
+          <h3>Active links</h3>
+          <span id="invitation-count" class="instrument-label">0 people</span>
+        </div>
+        <div id="invitations" class="connection-summary"></div>
+      </section>
+    </div>
+    <p id="status" class="status-line" role="status">Loading owner access…</p>
+  </main>
+
+  <script>
+    const householdName = document.querySelector('#household-name');
+    const claimPanel = document.querySelector('#claim-panel');
+    const connectedPanel = document.querySelector('#connected-panel');
+    const invitePanel = document.querySelector('#invite-panel');
+    const frames = document.querySelector('#frames');
+    const invitations = document.querySelector('#invitations');
+    const invitationCount = document.querySelector('#invitation-count');
+    const newInvitation = document.querySelector('#new-invitation');
+    const invitationUrl = document.querySelector('#invitation-url');
+    const status = document.querySelector('#status');
+    const claimCodeInput = document.querySelector('#claim-code');
+
+    function prefillClaimCode() {
+      const pageUrl = new URL(location.href);
+      const claimCode = (pageUrl.searchParams.get('claim_code') || '').toUpperCase();
+      pageUrl.searchParams.delete('claim_code');
+      history.replaceState(null, '', `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
+      if (/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/.test(claimCode)) {
+        claimCodeInput.value = claimCode;
+        document.querySelector('#place-name').focus();
+      }
+    }
+
+    function setStatus(message, state = 'ready') {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function render(context) {
+      householdName.textContent = context.household_name;
+      const connected = context.frames.length > 0;
+      claimPanel.hidden = connected;
+      connectedPanel.hidden = !connected;
+      invitePanel.hidden = !connected;
+      frames.replaceChildren(...context.frames.map(frame => {
+        const card = document.createElement('div');
+        card.className = 'connection-card';
+        const name = document.createElement('strong');
+        name.textContent = frame.place_name;
+        const detail = document.createElement('span');
+        detail.textContent = 'Frame linked / Ready to receive photos';
+        card.append(name, detail);
+        return card;
+      }));
+      const activeInvitations = context.invitations || [];
+      invitationCount.textContent = `${activeInvitations.length} ${activeInvitations.length === 1 ? 'person' : 'people'}`;
+      invitations.replaceChildren(...activeInvitations.map(invitation => {
+        const card = document.createElement('div');
+        card.className = 'invitation-card';
+        const identity = document.createElement('div');
+        const name = document.createElement('strong');
+        name.textContent = invitation.label;
+        const detail = document.createElement('span');
+        detail.textContent = `Active / Created ${invitation.created_at} UTC`;
+        identity.append(name, detail);
+        const revoke = document.createElement('button');
+        revoke.className = 'quiet-button danger';
+        revoke.type = 'button';
+        revoke.textContent = 'Disable';
+        revoke.addEventListener('click', () => revokeInvitation(invitation));
+        card.append(identity, revoke);
+        return card;
+      }));
+      if (!activeInvitations.length) {
+        const empty = document.createElement('p');
+        empty.className = 'empty-note';
+        empty.textContent = 'No one has a sender link yet.';
+        invitations.append(empty);
+      }
+      setStatus(connected ? 'Link established / Your frame is assigned to this place.' : 'Ready / Enter the code shown on your television.');
+    }
+
+    async function loadOwner() {
+      const response = await fetch('/api/beta/owner');
+      if (response.status === 401) {
+        throw new Error('Owner access is missing. Open the private activation link you received.');
+      }
+      if (!response.ok) throw new Error(await response.text());
+      render(await response.json());
+    }
+
+    claimCodeInput.addEventListener('input', event => {
+      event.target.value = event.target.value.toUpperCase().replace(/[^ABCDEFGHJKMNPQRSTUVWXYZ23456789]/g, '');
+    });
+
+    document.querySelector('#claim-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.target.querySelector('button');
+      button.disabled = true;
+      setStatus('Link active / Claiming this frame…', 'sending');
+      try {
+        const payload = Object.fromEntries(new FormData(event.target));
+        const response = await fetch('/api/beta/owner/claim', {
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) {
+          if (response.status === 409) throw new Error('That code is incorrect, expired, or already used. Check the television and try again.');
+          throw new Error(await response.text());
+        }
+        render(await response.json());
+      } catch (error) {
+        setStatus(`Connection error / ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.querySelector('#invite-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.target.querySelector('button');
+      button.disabled = true;
+      setStatus('Creating private sender access…', 'sending');
+      try {
+        const payload = Object.fromEntries(new FormData(event.target));
+        const response = await fetch('/api/beta/owner/invitations', {
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const invitation = await response.json();
+        invitationUrl.value = `${location.origin}/sender-activate.html#${invitation.token}`;
+        newInvitation.hidden = false;
+        event.target.reset();
+        await loadOwner();
+        setStatus(`Private link ready / Copy and send it to ${invitation.label}.`, 'success');
+      } catch (error) {
+        setStatus(`Invitation error / ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.querySelector('#copy-link').addEventListener('click', async () => {
+      let copied = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(invitationUrl.value);
+          copied = true;
+        }
+      } catch (_) {}
+      if (!copied) {
+        invitationUrl.focus();
+        invitationUrl.select();
+        invitationUrl.setSelectionRange(0, invitationUrl.value.length);
+        try {
+          copied = document.execCommand('copy');
+        } catch (_) {}
+      }
+      if (copied) {
+        setStatus('Copied / The private sender link is ready to share.', 'success');
+      } else {
+        setStatus('Copy the selected private link.', 'ready');
+      }
+    });
+
+    async function revokeInvitation(invitation) {
+      if (!confirm(`Disable ${invitation.label}'s sender link?`)) return;
+      setStatus(`Disabling ${invitation.label}'s link…`, 'sending');
+      try {
+        const response = await fetch(`/api/beta/owner/invitations/${invitation.invitation_id}`, {method: 'DELETE'});
+        if (!response.ok) throw new Error(await response.text());
+        await loadOwner();
+        setStatus(`Access disabled / ${invitation.label}'s old link no longer works.`, 'success');
+      } catch (error) {
+        setStatus(`Invitation error / ${error.message}`, 'error');
+      }
+    }
+
+    prefillClaimCode();
+    loadOwner().catch(error => setStatus(error.message, 'error'));
+  </script>
+</body>
+</html>

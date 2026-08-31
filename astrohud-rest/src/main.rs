@@ -18,13 +18,11 @@ async fn main() -> std::io::Result<()> {
     initialize_database(&database).map_err(std::io::Error::other)?;
     let app_state = web::Data::new(AppState::new(database, media_dir.clone()));
 
-    println!(
-        "Server starting on http://{}:{}",
-        args.ip_address, args.port
-    );
+    println!("Server starting on http://{}", args.endpoint);
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
+            .configure(configure_beta_routes)
             .route("/api/health", web::get().to(health))
             .service(
                 web::resource("/api/channels")
@@ -37,13 +35,13 @@ async fn main() -> std::io::Result<()> {
                 web::get().to(frame_manifest),
             )
             .route("/ws/", web::get().to(ws_handler))
-            .service(Files::new("/media", media_dir.clone()))
+            .route("/media/{storage_key}", web::get().to(demo_media))
             .service(
                 Files::new("/", env!("CARGO_MANIFEST_DIR").to_string() + "/static")
                     .index_file("sender.html"),
             )
     })
-    .bind((args.ip_address, args.port))?
+    .bind(args.endpoint)?
     .run()
     .await
 }

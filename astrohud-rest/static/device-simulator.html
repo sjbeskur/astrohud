@@ -1,0 +1,180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
+  <title>AstroHUD Device Simulator</title>
+  <link rel="stylesheet" href="/astrohud-theme.css">
+</head>
+<body>
+  <header class="hud-nav">
+    <div class="hud-shell hud-nav-row">
+      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-link-state"><i class="status-light"></i> Local device simulator</div>
+    </div>
+  </header>
+
+  <main class="simulator-view">
+    <section class="simulator-console">
+      <p class="signal-label">Setup / Waiting for owner</p>
+      <div id="pending">
+        <h1>Claim this frame</h1>
+        <p class="instrument-copy">Open your private AstroHUD owner link and enter this temporary code.</p>
+        <div id="claim-code" class="claim-code" aria-live="polite">--------</div>
+        <p id="expires" class="instrument-label">Creating a secure device identity…</p>
+      </div>
+      <div id="claimed" hidden>
+        <div class="simulator-frame-heading">
+          <div>
+            <p class="signal-label">Frame / Authenticated</p>
+            <h1 id="place-name">Frame connected</h1>
+          </div>
+          <p class="instrument-label">Newest photo</p>
+        </div>
+        <div class="simulated-display">
+          <img id="display-photo" hidden alt="Newest photograph delivered to this simulated frame">
+          <div id="display-empty" class="simulated-display-empty">
+            <strong>Waiting for the first photo</strong>
+            <span>Create a sender invitation, then send a photograph.</span>
+          </div>
+        </div>
+      </div>
+      <p id="status" class="status-line" data-state="sending" role="status">Registering with the local server.</p>
+    </section>
+  </main>
+
+  <script>
+    const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+    const claimCode = document.querySelector('#claim-code');
+    const expires = document.querySelector('#expires');
+    const pending = document.querySelector('#pending');
+    const claimed = document.querySelector('#claimed');
+    const placeName = document.querySelector('#place-name');
+    const displayPhoto = document.querySelector('#display-photo');
+    const displayEmpty = document.querySelector('#display-empty');
+    const status = document.querySelector('#status');
+    let pollTimer;
+    let manifestTimer;
+    let currentPhotoId;
+    let displayUrl;
+    let syncStarted = false;
+
+    function randomDeviceCode() {
+      const bytes = crypto.getRandomValues(new Uint8Array(6));
+      return [...bytes].map(value => alphabet[value % alphabet.length]).join('');
+    }
+
+    function randomUuid() {
+      if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 0x0f) | 0x40;
+      bytes[8] = (bytes[8] & 0x3f) | 0x80;
+      const hex = [...bytes].map(value => value.toString(16).padStart(2, '0'));
+      return `${hex.slice(0, 4).join('')}-${hex.slice(4, 6).join('')}-${hex.slice(6, 8).join('')}-${hex.slice(8, 10).join('')}-${hex.slice(10).join('')}`;
+    }
+
+    function identity() {
+      const stored = sessionStorage.getItem('astrohud-simulated-device');
+      if (stored) return JSON.parse(stored);
+      const created = {
+        device_id: randomUuid(),
+        device_code: randomDeviceCode(),
+        credential: `${randomUuid()}${randomUuid()}`
+      };
+      sessionStorage.setItem('astrohud-simulated-device', JSON.stringify(created));
+      return created;
+    }
+
+    function render(registration, device) {
+      if (registration.status === 'claimed') {
+        pending.hidden = true;
+        claimed.hidden = false;
+        clearTimeout(pollTimer);
+        if (!syncStarted) {
+          syncStarted = true;
+          status.textContent = 'Link established / Checking securely for photos.';
+          status.dataset.state = 'sending';
+          syncFrame(device);
+        }
+        return;
+      }
+      claimCode.textContent = registration.claim_code;
+      expires.textContent = `Temporary code / Expires ${registration.expires_at} UTC`;
+      status.textContent = 'Waiting / Enter this code from the private owner page.';
+      status.dataset.state = 'ready';
+    }
+
+    async function poll(registration, device) {
+      try {
+        const response = await fetch(`/api/beta/devices/enrollments/${registration.enrollment_id}`, {
+          headers: {authorization: `Bearer ${device.credential}`}
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const current = await response.json();
+        render(current, device);
+        if (current.status === 'pending') pollTimer = setTimeout(() => poll(current, device), 2000);
+      } catch (error) {
+        status.textContent = `Simulator error / ${error.message}`;
+        status.dataset.state = 'error';
+        pollTimer = setTimeout(() => poll(registration, device), 5000);
+      }
+    }
+
+    async function syncFrame(device) {
+      try {
+        const headers = {authorization: `Bearer ${device.credential}`};
+        const response = await fetch('/api/beta/device/manifest', {headers});
+        if (!response.ok) throw new Error(await response.text());
+        const manifest = await response.json();
+        placeName.textContent = manifest.place_name;
+        const newest = manifest.photos[0];
+        if (!newest) {
+          displayPhoto.hidden = true;
+          displayEmpty.hidden = false;
+          status.textContent = `Connected / ${manifest.place_name} is waiting for its first photo.`;
+          status.dataset.state = 'ready';
+          currentPhotoId = undefined;
+          return;
+        }
+        if (newest.id !== currentPhotoId) {
+          const mediaResponse = await fetch(newest.url, {headers});
+          if (!mediaResponse.ok) throw new Error(await mediaResponse.text());
+          const nextUrl = URL.createObjectURL(await mediaResponse.blob());
+          if (displayUrl) URL.revokeObjectURL(displayUrl);
+          displayUrl = nextUrl;
+          displayPhoto.src = displayUrl;
+          displayPhoto.hidden = false;
+          displayEmpty.hidden = true;
+          currentPhotoId = newest.id;
+        }
+        status.textContent = `Delivered / Showing the newest photo on ${manifest.place_name}.`;
+        status.dataset.state = 'success';
+      } catch (error) {
+        status.textContent = `Secure sync unavailable / ${error.message}`;
+        status.dataset.state = 'error';
+      } finally {
+        manifestTimer = setTimeout(() => syncFrame(device), 5000);
+      }
+    }
+
+    async function start() {
+      const device = identity();
+      const response = await fetch('/api/beta/devices/enrollments', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify(device)
+      });
+      if (!response.ok) throw new Error(await response.text());
+      const registration = await response.json();
+      render(registration, device);
+      if (registration.status === 'pending') pollTimer = setTimeout(() => poll(registration, device), 1000);
+    }
+
+    start().catch(error => {
+      status.textContent = `Simulator error / ${error.message}`;
+      status.dataset.state = 'error';
+    });
+  </script>
+</body>
+</html>

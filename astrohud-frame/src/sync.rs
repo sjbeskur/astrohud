@@ -10,6 +10,7 @@ const MAX_MANIFEST_BYTES: u64 = 2 * 1024 * 1024;
 pub struct ServerClient {
     base_url: Url,
     frame_id: String,
+    device_credential: Option<String>,
     agent: ureq::Agent,
 }
 
@@ -19,7 +20,11 @@ pub struct SyncResult {
 }
 
 impl ServerClient {
-    pub fn new(base_url: &str, frame_id: impl Into<String>) -> Result<Self, BoxError> {
+    pub fn new(
+        base_url: &str,
+        frame_id: impl Into<String>,
+        device_credential: Option<String>,
+    ) -> Result<Self, BoxError> {
         let base_url = Url::parse(base_url)?;
         if !matches!(base_url.scheme(), "http" | "https") {
             return Err("server URL must use HTTP or HTTPS".into());
@@ -31,18 +36,26 @@ impl ServerClient {
         Ok(Self {
             base_url,
             frame_id: frame_id.into(),
+            device_credential,
             agent,
         })
     }
 
     pub fn fetch_manifest(&self) -> Result<FrameManifest, BoxError> {
         let mut url = self.base_url.clone();
-        url.path_segments_mut()
-            .map_err(|_| "server URL cannot be a base URL")?
-            .clear()
-            .extend(["api", "frames", &self.frame_id, "manifest"]);
+        {
+            let mut segments = url
+                .path_segments_mut()
+                .map_err(|_| "server URL cannot be a base URL")?;
+            segments.clear();
+            if self.device_credential.is_some() {
+                segments.extend(["api", "beta", "device", "manifest"]);
+            } else {
+                segments.extend(["api", "frames", &self.frame_id, "manifest"]);
+            }
+        }
 
-        let response = self.agent.get(url.as_str()).call()?;
+        let response = self.authorized_get(url.as_str()).call()?;
         let mut bytes = Vec::new();
         response
             .into_reader()
@@ -59,9 +72,17 @@ impl ServerClient {
         if !matches!(url.scheme(), "http" | "https") {
             return Err("photo URL must use HTTP or HTTPS".into());
         }
-        let response = self.agent.get(url.as_str()).call()?;
+        let response = self.authorized_get(url.as_str()).call()?;
         cache.install(photo, response.into_reader())?;
         Ok(())
+    }
+
+    fn authorized_get(&self, url: &str) -> ureq::Request {
+        let request = self.agent.get(url);
+        match &self.device_credential {
+            Some(credential) => request.set("Authorization", &format!("Bearer {credential}")),
+            None => request,
+        }
     }
 }
 

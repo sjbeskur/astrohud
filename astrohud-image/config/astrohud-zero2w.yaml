@@ -1,0 +1,20 @@
+device:
+  layer: rpizero2w
+  hostname: astrohud-??????
+  user1: astrohud-support
+  user1sudo: nopasswd
+
+image:
+  layer: image-rpios
+  boot_part_size: 512M
+  root_part_size: 4G
+  name: astrohud-zero2w
+  compression: zstd
+
+layer:
+  base: trixie-minbase
+  app: astrohud-appliance
+
+ssh:
+  pubkey_user1: ${@SRCROOT}/operator.pub
+  pubkey_only: y

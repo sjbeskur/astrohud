@@ -8,6 +8,8 @@ digital picture frame. See [VISION.md](VISION.md) for the product thesis,
 boundaries, and proof-of-concept milestones. The living
 [product burndown](PRODUCT_BURNDOWN.md) tracks the Pi appliance, hosted
 software/user engagement, and mobile application as separate delivery streams.
+The current delivery target is the three-household friendly beta described in
+[`MVP.md`](MVP.md).
 
 ## Current components
 
@@ -17,10 +19,11 @@ software/user engagement, and mobile application as separate delivery streams.
 - `astrohud-provisioner`: native setup-AP and captive Wi-Fi provisioning service
 - `astroview_wasm`: browser display client
 
-The original WebSocket path remains a transport demonstration. The newer
-vertical slice persists channel images locally, and the native frame caches
-them offline. Authentication, pairing, and hosted media storage are not yet
-implemented.
+The original WebSocket path remains a transport demonstration. The friendly
+beta path now isolates households, claims first-boot devices, and gives owners
+revocable private sender links. Images are persisted locally and the native
+frame caches them offline. Device-authenticated media sync and hosted storage
+are not yet implemented.
 
 AstroHUD's shared visual tokens and interface rules are documented in
 [`UI_THEME.md`](UI_THEME.md). They adapt the operational design language from
@@ -75,6 +78,64 @@ Persistent proof-of-concept data defaults to `astrohud-rest/data`. Set
 ASTROHUD_DATA_DIR=/tmp/astrohud cargo run --package astrohud-rest -- 127.0.0.1:8080
 ```
 
+### Try the friendly-beta claim flow locally
+
+With the server running, create a private owner activation link:
+
+```sh
+cargo run --package astrohud-rest --bin astrohud-admin -- \
+  create-household "Tester household" "Primary owner" \
+  target/activation-cards/tester-household.png
+```
+
+The optional PNG is a private owner-activation QR card for printing or showing
+on the preparer's screen. The recipient scans it with the phone they will use
+for setup, keeps the owner page available, and then scans the appliance's Wi-Fi
+QR. Protect the card like a password until it has been delivered to its owner.
+
+Open `/device-simulator.html` in one browser tab. Open the private activation
+link printed by the command in another tab, then enter the simulator's
+temporary code and name the place. The activation token is carried in the URL
+fragment, exchanged for an HttpOnly same-site cookie, and removed before the
+owner page loads.
+
+Once the frame is connected, create a sender link from the owner page. Open
+that link in a private browser window to exercise the recipient experience:
+the destination is fixed by the invitation, the sender previews a JPEG or PNG,
+and the server derives the household and channel rather than trusting form
+fields. The claimed device simulator then downloads and displays the newest
+photo using its own credential. Disabling the sender link on the owner page
+takes effect immediately.
+
+Use `ASTROHUD_PUBLIC_URL` when the server is accessed through a different local
+hostname. Set `ASTROHUD_SECURE_COOKIES=true` only when it is served through
+HTTPS.
+
+When no endpoint argument is supplied, the service listens on
+`0.0.0.0:$PORT`. This is the launch mode used by hosted services such as
+Render; the explicit endpoint commands above remain available for local use.
+
+### Host the friendly beta on Render
+
+Create one web service from the repository. Leave **Root Directory** blank so
+Cargo can read the workspace manifest, while building and starting only the
+server package:
+
+- Build command: `cargo build --release --package astrohud-rest`
+- Start command: `./target/release/astrohud-rest`
+- Health check path: `/api/health`
+
+Attach a persistent disk at `/var/data`; both the SQLite database and uploaded
+photos must survive service restarts. Configure these environment variables:
+
+```text
+ASTROHUD_DATA_DIR=/var/data/astrohud
+ASTROHUD_PUBLIC_URL=https://app.astrohud.com
+ASTROHUD_SECURE_COOKIES=true
+```
+
+Render supplies `PORT` automatically. Do not set it manually.
+
 Send an image:
 
 ```sh
@@ -124,7 +185,10 @@ configuration, cache semantics, and the physical-Pi validation checklist.
 unprovisioned frame broadcasts a protected, per-device `AstroHUD-XXXXXX`
 network, displays a scannable Wi-Fi QR setup card, and serves a local Wi-Fi
 selection page. It tests candidate credentials before atomically replacing the
-active NetworkManager profile and its recovery backup. See
+active NetworkManager profile and its recovery backup. Once online, it
+generates an appliance-only device credential, enrolls with the server,
+displays the short-lived claim code on the television, and removes that screen
+when the owner claims the frame. See
 [`astrohud-provisioner/README.md`](astrohud-provisioner/README.md) for the state
 model, security boundaries, and deployment files.
 
@@ -140,9 +204,16 @@ test procedure are documented in [`RESET_BUTTON.md`](RESET_BUTTON.md).
 - `GET /api/frames/{frame_id}/manifest`
 - `GET /media/{storage_key}`
 
-New channels are automatically subscribed to the single `demo-frame` fixture.
-This deliberate shortcut will be replaced by explicit frame pairing and
-subscription management in the next milestone.
+The friendly-beta routes add owner sessions, device enrollment and claiming,
+revocable sender invitations, invitation-scoped uploads, and
+device-authenticated manifest and media delivery under `/api/beta`. The legacy
+manifest remains available for the original demo frame, but `/media` now serves
+only demo-household photos; beta-household files require the claimed device's
+credential.
+
+Channels created through the legacy demo API are automatically subscribed to
+the single `demo-frame` fixture. The friendly-beta claim flow instead creates
+an explicit household-scoped frame subscription.
 
 ## Repository state
 

@@ -10,7 +10,10 @@ frame. On an unprovisioned device, or after an explicit local reset, it:
 5. serves a phone-friendly captive portal at `http://10.42.0.1/`;
 6. stops the AP and tests the selected household network;
 7. atomically commits both the NetworkManager profile and protected backup; or
-8. restores the setup AP when the candidate connection fails.
+8. restores the setup AP when the candidate connection fails;
+9. creates a unique device ID and credential locally, enrolls with the server,
+   and shows the short-lived claim code on the television; and
+10. removes the claim screen automatically after the owner claims the frame.
 
 The setup suffix uses uppercase characters without `0/O` or `1/I/L`. The
 suffix is an identifier, not a credential. A separate 16-character random
@@ -21,7 +24,9 @@ after successful provisioning. The SSID and password appear on the card only
 as a fallback for phones that cannot scan Wi-Fi QR codes.
 
 The service stays dormant when either a persistent household profile or its
-recovery backup exists. To enter setup mode locally:
+recovery backup exists and the device is already claimed. While an online
+device is waiting to be claimed, it refreshes expired claim codes and keeps the
+current code on the television. To enter setup mode locally:
 
 ```sh
 sudo astrohud-enter-setup
@@ -45,9 +50,24 @@ sudo astrohud-provisioner --print-label
 ```
 
 The output contains the setup password and must be handled as a credential.
-`/etc/astrohud/device.json` and
-`/etc/astrohud/wifi-profile.nmconnection` must never be committed or copied
-into build artifacts.
+`/etc/astrohud/device.json` and `/var/lib/astrohud/device-credential` contain
+the unique device credential. They are created on the appliance, are never
+displayed, and must not be copied into another appliance image.
+
+Before capturing a reusable image, verify that it contains none of these
+runtime files:
+
+```text
+/etc/astrohud/device.json
+/var/lib/astrohud/device-credential
+/var/lib/astrohud/manifest.json
+/var/lib/astrohud/media/
+/etc/astrohud/wifi-profile.nmconnection
+/etc/NetworkManager/system-connections/astrohud-wifi.nmconnection
+```
+
+Do not remove those files from an assigned appliance; that is a manufacturing
+image requirement, not a reset procedure.
 
 ## Pi dependencies
 
@@ -70,7 +90,8 @@ sudo systemctl enable --now astrohud-provisioner.service
 ```
 
 Enabling the service on an already provisioned device is non-disruptive: it
-ensures device identity exists, sees the household profile/backup, and exits.
+ensures device identity exists, adopts a matching legacy frame credential when
+present, verifies that the server recognizes it, and exits.
 
 ## Planned physical reset
 

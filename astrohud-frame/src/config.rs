@@ -13,6 +13,7 @@ const DEFAULT_SLIDE_SECONDS: u64 = 12;
 pub struct Config {
     pub server_url: String,
     pub frame_id: String,
+    pub device_credential_file: Option<PathBuf>,
     pub cache_dir: PathBuf,
     pub setup_screen: PathBuf,
     pub cache_limit_bytes: u64,
@@ -30,6 +31,8 @@ impl Config {
             server_url: env::var("ASTROHUD_SERVER_URL")
                 .unwrap_or_else(|_| DEFAULT_SERVER.to_owned()),
             frame_id: env::var("ASTROHUD_FRAME_ID").unwrap_or_else(|_| DEFAULT_FRAME_ID.to_owned()),
+            device_credential_file: env::var_os("ASTROHUD_DEVICE_CREDENTIAL_FILE")
+                .map(PathBuf::from),
             setup_screen: env::var_os("ASTROHUD_SETUP_SCREEN")
                 .map(PathBuf::from)
                 .unwrap_or_else(|| cache_dir.join("setup-screen.ppm")),
@@ -61,6 +64,12 @@ impl Config {
             match arg.as_str() {
                 "--server" => config.server_url = required_value(&mut args, "--server")?,
                 "--frame" => config.frame_id = required_value(&mut args, "--frame")?,
+                "--credential-file" => {
+                    config.device_credential_file = Some(PathBuf::from(required_value(
+                        &mut args,
+                        "--credential-file",
+                    )?))
+                }
                 "--cache-dir" => {
                     config.cache_dir = PathBuf::from(required_value(&mut args, "--cache-dir")?)
                 }
@@ -132,6 +141,8 @@ pub fn usage() -> &'static str {
      Options:\n\
        --server URL          AstroHUD service URL\n\
        --frame ID            Frame identity (default: demo-frame)\n\
+       --credential-file PATH\n\
+                            Device credential used for secure delivery\n\
        --cache-dir PATH      Persistent cache directory\n\
        --setup-screen PATH   Provisioning card displayed during setup\n\
        --cache-mib N         Cache size in MiB (default: 1024)\n\
@@ -141,7 +152,8 @@ pub fn usage() -> &'static str {
        -h, --help            Print this help\n\
      \n\
      The same settings can be supplied with ASTROHUD_SERVER_URL,\n\
-     ASTROHUD_FRAME_ID, ASTROHUD_FRAME_CACHE_DIR, ASTROHUD_SETUP_SCREEN,\n\
+     ASTROHUD_FRAME_ID, ASTROHUD_DEVICE_CREDENTIAL_FILE,\n\
+     ASTROHUD_FRAME_CACHE_DIR, ASTROHUD_SETUP_SCREEN,\n\
      ASTROHUD_CACHE_MIB,\n\
      ASTROHUD_SYNC_SECONDS, and ASTROHUD_SLIDE_SECONDS."
 }
@@ -154,6 +166,7 @@ mod tests {
         Config {
             server_url: DEFAULT_SERVER.to_owned(),
             frame_id: DEFAULT_FRAME_ID.to_owned(),
+            device_credential_file: None,
             cache_dir: PathBuf::from("cache"),
             setup_screen: PathBuf::from("cache/setup-screen.ppm"),
             cache_limit_bytes: DEFAULT_CACHE_MIB * 1024 * 1024,
@@ -172,6 +185,8 @@ mod tests {
                 "http://frame.test:8080/",
                 "--frame",
                 "kitchen",
+                "--credential-file",
+                "/tmp/device-credential",
                 "--cache-mib",
                 "64",
                 "--setup-screen",
@@ -183,6 +198,10 @@ mod tests {
 
         assert_eq!(config.server_url, "http://frame.test:8080");
         assert_eq!(config.frame_id, "kitchen");
+        assert_eq!(
+            config.device_credential_file,
+            Some(PathBuf::from("/tmp/device-credential"))
+        );
         assert_eq!(config.cache_limit_bytes, 64 * 1024 * 1024);
         assert_eq!(
             config.setup_screen,

@@ -1,0 +1,60 @@
+# METABEGIN
+# X-Env-Layer-Name: astrohud-appliance
+# X-Env-Layer-Category: application
+# X-Env-Layer-Desc: Sealed AstroHUD appliance services for Raspberry Pi Zero 2 W
+# X-Env-Layer-Version: 0.1.0
+# X-Env-Layer-Requires: trixie-minbase,rpizero2w
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - ca-certificates
+    - dnsmasq-base
+    - libdrm2
+    - libegl1
+    - libgbm1
+    - libgles2
+    - network-manager
+  customize-hooks:
+    - |-
+      set -eu
+      chroot $1 groupadd --system --force astrohud
+      if ! chroot $1 id -u astrohud >/dev/null 2>&1; then
+        chroot $1 useradd --system --gid astrohud \
+          --home-dir /var/lib/astrohud --shell /usr/sbin/nologin astrohud
+      fi
+      for group in input video render; do
+        chroot $1 groupadd --system --force "$group"
+        chroot $1 usermod --append --groups "$group" astrohud
+      done
+    - |-
+      set -eu
+      install -d -o 0 -g 0 -m 0700 $1/etc/astrohud
+      install -d -o 0 -g 0 -m 0700 $1/etc/NetworkManager/system-connections
+      install -d -o 0 -g 0 -m 0755 $1/etc/NetworkManager/dnsmasq-shared.d
+      install -d -o 0 -g 0 -m 0755 $1/etc/systemd/journald.conf.d
+      install -d -o 0 -g 0 -m 0755 $1/etc/systemd/system
+      install -d -o 0 -g 0 -m 0755 $1/usr/local/bin
+      install -d -o 0 -g 0 -m 0755 $1/usr/local/sbin
+      install -d -o 0 -g 0 -m 0750 $1/var/lib/astrohud
+      chroot $1 chown astrohud:astrohud /var/lib/astrohud
+    - |-
+      set -eu
+      $BDEBSTRAP_HOOKS/disable-units "$1" iwd systemd-networkd
+      $BDEBSTRAP_HOOKS/enable-units "$1" NetworkManager NetworkManager-wait-online
+      $BDEBSTRAP_HOOKS/enable-units "$1" astrohud-frame astrohud-provisioner astrohud-wifi-guard.timer
+    - |-
+      set -eu
+      printf '%s\n' 'astrohud-??????' > $1/etc/hostname
+      truncate -s 0 $1/etc/machine-id
+      rm -f $1/var/lib/dbus/machine-id
+      rm -f $1/etc/ssh/ssh_host_ecdsa_key $1/etc/ssh/ssh_host_ecdsa_key.pub
+      rm -f $1/etc/ssh/ssh_host_ed25519_key $1/etc/ssh/ssh_host_ed25519_key.pub
+      rm -f $1/etc/ssh/ssh_host_rsa_key $1/etc/ssh/ssh_host_rsa_key.pub
+      rm -f $1/etc/astrohud/device.json
+      rm -f $1/etc/astrohud/wifi-profile.nmconnection
+      rm -f $1/etc/NetworkManager/system-connections/astrohud-wifi.nmconnection
+      rm -f $1/var/lib/astrohud/device-credential
+      rm -f $1/var/lib/astrohud/manifest.json
+      rm -f $1/var/lib/astrohud/setup-screen.ppm
+      rm -rf $1/var/lib/astrohud/media

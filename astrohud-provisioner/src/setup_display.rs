@@ -31,6 +31,25 @@ pub fn write(identity: &DeviceIdentity, path: &Path) -> Result<(), String> {
     atomic_write_ppm(path, &pixels).map_err(|error| error.to_string())
 }
 
+pub fn write_connecting(
+    identity: &DeviceIdentity,
+    wifi_ssid: &str,
+    path: &Path,
+) -> Result<(), String> {
+    let pixels = render_connecting(identity, wifi_ssid);
+    atomic_write_ppm(path, &pixels).map_err(|error| error.to_string())
+}
+
+pub fn write_claim(
+    identity: &DeviceIdentity,
+    claim_code: &str,
+    claim_url: &str,
+    path: &Path,
+) -> Result<(), String> {
+    let pixels = render_claim(identity, claim_code, claim_url)?;
+    atomic_write_ppm(path, &pixels).map_err(|error| error.to_string())
+}
+
 pub fn remove(path: &Path) -> io::Result<()> {
     match fs::remove_file(path) {
         Ok(()) => Ok(()),
@@ -84,6 +103,94 @@ fn render(identity: &DeviceIdentity) -> Result<Vec<u8>, String> {
         1,
         "SCAN TO JOIN / PORTAL OPENS AUTOMATICALLY",
         GREEN,
+    );
+    Ok(canvas.pixels)
+}
+
+fn render_connecting(identity: &DeviceIdentity, wifi_ssid: &str) -> Vec<u8> {
+    let mut canvas = Canvas::new(WIDTH, HEIGHT, VOID);
+
+    canvas.fill_rect(0, 0, 9, 158, AMBER);
+    canvas.fill_rect(0, 158, 9, 187, SALMON);
+    canvas.fill_rect(0, 345, 9, 187, LAVENDER);
+    canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
+    canvas.fill_rect(40, 30, 455, 62, BLUE);
+    canvas.text(70, 49, 3, "AH / ASTROHUD", VOID);
+    canvas.text(840, 52, 2, "NETWORK LINK / CONNECTING", BLUE);
+
+    canvas.fill_rect(40, 112, 1200, 568, LINE);
+    canvas.fill_rect(41, 113, 1198, 566, SURFACE);
+    canvas.fill_rect(40, 112, 8, 568, SALMON);
+    canvas.fill_rect(40, 112, 8, 82, AMBER);
+    canvas.text(
+        86,
+        151,
+        2,
+        &format!("SETUP / {}", identity.device_code),
+        AMBER,
+    );
+    canvas.text(86, 218, 5, "CONNECTING", TEXT);
+    canvas.text(86, 272, 5, "TO WI-FI", LAVENDER);
+
+    canvas.fill_rect(72, 355, 1096, 118, RAISED);
+    canvas.fill_rect(72, 355, 6, 118, BLUE);
+    canvas.text(102, 380, 1, "HOME NETWORK", BLUE);
+    canvas.text(102, 414, 2, wifi_ssid, TEXT);
+
+    canvas.text(86, 520, 2, "THE FRAME IS TESTING THIS CONNECTION", MUTED);
+    canvas.text(86, 560, 2, "THIS CAN TAKE ABOUT 30 SECONDS", MUTED);
+    canvas.fill_rect(72, 612, 1096, 5, GREEN);
+    canvas.text(86, 637, 1, "NEXT / A CLAIM CODE WILL APPEAR HERE", GREEN);
+    canvas.pixels
+}
+
+fn render_claim(
+    identity: &DeviceIdentity,
+    claim_code: &str,
+    claim_url: &str,
+) -> Result<Vec<u8>, String> {
+    let mut canvas = Canvas::new(WIDTH, HEIGHT, VOID);
+
+    canvas.fill_rect(0, 0, 9, 158, AMBER);
+    canvas.fill_rect(0, 158, 9, 187, SALMON);
+    canvas.fill_rect(0, 345, 9, 187, LAVENDER);
+    canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
+    canvas.fill_rect(40, 30, 455, 62, LAVENDER);
+    canvas.text(70, 49, 3, "AH / ASTROHUD", VOID);
+    canvas.text(900, 52, 2, "PAIRING LINK / ACTIVE", GREEN);
+
+    canvas.fill_rect(40, 112, 1200, 568, LINE);
+    canvas.fill_rect(41, 113, 1198, 566, SURFACE);
+    canvas.fill_rect(40, 112, 8, 568, SALMON);
+    canvas.fill_rect(40, 112, 8, 82, AMBER);
+    canvas.text(
+        86,
+        151,
+        2,
+        &format!("FRAME / {}", identity.device_code),
+        AMBER,
+    );
+    canvas.text(86, 215, 5, "CONNECT YOUR", TEXT);
+    canvas.text(86, 270, 5, "FRAME", LAVENDER);
+
+    canvas.text(86, 378, 2, "1  OPEN YOUR PRIVATE OWNER LINK", MUTED);
+    canvas.text(86, 420, 2, "2  SCAN THIS QR WITH THE SAME PHONE", MUTED);
+    canvas.text(86, 462, 2, "3  NAME THIS PLACE", MUTED);
+
+    canvas.fill_rect(700, 142, 470, 438, RAISED);
+    canvas.fill_rect(700, 142, 8, 438, SALMON);
+    canvas.qr_code(780, 160, 330, claim_url)?;
+    canvas.text(770, 498, 1, "CLAIM CODE / MANUAL ENTRY", MUTED);
+    canvas.text(770, 532, 4, claim_code, TEXT);
+
+    canvas.fill_rect(72, 606, 1096, 39, RAISED);
+    canvas.fill_rect(72, 606, 6, 39, BLUE);
+    canvas.text(
+        102,
+        620,
+        1,
+        "WAITING FOR OWNER / THIS SCREEN CLOSES AUTOMATICALLY",
+        BLUE,
     );
     Ok(canvas.pixels)
 }
@@ -200,6 +307,8 @@ mod tests {
             device_code: "AB23CD".to_owned(),
             setup_ssid: "AstroHUD-AB23CD".to_owned(),
             setup_password: "23456789ABCDEFGH".to_owned(),
+            device_id: "00000000-0000-4000-8000-000000000000".to_owned(),
+            device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".to_owned(),
         }
     }
 
@@ -229,6 +338,30 @@ mod tests {
     }
 
     #[test]
+    fn claim_card_has_expected_dimensions_and_contrast() {
+        let pixels = render_claim(
+            &identity(),
+            "AB23CD45",
+            "http://192.168.50.144:8080/owner.html?claim_code=AB23CD45",
+        )
+        .expect("render claim screen");
+        assert_eq!(pixels.len(), WIDTH * HEIGHT * 3);
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == TEXT));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == GREEN));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == LAVENDER));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == WHITE));
+    }
+
+    #[test]
+    fn connecting_card_has_expected_dimensions_and_status_colors() {
+        let pixels = render_connecting(&identity(), "Grandma's Wi-Fi");
+        assert_eq!(pixels.len(), WIDTH * HEIGHT * 3);
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == TEXT));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == BLUE));
+        assert!(pixels.chunks_exact(3).any(|pixel| pixel == GREEN));
+    }
+
+    #[test]
     #[ignore = "writes a manual preview artifact to /tmp"]
     fn write_setup_card_preview() {
         write(
@@ -236,5 +369,28 @@ mod tests {
             Path::new("/tmp/astrohud-setup-card-preview.ppm"),
         )
         .expect("write setup card preview");
+    }
+
+    #[test]
+    #[ignore = "writes a manual preview artifact to /tmp"]
+    fn write_connecting_card_preview() {
+        write_connecting(
+            &identity(),
+            "Grandma's Wi-Fi",
+            Path::new("/tmp/astrohud-connecting-card-preview.ppm"),
+        )
+        .expect("write connecting card preview");
+    }
+
+    #[test]
+    #[ignore = "writes a manual preview artifact to /tmp"]
+    fn write_claim_card_preview() {
+        write_claim(
+            &identity(),
+            "AB23CD45",
+            "http://192.168.50.144:8080/owner.html?claim_code=AB23CD45",
+            Path::new("/tmp/astrohud-claim-card-preview.ppm"),
+        )
+        .expect("write claim card preview");
     }
 }

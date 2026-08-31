@@ -1,0 +1,51 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
+  <title>Activate AstroHUD</title>
+  <link rel="stylesheet" href="/astrohud-theme.css">
+</head>
+<body>
+  <header class="hud-nav">
+    <div class="hud-shell hud-nav-row">
+      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-link-state"><i class="status-light"></i> Owner activation</div>
+    </div>
+  </header>
+
+  <main class="hud-shell sender-main">
+    <header class="sender-intro">
+      <p class="signal-label">Private access / Establishing link</p>
+      <h1>Preparing your <em>frame.</em></h1>
+      <p id="message">Checking this private activation link…</p>
+    </header>
+    <p id="status" class="status-line" data-state="sending" role="status">Activation in progress.</p>
+  </main>
+
+  <script>
+    const message = document.querySelector('#message');
+    const status = document.querySelector('#status');
+
+    async function activate() {
+      const token = location.hash.slice(1);
+      history.replaceState(null, '', '/activate.html');
+      if (!token) throw new Error('This activation link is incomplete. Ask the person who prepared your frame for a new link.');
+      const response = await fetch('/api/beta/owner/session', {
+        method: 'POST',
+        headers: {'content-type': 'application/json'},
+        body: JSON.stringify({token})
+      });
+      if (!response.ok) throw new Error('This activation link is invalid or no longer active.');
+      location.replace('/owner.html');
+    }
+
+    activate().catch(error => {
+      message.textContent = 'We could not activate owner access.';
+      status.textContent = error.message;
+      status.dataset.state = 'error';
+    });
+  </script>
+</body>
+</html>

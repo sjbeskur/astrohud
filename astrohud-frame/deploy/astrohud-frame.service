@@ -13,6 +13,7 @@ StateDirectory=astrohud
 Environment=SDL_VIDEODRIVER=kmsdrm
 Environment=ASTROHUD_SERVER_URL=http://192.168.50.144:8080
 Environment=ASTROHUD_FRAME_ID=demo-frame
+Environment=ASTROHUD_DEVICE_CREDENTIAL_FILE=/var/lib/astrohud/device-credential
 Environment=ASTROHUD_FRAME_CACHE_DIR=/var/lib/astrohud
 Environment=ASTROHUD_SETUP_SCREEN=/var/lib/astrohud/setup-screen.ppm
 ExecStart=/usr/local/bin/astrohud-frame

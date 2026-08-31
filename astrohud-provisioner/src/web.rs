@@ -1,7 +1,9 @@
 use crate::identity::DeviceIdentity;
 use crate::network::{NetworkManager, WifiNetwork};
+use crate::setup_display;
 use serde::Serialize;
 use std::io::Read;
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -113,6 +115,24 @@ fn handle_request(
                 *current = ProvisioningStatus::Applying;
             }
 
+            if let Err(error) = setup_display::write_connecting(
+                identity,
+                ssid,
+                Path::new(setup_display::SETUP_SCREEN_PATH),
+            ) {
+                *status.lock().expect("status lock") = ProvisioningStatus::Failed(error.clone());
+                respond(
+                    request,
+                    500,
+                    "text/html; charset=utf-8",
+                    message_page(
+                        "Could not update the television",
+                        "Reconnect to the AstroHUD network and try again.",
+                    ),
+                );
+                return;
+            }
+
             respond(
                 request,
                 202,
@@ -131,6 +151,12 @@ fn handle_request(
                         finished.store(true, Ordering::Release);
                     }
                     Err(error) => {
+                        if let Err(display_error) = setup_display::write(
+                            &identity,
+                            Path::new(setup_display::SETUP_SCREEN_PATH),
+                        ) {
+                            eprintln!("could not restore setup screen: {display_error}");
+                        }
                         *status.lock().expect("status lock") = ProvisioningStatus::Failed(error);
                     }
                 }
@@ -237,7 +263,7 @@ fn connecting_page(ssid: &str) -> String {
     page_shell(
         "Connecting",
         &format!(
-            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Network link / Testing</p><h1>Connecting<span class=\"ellipsis\">…</span></h1><p>The frame is testing <strong>{}</strong>. Your phone will leave this setup link. If the test fails, reconnect to the same AstroHUD network and try again.</p><p class=\"status-line pending\"><i></i> Connection test active</p></section>",
+            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Network link / Testing</p><h1>Connecting<span class=\"ellipsis\">…</span></h1><p>The frame is testing <strong>{}</strong>. This page will disconnect when the temporary AstroHUD network closes.</p><p><strong>Watch the television next.</strong> It will show a claim QR code when the frame is online. If needed, reconnect your phone to your home Wi-Fi before scanning it.</p><p class=\"status-line pending\"><i></i> Connection test active / About 30 seconds</p></section>",
             escape_html(ssid)
         ),
     )
@@ -316,12 +342,22 @@ mod tests {
     }
 
     #[test]
+    fn connecting_page_explains_the_phone_to_television_handoff() {
+        let page = connecting_page("Grandma's Wi-Fi");
+        assert!(page.contains("Watch the television next."));
+        assert!(page.contains("claim QR code"));
+        assert!(page.contains("About 30 seconds"));
+    }
+
+    #[test]
     #[ignore = "writes a manual preview artifact to /tmp"]
     fn write_portal_preview() {
         let identity = DeviceIdentity {
             device_code: "AB23CD".to_owned(),
             setup_ssid: "AstroHUD-AB23CD".to_owned(),
             setup_password: "23456789ABCDEFGH".to_owned(),
+            device_id: "00000000-0000-4000-8000-000000000000".to_owned(),
+            device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".to_owned(),
         };
         let networks = vec![
             WifiNetwork {

@@ -17,7 +17,7 @@ use std::io;
 use std::path::Path;
 use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, SystemTime};
 
 const FRAME_MARGIN: u32 = 24;
 const FRAME_GAP: i32 = 8;
@@ -53,7 +53,17 @@ fn spawn_sync(config: Config) -> Receiver<Playlist> {
                 return;
             }
         };
-        let client = match ServerClient::new(&config.server_url, config.frame_id) {
+        let device_credential = loop {
+            match load_device_credential(config.device_credential_file.as_deref()) {
+                Ok(credential) => break credential,
+                Err(error) => {
+                    eprintln!("frame credential unavailable; waiting: {error}");
+                    thread::sleep(config.sync_interval);
+                }
+            }
+        };
+        let client = match ServerClient::new(&config.server_url, config.frame_id, device_credential)
+        {
             Ok(client) => client,
             Err(error) => {
                 eprintln!("frame sync failed to start: {error}");
@@ -75,6 +85,18 @@ fn spawn_sync(config: Config) -> Receiver<Playlist> {
         }
     });
     receiver
+}
+
+fn load_device_credential(path: Option<&Path>) -> Result<Option<String>, BoxError> {
+    let Some(path) = path else {
+        return Ok(None);
+    };
+    let credential = fs::read_to_string(path)?;
+    let credential = credential.trim();
+    if credential.len() < 32 || credential.chars().any(char::is_whitespace) {
+        return Err(format!("invalid device credential in {}", path.display()).into());
+    }
+    Ok(Some(credential.to_owned()))
 }
 
 fn run_viewer(
@@ -106,6 +128,7 @@ fn run_viewer(
     let mut current = None;
     let mut next_slide = Instant::now();
     let mut next_setup_check = Instant::now();
+    let mut setup_revision = None;
     let mut setup_active = false;
     let mut running = true;
 
@@ -144,16 +167,26 @@ fn run_viewer(
 
         let now = Instant::now();
         if now >= next_setup_check {
-            let setup_present = fs::metadata(&config.setup_screen).is_ok();
-            if setup_present && !setup_active {
-                match render_image(&mut canvas, &config.setup_screen, None, None) {
-                    Ok(()) => setup_active = true,
-                    Err(error) => eprintln!("could not display setup screen: {error}"),
+            let detected_revision = setup_screen_revision(&config.setup_screen);
+            match detected_revision {
+                Some(revision) if setup_revision.as_ref() != Some(&revision) => {
+                    match render_image(&mut canvas, &config.setup_screen, None, None) {
+                        Ok(()) => {
+                            setup_revision = Some(revision);
+                            setup_active = true;
+                        }
+                        Err(error) => eprintln!("could not display setup screen: {error}"),
+                    }
                 }
-            } else if !setup_present && setup_active {
-                setup_active = false;
-                current = None;
-                next_slide = now;
+                None => {
+                    setup_revision = None;
+                    if setup_active {
+                        setup_active = false;
+                        current = None;
+                        next_slide = now;
+                    }
+                }
+                Some(_) => {}
             }
             next_setup_check = now + Duration::from_millis(500);
         }
@@ -166,6 +199,28 @@ fn run_viewer(
         thread::sleep(Duration::from_millis(20));
     }
     Ok(())
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+struct SetupScreenRevision {
+    length: u64,
+    modified: Option<SystemTime>,
+    #[cfg(unix)]
+    device: u64,
+    #[cfg(unix)]
+    inode: u64,
+}
+
+fn setup_screen_revision(path: &Path) -> Option<SetupScreenRevision> {
+    let metadata = fs::metadata(path).ok()?;
+    Some(SetupScreenRevision {
+        length: metadata.len(),
+        modified: metadata.modified().ok(),
+        #[cfg(unix)]
+        device: std::os::unix::fs::MetadataExt::dev(&metadata),
+        #[cfg(unix)]
+        inode: std::os::unix::fs::MetadataExt::ino(&metadata),
+    })
 }
 
 fn show_next(
@@ -532,6 +587,24 @@ fn other(error: impl std::fmt::Display) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn setup_screen_revision_detects_atomic_replacement() {
+        let path = std::env::temp_dir().join(format!(
+            "astrohud-frame-setup-revision-{}",
+            std::process::id()
+        ));
+        let replacement = path.with_extension("replacement");
+        fs::write(&path, b"alpha").expect("write first screen");
+        let first = setup_screen_revision(&path).expect("first revision");
+
+        fs::write(&replacement, b"bravo").expect("write replacement screen");
+        fs::rename(&replacement, &path).expect("replace screen atomically");
+        let second = setup_screen_revision(&path).expect("second revision");
+
+        assert_ne!(first, second);
+        fs::remove_file(path).expect("remove test screen");
+    }
 
     #[test]
     fn landscape_image_is_letterboxed_vertically() {
