@@ -4,8 +4,8 @@
 
 AstroHUD's next product gate is a three-household friendly beta. Each household
 receives one pre-enrolled Pi Zero appliance. An owner connects it to Wi-Fi,
-claims it with a short code shown on the television, and creates private links
-that trusted friends and family use to send photos to that place.
+names its place on the same phone, and creates private links that trusted
+friends and family use to send photos to that place.
 
 The beta is successful when all three households can use the complete journey
 without sharing data, credentials, or destinations with one another.
@@ -27,14 +27,17 @@ without sharing data, credentials, or destinations with one another.
 
 ### Prepare a tester
 
-1. The operator creates a household and an owner activation link.
-2. The same reusable appliance image is written to an SD card.
-3. On first boot, the appliance creates its own identity and credential. No
+1. The same reusable appliance image is written to an SD card.
+2. On first boot, the appliance creates its own identity and credentials. No
    per-device secret is included in the image.
-4. The tester completes the existing QR-guided Wi-Fi setup.
-5. The appliance registers as pending and displays a short-lived claim code.
-6. The owner opens their activation link, names the place, and enters the code.
-7. The server binds the appliance to that household and authorizes sync.
+3. The tester scans the television QR and selects household Wi-Fi on the phone.
+4. That phone automatically continues at the public onboarding page while the
+   appliance registers as pending.
+5. The owner names the place. The server atomically creates its household and
+   owner access, claims the appliance, and authorizes sync.
+6. A television QR and short claim code remain available only as recovery
+   fallbacks; the normal journey requires neither a prepared activation link
+   nor typed code.
 
 ### Invite a sender
 
@@ -63,9 +66,13 @@ and revoke sender invitations, and see the frame's last contact time.
 - Every frame, channel, invitation, and photo is owned by one household.
 - Authorization derives the household from the authenticated owner, sender,
   or device credential. A client-supplied household ID is never trusted.
-- Device credentials and invitation tokens are random, independently
-  revocable, and stored hashed on the server.
-- A short claim code identifies a pending enrollment; it is not a credential.
+- Device credentials, bootstrap tokens, and invitation tokens are random and
+  stored hashed on the server.
+- A high-entropy, device-bound bootstrap token expires with enrollment and can
+  claim exactly one frame. It travels in the URL fragment rather than HTTP
+  request logs or referrers.
+- A short claim code identifies a pending enrollment; it is a support fallback,
+  not an owner credential or part of normal onboarding.
 - Manifests and media require device authentication.
 - Cross-household subscriptions are rejected by the database and by API query
   scoping.
@@ -95,7 +102,8 @@ cached image files rather than SQLite.
 
 ## MVP constraints
 
-- Three operator-created households
+- Three device-created households, with operator activation retained for
+  recovery and attended support
 - One owner and one physical frame per household in the initial UI
 - One default channel per household, hidden from invited senders
 - Immediate publication by trusted senders; owner deletion instead of a
@@ -123,16 +131,18 @@ reset remains deferred.
 
 - [x] Establish the household schema, migrate the current demo data, and prove
   isolation with automated tests.
-- [x] Add pending device enrollment and the owner claim journey.
+- [x] Add pending device enrollment and the single-phone owner claim journey.
 - [x] Add owner access and invitation-scoped sender access.
 - [x] Authenticate manifest and media delivery.
-- [x] Generate per-appliance identity on first boot and display the claim code.
+- [x] Generate per-appliance identity on first boot and carry a one-time
+  bootstrap from Wi-Fi setup into owner onboarding.
 - [ ] Add frame last-seen state, cache-delivery acknowledgements, deletion, and
   quotas.
 - [ ] Exercise three local households with simulated devices.
 - [ ] Validate the same flow on the three physical appliances.
-- [ ] Deploy the already-proven service to a public HTTPS host.
+- [x] Deploy the service to a public HTTPS host.
 
 The server, browser simulator, and native Pi now exercise authenticated
 manifest and media delivery. The provisioner generates the device credential
-on the appliance, enrolls after Wi-Fi setup, and owns the claim-code display.
+and bootstrap token on the appliance, enrolls after Wi-Fi setup, and owns the
+setup display until the browser completes the claim.

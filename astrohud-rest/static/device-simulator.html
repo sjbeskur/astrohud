@@ -20,9 +20,10 @@
       <p class="signal-label">Setup / Waiting for owner</p>
       <div id="pending">
         <h1>Claim this frame</h1>
-        <p class="instrument-copy">Open your private AstroHUD owner link and enter this temporary code.</p>
+        <p class="instrument-copy">Open the device-bound setup link to create the place and owner access in one step.</p>
         <div id="claim-code" class="claim-code" aria-live="polite">--------</div>
         <p id="expires" class="instrument-label">Creating a secure device identity…</p>
+        <p><a id="onboard-link" class="signal-button" href="#">Continue onboarding →</a></p>
       </div>
       <div id="claimed" hidden>
         <div class="simulator-frame-heading">
@@ -48,6 +49,7 @@
     const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     const claimCode = document.querySelector('#claim-code');
     const expires = document.querySelector('#expires');
+    const onboardLink = document.querySelector('#onboard-link');
     const pending = document.querySelector('#pending');
     const claimed = document.querySelector('#claimed');
     const placeName = document.querySelector('#place-name');
@@ -76,11 +78,19 @@
 
     function identity() {
       const stored = sessionStorage.getItem('astrohud-simulated-device');
-      if (stored) return JSON.parse(stored);
+      if (stored) {
+        const existing = JSON.parse(stored);
+        if (!existing.bootstrap_token) {
+          existing.bootstrap_token = `${randomUuid()}${randomUuid()}`;
+          sessionStorage.setItem('astrohud-simulated-device', JSON.stringify(existing));
+        }
+        return existing;
+      }
       const created = {
         device_id: randomUuid(),
         device_code: randomDeviceCode(),
-        credential: `${randomUuid()}${randomUuid()}`
+        credential: `${randomUuid()}${randomUuid()}`,
+        bootstrap_token: `${randomUuid()}${randomUuid()}`
       };
       sessionStorage.setItem('astrohud-simulated-device', JSON.stringify(created));
       return created;
@@ -101,7 +111,8 @@
       }
       claimCode.textContent = registration.claim_code;
       expires.textContent = `Temporary code / Expires ${registration.expires_at} UTC`;
-      status.textContent = 'Waiting / Enter this code from the private owner page.';
+      onboardLink.href = `/onboard.html#${device.bootstrap_token}`;
+      status.textContent = 'Waiting / Continue through the private device-bound setup link.';
       status.dataset.state = 'ready';
     }
 

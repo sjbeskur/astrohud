@@ -1,7 +1,8 @@
 use crate::{
-    AppState, BetaError, DeviceEnrollmentState, DeviceRegistration, claim_device,
-    claimed_device_access, create_sender_invitation, enrollment_status, owner_context,
-    protected_manifest_for_household, protected_media_storage_key, register_device,
+    AppState, BetaError, DeviceEnrollmentState, DeviceRegistration, claim_bootstrap_device,
+    claim_device, claimed_device_access, create_sender_invitation, device_bootstrap_status,
+    enrollment_status, owner_context, protected_manifest_for_household,
+    protected_media_storage_key, register_bootstrap_device, register_device,
     revoke_sender_invitation, sender_access, upload_invited_photo,
 };
 use actix_files::NamedFile;
@@ -26,6 +27,17 @@ struct ClaimDeviceRequest {
 }
 
 #[derive(Deserialize)]
+struct BootstrapTokenRequest {
+    token: String,
+}
+
+#[derive(Deserialize)]
+struct BootstrapClaimRequest {
+    token: String,
+    place_name: String,
+}
+
+#[derive(Deserialize)]
 struct InvitationRequest {
     label: String,
 }
@@ -35,6 +47,7 @@ struct RegisterDeviceRequest {
     device_id: String,
     device_code: String,
     credential: String,
+    bootstrap_token: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -89,6 +102,11 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             "/api/beta/owner/claim",
             web::post().to(claim_pending_device),
         )
+        .route(
+            "/api/beta/bootstrap/status",
+            web::post().to(get_bootstrap_status),
+        )
+        .route("/api/beta/bootstrap/claim", web::post().to(claim_bootstrap))
         .route(
             "/api/beta/devices/enrollments",
             web::post().to(create_device_enrollment),
@@ -199,6 +217,35 @@ async fn claim_pending_device(
     Ok(HttpResponse::Ok().json(context))
 }
 
+async fn get_bootstrap_status(
+    state: web::Data<AppState>,
+    request: web::Json<BootstrapTokenRequest>,
+) -> Result<HttpResponse> {
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let status =
+        device_bootstrap_status(&database, request.token.trim()).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok().json(status))
+}
+
+async fn claim_bootstrap(
+    state: web::Data<AppState>,
+    request: web::Json<BootstrapClaimRequest>,
+) -> Result<HttpResponse> {
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let claim = claim_bootstrap_device(&mut database, request.token.trim(), &request.place_name)
+        .map_err(beta_http_error)?;
+    let context = owner_context(&database, &claim.owner_token).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .cookie(access_cookie(OWNER_COOKIE, &claim.owner_token))
+        .json(context))
+}
+
 async fn create_device_enrollment(
     state: web::Data<AppState>,
     request: web::Json<RegisterDeviceRequest>,
@@ -207,12 +254,21 @@ async fn create_device_enrollment(
         .database
         .lock()
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
-    let registration = register_device(
-        &database,
-        &request.device_id,
-        &request.device_code,
-        &request.credential,
-    )
+    let registration = match request.bootstrap_token.as_deref() {
+        Some(bootstrap_token) => register_bootstrap_device(
+            &database,
+            &request.device_id,
+            &request.device_code,
+            &request.credential,
+            bootstrap_token,
+        ),
+        None => register_device(
+            &database,
+            &request.device_id,
+            &request.device_code,
+            &request.credential,
+        ),
+    }
     .map_err(beta_http_error)?;
     Ok(HttpResponse::Ok().json(DeviceRegistrationResponse::from(registration)))
 }
@@ -388,6 +444,95 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn device_bootstrap_claim_creates_owner_session_and_rejects_replay() {
+        let database = Connection::open_in_memory().expect("open database");
+        initialize_database(&database).expect("initialize database");
+        let state = web::Data::new(AppState::new(database, PathBuf::from("unused")));
+        let app =
+            test::init_service(App::new().app_data(state).configure(configure_beta_routes)).await;
+        let device_id = Uuid::new_v4().to_string();
+        let credential = "simulated-device-credential-abcdefghijklmnopqrstuvwxyz";
+        let bootstrap_token = "simulated-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789";
+
+        let anonymous_owner = test::TestRequest::get().uri("/api/beta/owner").to_request();
+        assert_eq!(
+            test::call_service(&app, anonymous_owner).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+
+        let enrollment_request = test::TestRequest::post()
+            .uri("/api/beta/devices/enrollments")
+            .set_json(serde_json::json!({
+                "device_id": device_id,
+                "device_code": "ABC2D3",
+                "credential": credential,
+                "bootstrap_token": bootstrap_token
+            }))
+            .to_request();
+        let enrollment_response = test::call_service(&app, enrollment_request).await;
+        assert_eq!(enrollment_response.status(), StatusCode::OK);
+
+        let status_request = test::TestRequest::post()
+            .uri("/api/beta/bootstrap/status")
+            .set_json(serde_json::json!({"token": bootstrap_token}))
+            .to_request();
+        let status_response = test::call_service(&app, status_request).await;
+        assert_eq!(status_response.status(), StatusCode::OK);
+        let status: serde_json::Value = test::read_body_json(status_response).await;
+        assert_eq!(status["status"], "ready");
+        assert_eq!(status["device_code"], "ABC2D3");
+
+        let claim_request = test::TestRequest::post()
+            .uri("/api/beta/bootstrap/claim")
+            .set_json(serde_json::json!({
+                "token": bootstrap_token,
+                "place_name": "Mom's living room"
+            }))
+            .to_request();
+        let claim_response = test::call_service(&app, claim_request).await;
+        assert_eq!(claim_response.status(), StatusCode::OK);
+        let owner_cookie = claim_response
+            .response()
+            .cookies()
+            .find(|cookie| cookie.name() == OWNER_COOKIE)
+            .expect("owner cookie")
+            .into_owned();
+        assert!(owner_cookie.http_only().unwrap_or(false));
+        assert_eq!(owner_cookie.same_site(), Some(SameSite::Strict));
+        let claim_body: serde_json::Value = test::read_body_json(claim_response).await;
+        assert_eq!(claim_body["household_name"], "Mom's living room");
+        assert_eq!(claim_body["frames"][0]["place_name"], "Mom's living room");
+        assert!(claim_body.get("household_id").is_none());
+
+        let owner_request = test::TestRequest::get()
+            .uri("/api/beta/owner")
+            .cookie(owner_cookie)
+            .to_request();
+        let owner_response = test::call_service(&app, owner_request).await;
+        assert_eq!(owner_response.status(), StatusCode::OK);
+
+        let replay_request = test::TestRequest::post()
+            .uri("/api/beta/bootstrap/claim")
+            .set_json(serde_json::json!({
+                "token": bootstrap_token,
+                "place_name": "Replay place"
+            }))
+            .to_request();
+        let replay_response = test::call_service(&app, replay_request).await;
+        assert_eq!(replay_response.status(), StatusCode::CONFLICT);
+        assert!(replay_response.response().cookies().next().is_none());
+
+        let manifest_request = test::TestRequest::get()
+            .uri("/api/beta/device/manifest")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {credential}")))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, manifest_request).await.status(),
+            StatusCode::OK
+        );
+    }
 
     #[actix_web::test]
     async fn owner_session_claims_a_simulated_device_without_a_household_id() {

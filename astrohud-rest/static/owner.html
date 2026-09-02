@@ -17,9 +17,9 @@
 
   <main class="hud-shell sender-main">
     <header class="sender-intro">
-      <p class="signal-label">Frame activation / <span id="household-name">Loading</span></p>
-      <h1>Connect your <em>place.</em></h1>
-      <p>Enter the code shown on the television and give the destination a name people will recognize.</p>
+      <p class="signal-label">Place control / <span id="household-name">Loading</span></p>
+      <h1>Your place, <em>connected.</em></h1>
+      <p>See the frame assigned to this place and create private sender links for friends and family.</p>
     </header>
 
     <div class="instrument-stack">
@@ -28,8 +28,8 @@
           <p class="instrument-label"><span class="instrument-number">!</span> / Private owner access</p>
           <p class="instrument-label">This browser</p>
         </div>
-        <h2 id="owner-access-title">Open your owner link on this device</h2>
-        <p class="instrument-copy">This browser does not have owner access yet. Open the complete private owner activation link in Safari or Chrome on this device, then scan the frame QR again. Access does not carry between devices, private windows, or in-app browsers.</p>
+        <h2 id="owner-access-title">Owner access is missing</h2>
+        <p class="instrument-copy">New-frame setup creates access automatically on the phone that configures Wi-Fi. For recovery on another browser, open the private owner activation link supplied by AstroHUD support. Access does not carry between devices or private windows.</p>
       </section>
 
       <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
@@ -179,7 +179,7 @@
         connectedPanel.hidden = true;
         invitePanel.hidden = true;
         ownerAccessHelp.hidden = false;
-        throw new Error('Owner access is missing in this browser. Open the complete private activation link here, then scan the frame QR again.');
+        throw new Error('Owner access is missing in this browser. Use the phone that set up the frame, or open a private recovery activation link from AstroHUD support.');
       }
       if (!response.ok) throw new Error(await response.text());
       ownerAccessHelp.hidden = true;

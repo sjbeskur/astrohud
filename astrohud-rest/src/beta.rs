@@ -60,6 +60,24 @@ pub struct DeviceRegistration {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 #[serde(tag = "status", rename_all = "snake_case")]
+pub enum DeviceBootstrapState {
+    Waiting,
+    Ready {
+        device_code: String,
+        expires_at: String,
+    },
+    Claimed,
+    Expired,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct BootstrapClaim {
+    pub owner_token: String,
+    pub frame: ClaimedFrame,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[serde(tag = "status", rename_all = "snake_case")]
 pub enum DeviceEnrollmentState {
     Pending {
         claim_code: String,
@@ -176,6 +194,33 @@ pub fn register_device(
     device_code: &str,
     device_credential: &str,
 ) -> Result<DeviceRegistration, BetaError> {
+    register_device_internal(connection, device_id, device_code, device_credential, None)
+}
+
+pub fn register_bootstrap_device(
+    connection: &Connection,
+    device_id: &str,
+    device_code: &str,
+    device_credential: &str,
+    bootstrap_token: &str,
+) -> Result<DeviceRegistration, BetaError> {
+    validate_secret(bootstrap_token, "bootstrap token")?;
+    register_device_internal(
+        connection,
+        device_id,
+        device_code,
+        device_credential,
+        Some(bootstrap_token),
+    )
+}
+
+fn register_device_internal(
+    connection: &Connection,
+    device_id: &str,
+    device_code: &str,
+    device_credential: &str,
+    bootstrap_token: Option<&str>,
+) -> Result<DeviceRegistration, BetaError> {
     let device_id = validate_device_id(device_id)?;
     let device_code = validate_device_code(device_code)?;
     validate_device_credential(device_credential)?;
@@ -227,6 +272,9 @@ pub fn register_device(
             });
         }
         if unexpired {
+            if let Some(token) = bootstrap_token {
+                upsert_device_bootstrap(connection, &enrollment_id, token)?;
+            }
             return Ok(DeviceRegistration {
                 enrollment_id,
                 state: DeviceEnrollmentState::Pending {
@@ -245,6 +293,9 @@ pub fn register_device(
              WHERE id = ?3 AND status = 'pending'",
             params![device_code, claim_code, enrollment_id],
         )?;
+        if let Some(token) = bootstrap_token {
+            upsert_device_bootstrap(connection, &enrollment_id, token)?;
+        }
         return enrollment_status(connection, &enrollment_id, device_credential);
     }
 
@@ -262,7 +313,153 @@ pub fn register_device(
             claim_code
         ],
     )?;
+    if let Some(token) = bootstrap_token {
+        upsert_device_bootstrap(connection, &enrollment_id, token)?;
+    }
     enrollment_status(connection, &enrollment_id, device_credential)
+}
+
+fn upsert_device_bootstrap(
+    connection: &Connection,
+    enrollment_id: &str,
+    bootstrap_token: &str,
+) -> Result<(), BetaError> {
+    let token_hash = hash_secret(bootstrap_token);
+    connection.execute(
+        "INSERT INTO device_bootstraps (enrollment_id, token_hash, expires_at)
+         VALUES (?1, ?2, datetime('now', '+15 minutes'))
+         ON CONFLICT(enrollment_id) DO UPDATE SET
+             token_hash = excluded.token_hash,
+             expires_at = excluded.expires_at
+         WHERE device_bootstraps.consumed_at IS NULL",
+        params![enrollment_id, token_hash.as_slice()],
+    )?;
+    Ok(())
+}
+
+pub fn device_bootstrap_status(
+    connection: &Connection,
+    bootstrap_token: &str,
+) -> Result<DeviceBootstrapState, BetaError> {
+    validate_secret(bootstrap_token, "bootstrap token")?;
+    let token_hash = hash_secret(bootstrap_token);
+    let state = connection
+        .query_row(
+            "SELECT e.device_code, e.status, b.expires_at,
+                    b.expires_at > CURRENT_TIMESTAMP,
+                    e.expires_at > CURRENT_TIMESTAMP,
+                    b.consumed_at IS NOT NULL
+             FROM device_bootstraps b
+             JOIN device_enrollments e ON e.id = b.enrollment_id
+             WHERE b.token_hash = ?1",
+            params![token_hash.as_slice()],
+            |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, bool>(3)?,
+                    row.get::<_, bool>(4)?,
+                    row.get::<_, bool>(5)?,
+                ))
+            },
+        )
+        .optional()?;
+
+    let Some((device_code, enrollment_status, expires_at, bootstrap_valid, claim_valid, consumed)) =
+        state
+    else {
+        return Ok(DeviceBootstrapState::Waiting);
+    };
+    if consumed || enrollment_status == "claimed" {
+        return Ok(DeviceBootstrapState::Claimed);
+    }
+    if enrollment_status == "pending" && bootstrap_valid && claim_valid {
+        return Ok(DeviceBootstrapState::Ready {
+            device_code,
+            expires_at,
+        });
+    }
+    Ok(DeviceBootstrapState::Expired)
+}
+
+pub fn claim_bootstrap_device(
+    connection: &mut Connection,
+    bootstrap_token: &str,
+    place_name: &str,
+) -> Result<BootstrapClaim, BetaError> {
+    validate_secret(bootstrap_token, "bootstrap token")?;
+    let place_name = bounded_text(place_name, "place name", 80)?;
+    let token_hash = hash_secret(bootstrap_token);
+    let transaction = connection.transaction()?;
+    let (enrollment_id, frame_id) = transaction
+        .query_row(
+            "SELECT e.id, e.device_id
+             FROM device_bootstraps b
+             JOIN device_enrollments e ON e.id = b.enrollment_id
+             WHERE b.token_hash = ?1
+               AND b.consumed_at IS NULL
+               AND b.expires_at > CURRENT_TIMESTAMP
+               AND e.status = 'pending'
+               AND e.expires_at > CURRENT_TIMESTAMP",
+            params![token_hash.as_slice()],
+            |row| Ok((row.get::<_, String>(0)?, row.get::<_, String>(1)?)),
+        )
+        .optional()?
+        .ok_or(BetaError::ClaimUnavailable)?;
+
+    let household_id = Uuid::new_v4().to_string();
+    let channel_id = Uuid::new_v4().to_string();
+    let grant_id = Uuid::new_v4().to_string();
+    let owner_token = random_token();
+    let owner_token_hash = hash_secret(&owner_token);
+    transaction.execute(
+        "INSERT INTO households (id, name) VALUES (?1, ?2)",
+        params![household_id, place_name],
+    )?;
+    transaction.execute(
+        "INSERT INTO channels (id, household_id, name) VALUES (?1, ?2, 'Family')",
+        params![channel_id, household_id],
+    )?;
+    transaction.execute(
+        "INSERT INTO owner_access_grants (id, household_id, label, token_hash)
+         VALUES (?1, ?2, 'Owner', ?3)",
+        params![grant_id, household_id, owner_token_hash.as_slice()],
+    )?;
+    transaction.execute(
+        "INSERT INTO frames (id, household_id, place_name) VALUES (?1, ?2, ?3)",
+        params![frame_id, household_id, place_name],
+    )?;
+    transaction.execute(
+        "INSERT INTO frame_subscriptions (frame_id, channel_id) VALUES (?1, ?2)",
+        params![frame_id, channel_id],
+    )?;
+    let claimed = transaction.execute(
+        "UPDATE device_enrollments
+         SET status = 'claimed', household_id = ?1, frame_id = ?2,
+             claimed_at = CURRENT_TIMESTAMP
+         WHERE id = ?3 AND status = 'pending'",
+        params![household_id, frame_id, enrollment_id],
+    )?;
+    let consumed = transaction.execute(
+        "UPDATE device_bootstraps
+         SET consumed_at = CURRENT_TIMESTAMP
+         WHERE enrollment_id = ?1 AND consumed_at IS NULL",
+        params![enrollment_id],
+    )?;
+    if claimed != 1 || consumed != 1 {
+        return Err(BetaError::ClaimUnavailable);
+    }
+    transaction.commit()?;
+
+    Ok(BootstrapClaim {
+        owner_token,
+        frame: ClaimedFrame {
+            household_id,
+            frame_id,
+            place_name: place_name.to_owned(),
+        },
+    })
 }
 
 pub fn enrollment_status(
@@ -608,14 +805,13 @@ fn validate_device_code(device_code: &str) -> Result<&str, BetaError> {
 }
 
 fn validate_device_credential(device_credential: &str) -> Result<(), BetaError> {
-    let valid = (32..=512).contains(&device_credential.len())
-        && device_credential
-            .bytes()
-            .all(|byte| !byte.is_ascii_whitespace());
-    if !valid {
-        return Err(BetaError::InvalidInput("device credential"));
-    }
-    Ok(())
+    validate_secret(device_credential, "device credential")
+}
+
+fn validate_secret(value: &str, name: &'static str) -> Result<(), BetaError> {
+    let valid =
+        (32..=512).contains(&value.len()) && value.bytes().all(|byte| !byte.is_ascii_whitespace());
+    valid.then_some(()).ok_or(BetaError::InvalidInput(name))
 }
 
 fn hash_secret(secret: &str) -> [u8; 32] {
@@ -642,6 +838,131 @@ mod tests {
 
     fn device_credential(index: usize) -> String {
         format!("device-{index}-credential-abcdefghijklmnopqrstuvwxyz")
+    }
+
+    fn bootstrap_token(index: usize) -> String {
+        format!("bootstrap-{index}-token-abcdefghijklmnopqrstuvwxyz0123456789")
+    }
+
+    #[test]
+    fn bootstrap_claim_creates_owner_place_and_claimed_device() {
+        let mut database = Connection::open_in_memory().expect("open database");
+        initialize_database(&database).expect("initialize database");
+        let device_id = Uuid::new_v4().to_string();
+        let credential = device_credential(1);
+        let token = bootstrap_token(1);
+
+        let registration =
+            register_bootstrap_device(&database, &device_id, "ABC2D3", &credential, &token)
+                .expect("register bootstrap device");
+        assert!(matches!(
+            device_bootstrap_status(&database, &token).expect("read bootstrap status"),
+            DeviceBootstrapState::Ready { device_code, .. } if device_code == "ABC2D3"
+        ));
+
+        let claim = claim_bootstrap_device(&mut database, &token, "Mom's living room")
+            .expect("claim bootstrap device");
+        assert_eq!(claim.frame.frame_id, device_id);
+        assert_eq!(claim.frame.place_name, "Mom's living room");
+        let context = owner_context(&database, &claim.owner_token).expect("read owner context");
+        assert_eq!(context.household_name, "Mom's living room");
+        assert_eq!(context.frames.len(), 1);
+        assert_eq!(context.frames[0].frame_id, device_id);
+        assert_eq!(context.frames[0].place_name, "Mom's living room");
+        assert!(context.invitations.is_empty());
+        assert!(matches!(
+            enrollment_status(&database, &registration.enrollment_id, &credential)
+                .expect("read enrollment")
+                .state,
+            DeviceEnrollmentState::Claimed { frame_id, .. } if frame_id == device_id
+        ));
+        assert_eq!(
+            claimed_device_access(&database, &credential)
+                .expect("authenticate claimed device")
+                .frame_id,
+            device_id
+        );
+        assert_eq!(
+            device_bootstrap_status(&database, &token).expect("read consumed status"),
+            DeviceBootstrapState::Claimed
+        );
+    }
+
+    #[test]
+    fn bootstrap_token_is_hashed_and_single_use() {
+        let mut database = Connection::open_in_memory().expect("open database");
+        initialize_database(&database).expect("initialize database");
+        let token = bootstrap_token(2);
+        register_bootstrap_device(
+            &database,
+            &Uuid::new_v4().to_string(),
+            "ABC2D4",
+            &device_credential(2),
+            &token,
+        )
+        .expect("register bootstrap device");
+
+        let stored: Vec<u8> = database
+            .query_row("SELECT token_hash FROM device_bootstraps", [], |row| {
+                row.get(0)
+            })
+            .expect("read bootstrap hash");
+        assert_ne!(stored, token.as_bytes());
+        assert_eq!(stored, hash_secret(&token));
+
+        claim_bootstrap_device(&mut database, &token, "Kitchen").expect("first claim");
+        assert!(matches!(
+            claim_bootstrap_device(&mut database, &token, "Second place"),
+            Err(BetaError::ClaimUnavailable)
+        ));
+        let household_count: i64 = database
+            .query_row(
+                "SELECT COUNT(*) FROM households WHERE id != 'demo-household'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("count households");
+        assert_eq!(household_count, 1);
+    }
+
+    #[test]
+    fn unknown_and_expired_bootstrap_tokens_cannot_claim() {
+        let mut database = Connection::open_in_memory().expect("open database");
+        initialize_database(&database).expect("initialize database");
+        let token = bootstrap_token(3);
+        register_bootstrap_device(
+            &database,
+            &Uuid::new_v4().to_string(),
+            "ABC2D5",
+            &device_credential(3),
+            &token,
+        )
+        .expect("register bootstrap device");
+
+        let unknown = bootstrap_token(4);
+        assert_eq!(
+            device_bootstrap_status(&database, &unknown).expect("read unknown status"),
+            DeviceBootstrapState::Waiting
+        );
+        assert!(matches!(
+            claim_bootstrap_device(&mut database, &unknown, "Unknown place"),
+            Err(BetaError::ClaimUnavailable)
+        ));
+
+        database
+            .execute(
+                "UPDATE device_bootstraps SET expires_at = datetime('now', '-1 minute')",
+                [],
+            )
+            .expect("expire bootstrap");
+        assert_eq!(
+            device_bootstrap_status(&database, &token).expect("read expired status"),
+            DeviceBootstrapState::Expired
+        );
+        assert!(matches!(
+            claim_bootstrap_device(&mut database, &token, "Expired place"),
+            Err(BetaError::ClaimUnavailable)
+        ));
     }
 
     #[test]

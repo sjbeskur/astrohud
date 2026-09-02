@@ -23,6 +23,8 @@ fn run() -> Result<(), String> {
         identity::load_or_create(Path::new(IDENTITY_PATH), Path::new(DEVICE_CREDENTIAL_PATH))
             .map_err(|error| format!("could not load device identity: {error}"))?;
     let paths = ProvisioningPaths::default();
+    let server_url =
+        std::env::var("ASTROHUD_SERVER_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_owned());
 
     if arguments.iter().any(|argument| argument == "--print-label") {
         println!("Device code: {}", identity.device_code);
@@ -50,13 +52,11 @@ fn run() -> Result<(), String> {
             "provisioning access point {} is ready at http://10.42.0.1/",
             identity.setup_ssid
         );
-        web::serve(identity.clone(), manager, networks)?;
+        web::serve(identity.clone(), manager, networks, &server_url)?;
         setup_display::remove(Path::new(setup_display::SETUP_SCREEN_PATH))
             .map_err(|error| format!("could not remove setup screen: {error}"))?;
     }
 
-    let server_url =
-        std::env::var("ASTROHUD_SERVER_URL").unwrap_or_else(|_| "http://127.0.0.1:8080".to_owned());
     pairing::ensure_claimed(
         &identity,
         &server_url,

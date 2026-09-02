@@ -65,7 +65,9 @@ code has changed since the source card was captured.
 ## First boot
 
 The image starts without a household Wi-Fi profile. The provisioner generates
-the identity and credential on the Pi, starts the protected setup network, and
-shows the Wi-Fi QR card. After Wi-Fi succeeds it enrolls with the configured
-server and replaces the setup card with the short claim code. Claiming removes
-that card and allows the authenticated frame slideshow to appear.
+the identity and credentials on the Pi, starts the protected setup network,
+and shows the Wi-Fi QR card. The same phone selects household Wi-Fi and then
+continues automatically at the configured server. After the frame enrolls, the
+owner names the place; the one-time device bootstrap creates owner access and
+claims the frame without a separate activation link or typed code. Claiming
+removes the setup card and allows the authenticated slideshow to appear.

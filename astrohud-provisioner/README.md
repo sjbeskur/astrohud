@@ -11,9 +11,10 @@ frame. On an unprovisioned device, or after an explicit local reset, it:
 6. stops the AP and tests the selected household network;
 7. atomically commits both the NetworkManager profile and protected backup; or
 8. restores the setup AP when the candidate connection fails;
-9. creates a unique device ID and credential locally, enrolls with the server,
-   and shows the short-lived claim code on the television; and
-10. removes the claim screen automatically after the owner claims the frame.
+9. carries a private device-bound setup link onto the owner's phone, creates a
+   unique device ID and credential locally, and enrolls with the server;
+10. asks the owner to name the place as soon as the server sees the frame; and
+11. removes the setup screen automatically after the owner claims the frame.
 
 The setup suffix uses uppercase characters without `0/O` or `1/I/L`. The
 suffix is an identifier, not a credential. A separate 16-character random
@@ -23,10 +24,16 @@ setup card priority over photos while it exists, and resumes the slideshow
 after successful provisioning. The SSID and password appear on the card only
 as a fallback for phones that cannot scan Wi-Fi QR codes.
 
+The private bootstrap token is separate from the appliance credential. It is
+sent in the URL fragment, stored only as a hash by the server, expires with the
+pending enrollment, and can claim exactly one frame. The television retains a
+short claim code as an attended support fallback; normal onboarding does not
+ask the owner to type it or obtain a separate activation link.
+
 The service stays dormant when either a persistent household profile or its
 recovery backup exists and the device is already claimed. While an online
-device is waiting to be claimed, it refreshes expired claim codes and keeps the
-current code on the television. To enter setup mode locally:
+device is waiting to be claimed, it refreshes expired setup credentials and
+keeps the setup QR on the television. To enter setup mode locally:
 
 ```sh
 sudo astrohud-enter-setup

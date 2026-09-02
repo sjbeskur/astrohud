@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
+  <meta name="referrer" content="no-referrer">
+  <title>Set up your AstroHUD</title>
+  <link rel="stylesheet" href="/astrohud-theme.css">
+</head>
+<body>
+  <header class="hud-nav">
+    <div class="hud-shell hud-nav-row">
+      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-link-state"><i class="status-light"></i> Frame setup / Private</div>
+    </div>
+  </header>
+
+  <main class="hud-shell sender-main">
+    <header class="sender-intro">
+      <p class="signal-label">New frame / One secure handoff</p>
+      <h1>Connect your <em>place.</em></h1>
+      <p>Your phone is securely linked to the frame you just connected. Give the destination a name people will recognize.</p>
+    </header>
+
+    <div class="instrument-stack">
+      <section id="waiting-panel" class="instrument-panel" aria-labelledby="waiting-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">01</span> / Frame link</p>
+          <p class="instrument-label">Usually under a minute</p>
+        </div>
+        <h2 id="waiting-title">Waiting for your frame</h2>
+        <p class="instrument-copy">Keep this page open while your phone returns to home Wi-Fi or cellular service and the frame contacts AstroHUD.</p>
+      </section>
+
+      <section id="place-panel" class="instrument-panel" hidden aria-labelledby="place-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">02</span> / Name this place</p>
+          <p id="device-code" class="instrument-label">Frame ------</p>
+        </div>
+        <h2 id="place-title">Where is this frame?</h2>
+        <p class="instrument-copy">This name is shown to friends and family before they send a photo.</p>
+        <form id="place-form">
+          <label for="place-name">Place name</label>
+          <input id="place-name" name="place_name" maxlength="80" placeholder="Mom's living room" required>
+          <button class="signal-button full-width" type="submit">Connect this place →</button>
+        </form>
+      </section>
+
+      <section id="error-panel" class="instrument-panel" hidden aria-labelledby="error-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">!</span> / Setup link</p>
+          <p class="instrument-label">Attention</p>
+        </div>
+        <h2 id="error-title">This setup link cannot continue</h2>
+        <p id="error-copy" class="instrument-copy"></p>
+      </section>
+    </div>
+    <p id="status" class="status-line" data-state="sending" role="status">Linking securely to your frame…</p>
+  </main>
+
+  <script>
+    const tokenKey = 'astrohud-device-bootstrap';
+    const tokenFromLink = location.hash.slice(1);
+    if (tokenFromLink) sessionStorage.setItem(tokenKey, tokenFromLink);
+    history.replaceState(null, '', '/onboard.html');
+
+    const token = sessionStorage.getItem(tokenKey) || '';
+    const waitingPanel = document.querySelector('#waiting-panel');
+    const placePanel = document.querySelector('#place-panel');
+    const errorPanel = document.querySelector('#error-panel');
+    const errorCopy = document.querySelector('#error-copy');
+    const status = document.querySelector('#status');
+    const form = document.querySelector('#place-form');
+    let pollTimer;
+
+    function setStatus(message, state = 'ready') {
+      status.textContent = message;
+      status.dataset.state = state;
+    }
+
+    function fail(message) {
+      clearTimeout(pollTimer);
+      waitingPanel.hidden = true;
+      placePanel.hidden = true;
+      errorPanel.hidden = false;
+      errorCopy.textContent = message;
+      setStatus(`Setup paused / ${message}`, 'error');
+    }
+
+    async function checkFrame() {
+      if (token.length < 32) {
+        fail('Scan the setup QR shown by the frame to begin again.');
+        return;
+      }
+      try {
+        const response = await fetch('/api/beta/bootstrap/status', {
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({token})
+        });
+        if (!response.ok) throw new Error(await response.text());
+        const result = await response.json();
+        if (result.status === 'waiting') {
+          setStatus('Waiting / Your frame is joining AstroHUD.', 'sending');
+          pollTimer = setTimeout(checkFrame, 2500);
+          return;
+        }
+        if (result.status === 'ready') {
+          waitingPanel.hidden = true;
+          errorPanel.hidden = true;
+          placePanel.hidden = false;
+          document.querySelector('#device-code').textContent = `Frame ${result.device_code}`;
+          setStatus('Frame found / Name this place to finish setup.');
+          document.querySelector('#place-name').focus();
+          return;
+        }
+        if (result.status === 'claimed') {
+          const owner = await fetch('/api/beta/owner');
+          if (owner.ok) {
+            location.replace('/owner.html');
+            return;
+          }
+          fail('This frame has already been claimed. Ask its owner for access.');
+          return;
+        }
+        fail('This setup link expired. Restart the frame setup to create a new link.');
+      } catch (_) {
+        setStatus('Reconnecting / Waiting for internet access…', 'sending');
+        pollTimer = setTimeout(checkFrame, 3000);
+      }
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = form.querySelector('button');
+      button.disabled = true;
+      setStatus('Connecting / Creating your private owner access…', 'sending');
+      try {
+        const placeName = new FormData(form).get('place_name');
+        const response = await fetch('/api/beta/bootstrap/claim', {
+          method: 'POST',
+          headers: {'content-type': 'application/json'},
+          body: JSON.stringify({token, place_name: placeName})
+        });
+        if (response.status === 409) {
+          throw new Error('The setup link expired or was already used.');
+        }
+        if (!response.ok) throw new Error(await response.text());
+        sessionStorage.removeItem(tokenKey);
+        location.replace('/owner.html');
+      } catch (error) {
+        setStatus(`Could not connect / ${error.message}`, 'error');
+        button.disabled = false;
+      }
+    });
+
+    checkFrame();
+  </script>
+</body>
+</html>

@@ -9,6 +9,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use tiny_http::{Header, Method, Request, Response, Server, StatusCode};
+use url::Url;
 
 const MAX_FORM_BYTES: u64 = 8 * 1024;
 
@@ -25,6 +26,7 @@ pub fn serve(
     identity: DeviceIdentity,
     manager: NetworkManager,
     networks: Vec<WifiNetwork>,
+    server_url: &str,
 ) -> Result<(), String> {
     let server = Server::http("0.0.0.0:80").map_err(|error| error.to_string())?;
     let status = Arc::new(Mutex::new(ProvisioningStatus::Ready));
@@ -42,6 +44,7 @@ pub fn serve(
             &identity,
             &manager,
             &networks,
+            server_url,
             Arc::clone(&status),
             Arc::clone(&finished),
         );
@@ -54,6 +57,7 @@ fn handle_request(
     identity: &DeviceIdentity,
     manager: &NetworkManager,
     networks: &[WifiNetwork],
+    server_url: &str,
     status: Arc<Mutex<ProvisioningStatus>>,
     finished: Arc<AtomicBool>,
 ) {
@@ -91,6 +95,18 @@ fn handle_request(
                 .unwrap_or("");
             let ssid = if manual.is_empty() { selected } else { manual };
             let password = fields.get("password").map(String::as_str).unwrap_or("");
+            let onboarding_url = match onboarding_url(server_url, &identity.bootstrap_token) {
+                Ok(url) => url,
+                Err(message) => {
+                    respond(
+                        request,
+                        500,
+                        "text/html; charset=utf-8",
+                        message_page("Could not prepare setup", &message),
+                    );
+                    return;
+                }
+            };
 
             if let Err(message) = validate_credentials(ssid, password) {
                 respond(
@@ -137,7 +153,7 @@ fn handle_request(
                 request,
                 202,
                 "text/html; charset=utf-8",
-                connecting_page(ssid),
+                connecting_page(ssid, &onboarding_url),
             );
             let manager = manager.clone();
             let identity = identity.clone();
@@ -195,7 +211,7 @@ fn respond(request: Request, status: u16, content_type: &str, body: String) {
         ("X-Content-Type-Options", "nosniff"),
         (
             "Content-Security-Policy",
-            "default-src 'self'; style-src 'unsafe-inline'",
+            "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
         ),
     ] {
         response.add_header(Header::from_bytes(name, value).expect("static header"));
@@ -259,12 +275,26 @@ fn setup_page(
     )
 }
 
-fn connecting_page(ssid: &str) -> String {
+fn onboarding_url(server_url: &str, bootstrap_token: &str) -> Result<String, String> {
+    let mut url = Url::parse(server_url).map_err(|error| error.to_string())?;
+    if !matches!(url.scheme(), "http" | "https") {
+        return Err("AstroHUD server URL must use HTTP or HTTPS".to_owned());
+    }
+    url.path_segments_mut()
+        .map_err(|_| "AstroHUD server URL cannot be a base URL".to_owned())?
+        .clear()
+        .extend(["onboard.html"]);
+    url.set_fragment(Some(bootstrap_token));
+    Ok(url.into())
+}
+
+fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
     page_shell(
         "Connecting",
         &format!(
-            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Network link / Testing</p><h1>Connecting<span class=\"ellipsis\">…</span></h1><p>The frame is testing <strong>{}</strong>. This page will disconnect when the temporary AstroHUD network closes.</p><p><strong>Watch the television next.</strong> It will show a claim QR code when the frame is online. If needed, reconnect your phone to your home Wi-Fi before scanning it.</p><p class=\"status-line pending\"><i></i> Connection test active / About 30 seconds</p></section>",
-            escape_html(ssid)
+            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Network link / Testing</p><h1>Connecting<span class=\"ellipsis\">…</span></h1><p>The frame is testing <strong>{}</strong>. Keep this page open while your phone returns to home Wi-Fi or cellular service.</p><p><strong>Setup will continue automatically.</strong> If it does not, reconnect your phone to the internet and tap below.</p><p><a id=\"continue-setup\" class=\"signal-button\" href=\"{}\">Continue setup <span aria-hidden=\"true\">→</span></a></p><p class=\"status-line pending\"><i></i> Connection test active / About 30 seconds</p></section><script>setTimeout(() => document.querySelector('#continue-setup').click(), 12000);</script>",
+            escape_html(ssid),
+            escape_html(onboarding_url)
         ),
     )
 }
@@ -343,10 +373,26 @@ mod tests {
 
     #[test]
     fn connecting_page_explains_the_phone_to_television_handoff() {
-        let page = connecting_page("Grandma's Wi-Fi");
-        assert!(page.contains("Watch the television next."));
-        assert!(page.contains("claim QR code"));
+        let page = connecting_page(
+            "Grandma's Wi-Fi",
+            "https://app.astrohud.com/onboard.html#private-bootstrap-token",
+        );
+        assert!(page.contains("Setup will continue automatically."));
+        assert!(page.contains("Continue setup"));
+        assert!(page.contains("onboard.html#private-bootstrap-token"));
         assert!(page.contains("About 30 seconds"));
+    }
+
+    #[test]
+    fn onboarding_secret_stays_in_the_url_fragment() {
+        assert_eq!(
+            onboarding_url(
+                "https://app.astrohud.com/base",
+                "private-bootstrap-token-abcdefghijklmnopqrstuvwxyz"
+            )
+            .expect("onboarding URL"),
+            "https://app.astrohud.com/onboard.html#private-bootstrap-token-abcdefghijklmnopqrstuvwxyz"
+        );
     }
 
     #[test]
@@ -358,6 +404,7 @@ mod tests {
             setup_password: "23456789ABCDEFGH".to_owned(),
             device_id: "00000000-0000-4000-8000-000000000000".to_owned(),
             device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".to_owned(),
+            bootstrap_token: "test-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789".to_owned(),
         };
         let networks = vec![
             WifiNetwork {

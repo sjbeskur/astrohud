@@ -140,7 +140,13 @@ fn render_connecting(identity: &DeviceIdentity, wifi_ssid: &str) -> Vec<u8> {
     canvas.text(86, 520, 2, "THE FRAME IS TESTING THIS CONNECTION", MUTED);
     canvas.text(86, 560, 2, "THIS CAN TAKE ABOUT 30 SECONDS", MUTED);
     canvas.fill_rect(72, 612, 1096, 5, GREEN);
-    canvas.text(86, 637, 1, "NEXT / A CLAIM CODE WILL APPEAR HERE", GREEN);
+    canvas.text(
+        86,
+        637,
+        1,
+        "KEEP YOUR PHONE OPEN / SETUP CONTINUES AUTOMATICALLY",
+        GREEN,
+    );
     canvas.pixels
 }
 
@@ -170,11 +176,11 @@ fn render_claim(
         &format!("FRAME / {}", identity.device_code),
         AMBER,
     );
-    canvas.text(86, 215, 5, "CONNECT YOUR", TEXT);
-    canvas.text(86, 270, 5, "FRAME", LAVENDER);
+    canvas.text(86, 215, 5, "FINISH FRAME", TEXT);
+    canvas.text(86, 270, 5, "SETUP", LAVENDER);
 
-    canvas.text(86, 378, 2, "1  OPEN YOUR PRIVATE OWNER LINK", MUTED);
-    canvas.text(86, 420, 2, "2  SCAN THIS QR WITH THE SAME PHONE", MUTED);
+    canvas.text(86, 378, 2, "1  YOUR PHONE SHOULD CONTINUE", MUTED);
+    canvas.text(86, 420, 2, "2  IF NOT, SCAN THIS QR", MUTED);
     canvas.text(86, 462, 2, "3  NAME THIS PLACE", MUTED);
 
     canvas.fill_rect(700, 142, 470, 438, RAISED);
@@ -309,6 +315,7 @@ mod tests {
             setup_password: "23456789ABCDEFGH".to_owned(),
             device_id: "00000000-0000-4000-8000-000000000000".to_owned(),
             device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".to_owned(),
+            bootstrap_token: "test-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789".to_owned(),
         }
     }
 
@@ -342,7 +349,7 @@ mod tests {
         let pixels = render_claim(
             &identity(),
             "AB23CD45",
-            "http://192.168.50.144:8080/owner.html?claim_code=AB23CD45",
+            "https://app.astrohud.com/onboard.html#test-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789",
         )
         .expect("render claim screen");
         assert_eq!(pixels.len(), WIDTH * HEIGHT * 3);
@@ -388,7 +395,7 @@ mod tests {
         write_claim(
             &identity(),
             "AB23CD45",
-            "http://192.168.50.144:8080/owner.html?claim_code=AB23CD45",
+            "https://app.astrohud.com/onboard.html#test-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789",
             Path::new("/tmp/astrohud-claim-card-preview.ppm"),
         )
         .expect("write claim card preview");

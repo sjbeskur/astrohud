@@ -16,6 +16,8 @@ pub struct DeviceIdentity {
     pub device_id: String,
     #[serde(default)]
     pub device_credential: String,
+    #[serde(default)]
+    pub bootstrap_token: String,
 }
 
 impl DeviceIdentity {
@@ -51,6 +53,7 @@ pub fn load_or_create(path: &Path, credential_path: &Path) -> io::Result<DeviceI
                 device_credential: existing_credential
                     .clone()
                     .unwrap_or(random_human_string(64)?),
+                bootstrap_token: random_human_string(64)?,
             },
             true,
         )
@@ -66,7 +69,12 @@ pub fn load_or_create(path: &Path, credential_path: &Path) -> io::Result<DeviceI
             .unwrap_or(random_human_string(64)?);
         changed = true;
     }
+    if identity.bootstrap_token.is_empty() {
+        identity.bootstrap_token = random_human_string(64)?;
+        changed = true;
+    }
     validate_credential(&identity.device_credential)?;
+    validate_credential(&identity.bootstrap_token)?;
     if existing_credential
         .as_deref()
         .is_some_and(|existing| existing != identity.device_credential)
@@ -181,9 +189,11 @@ mod tests {
         assert_eq!(first.setup_password, second.setup_password);
         assert_eq!(first.device_id, second.device_id);
         assert_eq!(first.device_credential, second.device_credential);
+        assert_eq!(first.bootstrap_token, second.bootstrap_token);
         assert_eq!(first.device_code.len(), 6);
         assert_eq!(first.setup_password.len(), 16);
         assert_eq!(first.device_credential.len(), 64);
+        assert_eq!(first.bootstrap_token.len(), 64);
         assert_eq!(
             fs::read_to_string(&credential_path)
                 .expect("read credential")

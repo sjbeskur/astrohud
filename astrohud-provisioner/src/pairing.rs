@@ -32,8 +32,13 @@ pub fn ensure_claimed(
                     ref enrollment_id,
                     ref claim_code,
                 } => {
-                    let claim_url = client.owner_claim_url(claim_code)?;
-                    setup_display::write_claim(identity, claim_code, &claim_url, display_path)?;
+                    let onboarding_url = client.onboarding_url(&identity.bootstrap_token)?;
+                    setup_display::write_claim(
+                        identity,
+                        claim_code,
+                        &onboarding_url,
+                        display_path,
+                    )?;
                     thread::sleep(POLL_INTERVAL);
                     match client.status(enrollment_id, &identity.device_credential)? {
                         Some(next) => enrollment = next,
@@ -83,6 +88,7 @@ impl PairingClient {
             device_id: &identity.device_id,
             device_code: &identity.device_code,
             credential: &identity.device_credential,
+            bootstrap_token: &identity.bootstrap_token,
         })
         .map_err(|error| error.to_string())?;
         let response = self
@@ -117,9 +123,9 @@ impl PairingClient {
         Ok(url)
     }
 
-    fn owner_claim_url(&self, claim_code: &str) -> Result<String, String> {
-        let mut url = self.endpoint(&["owner.html"])?;
-        url.query_pairs_mut().append_pair("claim_code", claim_code);
+    fn onboarding_url(&self, bootstrap_token: &str) -> Result<String, String> {
+        let mut url = self.endpoint(&["onboard.html"])?;
+        url.set_fragment(Some(bootstrap_token));
         Ok(url.into())
     }
 }
@@ -129,6 +135,7 @@ struct RegistrationRequest<'a> {
     device_id: &'a str,
     device_code: &'a str,
     credential: &'a str,
+    bootstrap_token: &'a str,
 }
 
 #[derive(Deserialize)]
@@ -180,19 +187,23 @@ mod tests {
             device_id: "00000000-0000-4000-8000-000000000000",
             device_code: "AB23CD",
             credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz",
+            bootstrap_token: "test-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789",
         };
         let value = serde_json::to_value(request).expect("serialize request");
         assert_eq!(value["device_code"], "AB23CD");
         assert!(value.get("credential").is_some());
+        assert!(value.get("bootstrap_token").is_some());
         assert!(value.get("household_id").is_none());
     }
 
     #[test]
-    fn owner_claim_url_prefills_the_visible_claim_code() {
+    fn onboarding_url_keeps_the_bootstrap_secret_in_the_fragment() {
         let client = PairingClient::new("https://frames.example/base").expect("pairing client");
         assert_eq!(
-            client.owner_claim_url("AB23CD45").expect("claim URL"),
-            "https://frames.example/owner.html?claim_code=AB23CD45"
+            client
+                .onboarding_url("private-bootstrap-token-abcdefghijklmnopqrstuvwxyz")
+                .expect("onboarding URL"),
+            "https://frames.example/onboard.html#private-bootstrap-token-abcdefghijklmnopqrstuvwxyz"
         );
     }
 }

@@ -78,9 +78,15 @@ Persistent proof-of-concept data defaults to `astrohud-rest/data`. Set
 ASTROHUD_DATA_DIR=/tmp/astrohud cargo run --package astrohud-rest -- 127.0.0.1:8080
 ```
 
-### Try the friendly-beta claim flow locally
+### Try the friendly-beta onboarding flow locally
 
-With the server running, create a private owner activation link:
+With the server running, open `/device-simulator.html` and choose **Continue
+onboarding**. The device-bound page waits for enrollment, asks for the place
+name, creates owner access, claims the frame, and continues to the owner page
+in the same browser. No household identifier, owner activation link, or copied
+claim code is part of the normal owner's journey.
+
+The operator command remains available for recovery and attended support:
 
 ```sh
 cargo run --package astrohud-rest --bin astrohud-admin -- \
@@ -88,16 +94,8 @@ cargo run --package astrohud-rest --bin astrohud-admin -- \
   target/activation-cards/tester-household.png
 ```
 
-The optional PNG is a private owner-activation QR card for printing or showing
-on the preparer's screen. The recipient scans it with the phone they will use
-for setup, keeps the owner page available, and then scans the appliance's Wi-Fi
-QR. Protect the card like a password until it has been delivered to its owner.
-
-Open `/device-simulator.html` in one browser tab. Open the private activation
-link printed by the command in another tab, then enter the simulator's
-temporary code and name the place. The activation token is carried in the URL
-fragment, exchanged for an HttpOnly same-site cookie, and removed before the
-owner page loads.
+The optional recovery PNG and its activation URL are private credentials.
+Protect them like a password until delivered to the owner.
 
 Once the frame is connected, create a sender link from the owner page. Open
 that link in a private browser window to exercise the recipient experience:
@@ -187,8 +185,11 @@ network, displays a scannable Wi-Fi QR setup card, and serves a local Wi-Fi
 selection page. It tests candidate credentials before atomically replacing the
 active NetworkManager profile and its recovery backup. Once online, it
 generates an appliance-only device credential, enrolls with the server,
-displays the short-lived claim code on the television, and removes that screen
-when the owner claims the frame. See
+continues the same phone at the public onboarding page, and creates owner
+access when the owner names the place. A high-entropy, single-use bootstrap
+token binds the browser to that appliance; its short claim code remains only
+as an attended support fallback. The setup screen disappears when the owner
+claims the frame. See
 [`astrohud-provisioner/README.md`](astrohud-provisioner/README.md) for the state
 model, security boundaries, and deployment files.
 

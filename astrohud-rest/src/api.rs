@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
 pub const DEMO_HOUSEHOLD_ID: &str = "demo-household";
 
@@ -81,6 +81,13 @@ CREATE TABLE IF NOT EXISTS device_enrollments (
         OR
         (status = 'claimed' AND household_id IS NOT NULL AND frame_id IS NOT NULL)
     )
+);
+CREATE TABLE IF NOT EXISTS device_bootstraps (
+    enrollment_id TEXT PRIMARY KEY REFERENCES device_enrollments(id) ON DELETE CASCADE,
+    token_hash BLOB NOT NULL UNIQUE,
+    expires_at TEXT NOT NULL,
+    consumed_at TEXT,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE TABLE IF NOT EXISTS sender_invitations (
     id TEXT PRIMARY KEY,
