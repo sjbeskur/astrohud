@@ -68,7 +68,7 @@
 
     async function loadDestination() {
       const response = await fetch('/api/beta/sender');
-      if (response.status === 401) throw new Error('This invitation is missing or has been disabled. Ask the frame owner for a new link.');
+      if (response.status === 401) throw new Error('Sender access is missing in this browser. Open the complete private invitation link in this same Safari or Chrome browser.');
       if (!response.ok) throw new Error(await response.text());
       const context = await response.json();
       document.querySelector('#place-label').textContent = context.place_name;

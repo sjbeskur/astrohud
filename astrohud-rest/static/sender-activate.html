@@ -20,6 +20,7 @@
       <p class="signal-label">Invitation / Establishing link</p>
       <h1>Opening the <em>frame.</em></h1>
       <p id="message">Checking this private photo invitation…</p>
+      <p>For reliable access, open this complete link in Safari or Chrome and keep using that browser when choosing your photo.</p>
     </header>
     <p id="status" class="status-line" data-state="sending" role="status">Secure link in progress.</p>
   </main>
@@ -31,7 +32,7 @@
     async function activate() {
       const token = location.hash.slice(1);
       history.replaceState(null, '', '/sender-activate.html');
-      if (!token) throw new Error('This invitation link is incomplete. Ask the frame owner for a new link.');
+      if (!token) throw new Error('This invitation link is incomplete. Ask the frame owner to resend the complete private link containing its # token.');
       const response = await fetch('/api/beta/sender/session', {
         method: 'POST',
         headers: {'content-type': 'application/json'},

@@ -20,6 +20,7 @@
       <p class="signal-label">Private access / Establishing link</p>
       <h1>Preparing your <em>frame.</em></h1>
       <p id="message">Checking this private activation link…</p>
+      <p>Keep using this same Safari or Chrome browser when you scan the frame QR. Owner access does not carry between browsers or devices.</p>
     </header>
     <p id="status" class="status-line" data-state="sending" role="status">Activation in progress.</p>
   </main>
@@ -31,7 +32,7 @@
     async function activate() {
       const token = location.hash.slice(1);
       history.replaceState(null, '', '/activate.html');
-      if (!token) throw new Error('This activation link is incomplete. Ask the person who prepared your frame for a new link.');
+      if (!token) throw new Error('This activation link is incomplete. Open the original private link containing its # token in this browser.');
       const response = await fetch('/api/beta/owner/session', {
         method: 'POST',
         headers: {'content-type': 'application/json'},

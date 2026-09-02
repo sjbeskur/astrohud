@@ -74,6 +74,7 @@ fn create_household(
     if let Some(path) = activation_card {
         println!("Private activation QR card: {}", path.display());
     }
+    println!("Open the complete link in the same phone browser that will scan the frame QR.");
     println!("Handle this link like a password. It is shown only once.");
     Ok(())
 }

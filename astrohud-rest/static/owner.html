@@ -23,6 +23,15 @@
     </header>
 
     <div class="instrument-stack">
+      <section id="owner-access-help" class="instrument-panel" hidden aria-labelledby="owner-access-title">
+        <div class="instrument-heading">
+          <p class="instrument-label"><span class="instrument-number">!</span> / Private owner access</p>
+          <p class="instrument-label">This browser</p>
+        </div>
+        <h2 id="owner-access-title">Open your owner link on this device</h2>
+        <p class="instrument-copy">This browser does not have owner access yet. Open the complete private owner activation link in Safari or Chrome on this device, then scan the frame QR again. Access does not carry between devices, private windows, or in-app browsers.</p>
+      </section>
+
       <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
         <div class="instrument-heading">
           <p class="instrument-label"><span class="instrument-number">01</span> / Appliance link</p>
@@ -72,10 +81,11 @@
         </form>
         <div id="new-invitation" class="link-reveal" hidden>
           <strong>Private link ready</strong>
-          <p>Send this only to the person named above.</p>
+          <p>Send this complete link only to the person named above. They should open it in the same Safari or Chrome browser they will use to send photos.</p>
           <div class="field-row">
             <input id="invitation-url" readonly aria-label="New private sender link">
             <button id="copy-link" class="signal-button secondary" type="button">Copy link</button>
+            <button id="share-link" class="signal-button secondary" type="button" hidden>Share link</button>
           </div>
         </div>
         <div class="invitation-heading">
@@ -90,6 +100,7 @@
 
   <script>
     const householdName = document.querySelector('#household-name');
+    const ownerAccessHelp = document.querySelector('#owner-access-help');
     const claimPanel = document.querySelector('#claim-panel');
     const connectedPanel = document.querySelector('#connected-panel');
     const invitePanel = document.querySelector('#invite-panel');
@@ -164,9 +175,14 @@
     async function loadOwner() {
       const response = await fetch('/api/beta/owner');
       if (response.status === 401) {
-        throw new Error('Owner access is missing. Open the private activation link you received.');
+        claimPanel.hidden = true;
+        connectedPanel.hidden = true;
+        invitePanel.hidden = true;
+        ownerAccessHelp.hidden = false;
+        throw new Error('Owner access is missing in this browser. Open the complete private activation link here, then scan the frame QR again.');
       }
       if (!response.ok) throw new Error(await response.text());
+      ownerAccessHelp.hidden = true;
       render(await response.json());
     }
 
@@ -244,6 +260,23 @@
         setStatus('Copied / The private sender link is ready to share.', 'success');
       } else {
         setStatus('Copy the selected private link.', 'ready');
+      }
+    });
+
+    const shareLink = document.querySelector('#share-link');
+    if (navigator.share) shareLink.hidden = false;
+    shareLink.addEventListener('click', async () => {
+      try {
+        await navigator.share({
+          title: 'Send a photo to my AstroHUD',
+          text: 'Open this private link in Safari or Chrome to send a photo.',
+          url: invitationUrl.value
+        });
+        setStatus('Shared / The complete private sender link was sent.', 'success');
+      } catch (error) {
+        if (error.name !== 'AbortError') {
+          setStatus('Share unavailable / Copy the private link instead.', 'error');
+        }
       }
     });
 
