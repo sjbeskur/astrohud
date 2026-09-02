@@ -25,6 +25,7 @@ fi
 expected_size=15931539456
 old_user=sbeskur
 support_user=astrohud-support
+server_url="${ASTROHUD_SERVER_URL:-https://app.astrohud.com}"
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 image_dir="$(cd "${script_dir}/.." && pwd)"
 
@@ -68,6 +69,10 @@ if [ "$(stat -c %s "$source_image")" -ne "$expected_size" ]; then
 fi
 if ! grep -qE '^ssh-(ed25519|rsa|ecdsa) ' "$operator_key"; then
     echo "Operator key does not look like an OpenSSH public key." >&2
+    exit 1
+fi
+if ! [[ "$server_url" =~ ^https?://[^[:space:]\|]+$ ]]; then
+    echo "ASTROHUD_SERVER_URL must be an HTTP or HTTPS URL without whitespace." >&2
     exit 1
 fi
 
@@ -142,6 +147,9 @@ if [ -n "$provisioner_binary" ]; then
     install -o root -g root -m 0755 "$provisioner_binary" \
         "$mount_dir/usr/local/sbin/astrohud-provisioner"
 fi
+sed -i "s|^Environment=ASTROHUD_SERVER_URL=.*|Environment=ASTROHUD_SERVER_URL=$server_url|" \
+    "$mount_dir/etc/systemd/system/astrohud-frame.service" \
+    "$mount_dir/etc/systemd/system/astrohud-provisioner.service"
 
 if ! grep -q "^${old_user}:" "$mount_dir/etc/passwd"; then
     echo "Expected maintenance account was not found in the clone." >&2
@@ -294,4 +302,5 @@ if [ -n "${SUDO_UID:-}" ] && [ -n "${SUDO_GID:-}" ]; then
 fi
 
 echo "Sanitized AstroHUD clone ready: $output_image"
+echo "Server URL: $server_url"
 cat "$output_image.sha256"

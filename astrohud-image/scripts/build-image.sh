@@ -6,7 +6,7 @@ image_dir="$(cd "${script_dir}/.." && pwd)"
 workspace_dir="$(cd "${image_dir}/.." && pwd)"
 image_gen_dir="${RPI_IMAGE_GEN_DIR:-}"
 operator_key="${ASTROHUD_OPERATOR_PUBKEY:-}"
-server_url="${ASTROHUD_SERVER_URL:-http://192.168.50.144:8080}"
+server_url="${ASTROHUD_SERVER_URL:-https://app.astrohud.com}"
 expected_image_gen_commit="3f2c916086ad70197945bfc50ef953c1f6035f10"
 
 if [ -z "$image_gen_dir" ] || [ ! -x "$image_gen_dir/rpi-image-gen" ]; then

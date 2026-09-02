@@ -25,12 +25,12 @@ dependencies. Then run:
 ```sh
 RPI_IMAGE_GEN_DIR=/path/to/rpi-image-gen \
 ASTROHUD_OPERATOR_PUBKEY=/path/to/operator.pub \
-ASTROHUD_SERVER_URL=http://192.168.50.144:8080 \
+ASTROHUD_SERVER_URL=https://app.astrohud.com \
 astrohud-image/scripts/build-image.sh
 ```
 
-The URL is intentionally a build input. Use the local server for attended LAN
-testing and the future HTTPS Render origin for tester images.
+The URL defaults to the production HTTPS origin and remains an explicit build
+input so attended LAN tests can override it with a local server.
 
 The post-build check fails if any appliance runtime state or reusable host
 identity leaks into the root filesystem. Do not use an assigned Pi as an image
@@ -49,7 +49,8 @@ not recoverable from the distributed copy.
 Run it only against the verified master file, never a block device:
 
 ```sh
-sudo astrohud-image/scripts/sanitize-clone.sh \
+sudo ASTROHUD_SERVER_URL=https://app.astrohud.com \
+  astrohud-image/scripts/sanitize-clone.sh \
   target/astrohud-images/astrohud-original-2026-08-30.img \
   target/astrohud-images/astrohud-tester-golden.img \
   /home/sbeskur/.ssh/id_ed25519.pub \
