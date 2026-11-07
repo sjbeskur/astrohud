@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 6;
+const SCHEMA_VERSION: i64 = 7;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
 pub const DEMO_HOUSEHOLD_ID: &str = "demo-household";
 
@@ -69,6 +69,13 @@ CREATE TABLE IF NOT EXISTS frame_photo_removals (
     photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (frame_id, photo_id)
+);
+CREATE TABLE IF NOT EXISTS owner_recovery_links (
+    household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
+    token_hash BLOB NOT NULL UNIQUE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_used_at TEXT,
+    expires_at TEXT
 );
 CREATE TABLE IF NOT EXISTS device_enrollments (
     id TEXT PRIMARY KEY,

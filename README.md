@@ -118,6 +118,22 @@ an offline frame applies the change when it reconnects. Removal is specific to
 the selected frame: other subscribed frames and the server's original photo
 remain available. The gallery shows the current manifest's newest 200 photos.
 
+Under **Device settings → Owner recovery**, create a private recovery link and
+save the complete URL in a password manager or secure notes. It works in regular
+mobile and desktop browsers, including after cookies are cleared. Opening
+`/recover.html#<secret>` and choosing **Restore owner access** creates a fresh
+30-day owner session for the same household. The secret stays in the URL
+fragment until the page removes it; it is sent only in a POST body and is
+stored as a hash. The complete link is shown only when created or replaced.
+
+The recovery link remains usable until replaced (no automatic expiry by
+default). Replacement invalidates the previous recovery link while preserving
+existing owner sessions. Save it outside browser site data, and test it in a
+private window or on a second device before relying on it. Losing both all
+owner sessions and the recovery link still requires operator assistance; email
+recovery and passkeys remain deferred. New owners see a reminder to save a link
+after setup, and existing owners can create one from Device settings.
+
 Under **Device settings**, **Factory reset** requires typing the place name.
 The owner page shows **pending** until the device accepts the request, then
 **resetting** while it clears its cache, Wi-Fi profiles, and pairing credentials.

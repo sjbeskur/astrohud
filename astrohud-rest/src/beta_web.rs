@@ -101,6 +101,11 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             web::post().to(create_owner_session),
         )
         .route("/api/beta/owner", web::get().to(get_owner_context))
+        .route("/api/beta/owner/recovery", web::post().to(create_recovery))
+        .route(
+            "/api/beta/owner/recovery/session",
+            web::post().to(recover_session),
+        )
         .route(
             "/api/beta/owner/frames/{frame_id}/reset",
             web::post().to(request_reset),
@@ -252,6 +257,33 @@ async fn get_owner_context(
     Ok(HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .json(context))
+}
+
+async fn create_recovery(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let recovery = crate::create_owner_recovery(&db, &token).map_err(beta_http_error)?;
+    Ok(HttpResponse::Created()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(recovery))
+}
+
+async fn recover_session(
+    state: web::Data<AppState>,
+    body: web::Json<OwnerSessionRequest>,
+) -> Result<HttpResponse> {
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let token = crate::recover_owner(&mut db, &body.token).map_err(beta_http_error)?;
+    Ok(HttpResponse::NoContent()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .cookie(access_cookie(OWNER_COOKIE, &token))
+        .finish())
 }
 
 async fn request_reset(
@@ -656,6 +688,101 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn saved_recovery_link_restores_a_fresh_browser_and_replacement_keeps_sessions() {
+        let mut database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let owner = create_household_owner(&mut database, "Saved household", "Owner").unwrap();
+        let state = web::Data::new(AppState::new(database, PathBuf::from("unused")));
+        let app =
+            test::init_service(App::new().app_data(state).configure(configure_beta_routes)).await;
+        let anonymous = test::TestRequest::post()
+            .uri("/api/beta/owner/recovery")
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, anonymous).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let sender = test::TestRequest::post()
+            .uri("/api/beta/owner/recovery")
+            .cookie(Cookie::new(SENDER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, sender).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let create = test::TestRequest::post()
+            .uri("/api/beta/owner/recovery")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        let response = test::call_service(&app, create).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+        let link: serde_json::Value = test::read_body_json(response).await;
+        let token = link["token"].as_str().unwrap();
+        let cleared = test::TestRequest::get().uri("/api/beta/owner").to_request();
+        assert_eq!(
+            test::call_service(&app, cleared).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let restore = test::TestRequest::post()
+            .uri("/api/beta/owner/recovery/session")
+            .set_json(serde_json::json!({"token": token}))
+            .to_request();
+        let response = test::call_service(&app, restore).await;
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+        let cookie = response
+            .response()
+            .cookies()
+            .find(|c| c.name() == OWNER_COOKIE)
+            .unwrap()
+            .into_owned();
+        assert_ne!(cookie.value(), token);
+        assert!(cookie.http_only().unwrap());
+        assert_eq!(cookie.same_site(), Some(SameSite::Strict));
+        let restored = test::TestRequest::get()
+            .uri("/api/beta/owner")
+            .cookie(cookie.clone())
+            .to_request();
+        let response = test::call_service(&app, restored).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let context: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(context["household_name"], "Saved household");
+        assert!(context["recovery"].get("token").is_none());
+        assert!(context["recovery"].get("token_hash").is_none());
+        let rotate = test::TestRequest::post()
+            .uri("/api/beta/owner/recovery")
+            .cookie(cookie.clone())
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, rotate).await.status(),
+            StatusCode::CREATED
+        );
+        let old = test::TestRequest::post()
+            .uri("/api/beta/owner/recovery/session")
+            .set_json(serde_json::json!({"token": token}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, old).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let still_signed_in = test::TestRequest::get()
+            .uri("/api/beta/owner")
+            .cookie(cookie)
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, still_signed_in).await.status(),
+            StatusCode::OK
+        );
+    }
 
     #[actix_web::test]
     async fn reset_http_flow_requires_owner_confirmation_and_device_acknowledgement() {

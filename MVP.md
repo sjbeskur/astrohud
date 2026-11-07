@@ -117,7 +117,7 @@ does not need management UI for those cases.
 ## Deliberately deferred
 
 - Physical reset-button handling and automated resale workflows
-- Public signup, email delivery, passwords, and account recovery
+- Public signup, email delivery, passwords, and recovery without a saved private link
 - Self-service ownership transfer
 - Native mobile applications
 - Postgres and object storage

@@ -102,6 +102,7 @@ pub struct OwnerContext {
     pub frames: Vec<OwnerFrame>,
     pub invitations: Vec<OwnerInvitation>,
     pub resets: Vec<crate::DeviceReset>,
+    pub recovery: Option<crate::RecoveryStatus>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -666,6 +667,7 @@ pub fn owner_context(
         frames,
         invitations,
         resets: crate::owner_resets(connection, &household.0)?,
+        recovery: crate::recovery_status(connection, &household.0)?,
     })
 }
 
@@ -852,7 +854,7 @@ pub(crate) fn hash_secret(secret: &str) -> [u8; 32] {
     Sha256::digest(secret.as_bytes()).into()
 }
 
-fn random_token() -> String {
+pub(crate) fn random_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 

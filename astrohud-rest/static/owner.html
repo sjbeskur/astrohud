@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Set up your M3mory L4ne</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=69ec528d05c7">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=10560af579c6">
 </head>
 <body class="owner-page">
   <header class="hud-nav">
@@ -34,7 +34,7 @@
           <p class="instrument-label">This browser</p>
         </div>
         <h2 id="owner-access-title">Owner access is missing</h2>
-        <p class="instrument-copy">New-frame setup creates access automatically on the phone that configures Wi-Fi. For recovery on another browser, open the private owner activation link supplied by M3mory L4ne support. Access does not carry between devices or private windows.</p>
+        <p class="instrument-copy">Open your saved private recovery link to restore owner access on this phone or another device. If another browser still has access, create a recovery link in its Device settings. If you have neither, contact M3mory L4ne support for recovery.</p>
       </section>
 
       <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
@@ -69,6 +69,7 @@
         <p class="instrument-copy">Create a separate private link for each person you trust to send photos.</p>
         <div id="frames" class="connection-summary"></div>
         <button id="open-device-settings" class="quiet-button" type="button"><span aria-hidden="true" style="margin-right: 0.4rem;">&#9881;&#65038;</span>Device settings</button>
+        <p id="recovery-reminder" class="instrument-copy" hidden>Keep owner access if you change phones or clear browser data. <button id="save-recovery-shortcut" class="quiet-button" type="button">Save a recovery link</button></p>
       </section>
 
       <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
@@ -104,6 +105,24 @@
       <section id="device-settings" class="instrument-panel" hidden aria-label="Device settings">
         <details>
           <summary>Device settings</summary>
+          <div class="owner-recovery">
+            <h3>Owner recovery</h3>
+            <p class="instrument-copy">Save a private recovery link in your password manager or secure notes. It restores access on phones, tablets, and computers, even after browser data is cleared. Anyone with this link has owner access.</p>
+            <p id="recovery-state" class="instrument-copy"></p>
+            <button id="create-recovery" class="quiet-button" type="button">Create recovery link</button>
+            <div id="recovery-reveal" class="link-reveal" hidden>
+              <strong>Save this private recovery link</strong>
+              <p>This is the only time the complete link is shown. Save it before leaving this page; you can replace it later if needed.</p>
+              <label for="recovery-url">Private owner recovery link</label>
+              <div class="field-row">
+                <input id="recovery-url" readonly autocomplete="off" spellcheck="false">
+                <button id="copy-recovery" class="signal-button secondary" type="button">Copy link</button>
+                <button id="share-recovery" class="signal-button secondary" type="button" hidden>Save or share</button>
+              </div>
+              <p id="recovery-feedback" role="status"></p>
+            </div>
+          </div>
+          <h3>Factory reset</h3>
           <p class="instrument-copy">Factory reset removes photos stored on the device, its Wi-Fi settings, and its owner pairing. Your household's photos and other devices stay available. You will need to set up the device again.</p>
           <div id="device-controls" class="connection-summary"></div>
           <div id="reset-history" class="connection-summary" role="status"></div>
@@ -139,6 +158,7 @@
     const photoStatus = document.querySelector('#photo-status');
     let photoRequest = 0;
     let resetTimer;
+    let recoveryExists = false;
     const invitations = document.querySelector('#invitations');
     const invitationCount = document.querySelector('#invitation-count');
     const newInvitation = document.querySelector('#new-invitation');
@@ -237,7 +257,7 @@
         document.querySelector('#device-settings').hidden = true;
         clearTimeout(resetTimer);
         ownerAccessHelp.hidden = false;
-        throw new Error('Owner access is missing in this browser. Use the phone that set up the frame, or open a private recovery activation link from M3mory L4ne support.');
+        throw new Error('Owner access is missing in this browser. Open your saved private recovery link, or use a browser where you still have access.');
       }
       if (!response.ok) throw new Error(await response.text());
       ownerAccessHelp.hidden = true;
@@ -251,10 +271,74 @@
       settings.querySelector('summary').focus({preventScroll: true});
     });
 
+    document.querySelector('#save-recovery-shortcut').addEventListener('click', () => {
+      document.querySelector('#open-device-settings').click();
+      document.querySelector('#create-recovery').focus();
+    });
+
+    document.querySelector('#create-recovery').addEventListener('click', async event => {
+      if (recoveryExists && !confirm('Replace your saved recovery link? The previous link will stop working. Your currently signed-in browsers will keep access.')) return;
+      const button = event.currentTarget;
+      button.disabled = true;
+      const feedback = document.querySelector('#recovery-feedback');
+      try {
+        const response = await fetch('/api/beta/owner/recovery', {method: 'POST'});
+        if (!response.ok) throw new Error(await response.text());
+        const recovery = await response.json();
+        recoveryExists = true;
+        document.querySelector('#recovery-url').value = `${location.origin}/recover.html#${recovery.token}`;
+        document.querySelector('#recovery-reveal').hidden = false;
+        document.querySelector('#recovery-reminder').hidden = true;
+        button.textContent = 'Replace recovery link';
+        document.querySelector('#recovery-state').textContent = 'A recovery link is active. Save the new link below; any previous recovery link has been replaced.';
+        feedback.textContent = 'Link ready. Save the complete link before leaving this page.';
+        document.querySelector('#recovery-reveal').scrollIntoView({block: 'nearest'});
+      } catch (error) {
+        setStatus(`Could not create recovery link / ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    });
+
+    document.querySelector('#copy-recovery').addEventListener('click', async () => {
+      const input = document.querySelector('#recovery-url');
+      let copied = false;
+      try {
+        if (navigator.clipboard && window.isSecureContext) {
+          await navigator.clipboard.writeText(input.value);
+          copied = true;
+        }
+      } catch (_) {}
+      if (!copied) {
+        input.focus(); input.select(); input.setSelectionRange(0, input.value.length);
+        try { copied = document.execCommand('copy'); } catch (_) {}
+      }
+      document.querySelector('#recovery-feedback').textContent = copied
+        ? 'Copied. Save the complete link in your password manager or secure notes.'
+        : 'Select and copy the complete link, then save it in your password manager or secure notes.';
+    });
+
+    const shareRecovery = document.querySelector('#share-recovery');
+    if (navigator.share) shareRecovery.hidden = false;
+    shareRecovery.addEventListener('click', async () => {
+      try {
+        await navigator.share({title: 'Private M3mory L4ne owner recovery', url: document.querySelector('#recovery-url').value});
+        document.querySelector('#recovery-feedback').textContent = 'Keep this recovery link somewhere private that you can access from your other devices.';
+      } catch (error) {
+        if (error.name !== 'AbortError') document.querySelector('#recovery-feedback').textContent = 'Use Copy link to save the complete recovery link.';
+      }
+    });
+
     function renderDeviceSettings(context) {
       clearTimeout(resetTimer);
       const resets = context.resets || [];
-      document.querySelector('#device-settings').hidden = !context.frames.length && !resets.length;
+      document.querySelector('#device-settings').hidden = false;
+      recoveryExists = Boolean(context.recovery);
+      document.querySelector('#create-recovery').textContent = recoveryExists ? 'Replace recovery link' : 'Create recovery link';
+      document.querySelector('#recovery-reminder').hidden = recoveryExists;
+      document.querySelector('#recovery-state').textContent = recoveryExists
+        ? `Recovery link active / Created ${context.recovery.created_at} UTC. Replacing it keeps your existing browser sessions signed in.`
+        : 'No recovery link has been created yet. Create one before changing phones or clearing browser data.';
       document.querySelector('#device-controls').replaceChildren(...context.frames.map(frame => {
         const card = document.createElement('div');
         card.className = 'invitation-card';

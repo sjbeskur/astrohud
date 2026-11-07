@@ -165,6 +165,9 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 #open-device-settings { min-height: 44px; margin-top: 1rem; }
 #device-settings { scroll-margin-top: 6rem; }
 #device-settings .instrument-copy { margin-top: 0.75rem; }
+.owner-recovery { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--hud-line); }
+.owner-recovery h3 { margin-top: 0.75rem; }
+#recovery-reminder { margin-top: 1rem; }
 .reset-progress-card { padding: 1rem; border: 1px solid var(--hud-line); border-radius: 5px 18px 18px 5px; background: #0b0f18; }
 .reset-progress-card > strong { display: block; font-size: 0.88rem; }
 .reset-progress-track { height: 8px; margin: 1rem 0; overflow: hidden; border-radius: 4px; background: var(--hud-line); }
