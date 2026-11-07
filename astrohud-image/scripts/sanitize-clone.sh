@@ -146,6 +146,10 @@ fi
 if [ -n "$provisioner_binary" ]; then
     install -o root -g root -m 0755 "$provisioner_binary" \
         "$mount_dir/usr/local/sbin/astrohud-provisioner"
+    install -o root -g root -m 0644 "$image_dir/../astrohud-provisioner/deploy/astrohud-provisioner.service" \
+        "$mount_dir/etc/systemd/system/astrohud-provisioner.service"
+    install -o root -g root -m 0644 "$image_dir/../astrohud-frame/deploy/astrohud-frame.service" \
+        "$mount_dir/etc/systemd/system/astrohud-frame.service"
 fi
 sed -i "s|^Environment=ASTROHUD_SERVER_URL=.*|Environment=ASTROHUD_SERVER_URL=$server_url|" \
     "$mount_dir/etc/systemd/system/astrohud-frame.service" \
@@ -210,6 +214,8 @@ rm -f "$mount_dir/var/lib/dbus/machine-id"
 find "$mount_dir/etc/ssh" -maxdepth 1 -type f -name 'ssh_host_*' -delete
 
 rm -f "$mount_dir/etc/astrohud/device.json"
+rm -f "$mount_dir/etc/astrohud/manufacturing.json" "$mount_dir/etc/astrohud/reset.json"
+rm -f "$mount_dir/var/lib/astrohud/reset-in-progress"
 rm -f "$mount_dir/etc/astrohud/wifi-profile.nmconnection"
 rm -f "$mount_dir/var/lib/astrohud/device-credential"
 rm -f "$mount_dir/var/lib/astrohud/manifest.json"
@@ -232,6 +238,9 @@ find "$mount_dir/var/tmp" -mindepth 1 -delete
 
 for forbidden in \
     etc/astrohud/device.json \
+    etc/astrohud/manufacturing.json \
+    etc/astrohud/reset.json \
+    var/lib/astrohud/reset-in-progress \
     etc/astrohud/wifi-profile.nmconnection \
     var/lib/astrohud/device-credential \
     var/lib/astrohud/manifest.json \

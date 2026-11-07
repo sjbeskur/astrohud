@@ -105,6 +105,34 @@ fields. The claimed device simulator then downloads and displays the newest
 photo using its own credential. Disabling the sender link on the owner page
 takes effect immediately.
 
+To resend access later, choose **Replace link** beside the person's name.
+After confirmation, copy or share the new link. Replacement preserves the
+recipient and destination, and immediately disables their previous link and
+browser sessions. Disabled invitations cannot be replaced; create a new
+invitation to restore their access.
+
+The owner page also shows photo previews for each frame. Choose **Remove from
+this frame** to remove a photo from that frame's manifest and protected media
+access. The native frame deletes its cached copy at its next successful sync;
+an offline frame applies the change when it reconnects. Removal is specific to
+the selected frame: other subscribed frames and the server's original photo
+remain available. The gallery shows the current manifest's newest 200 photos.
+
+Under **Device settings**, **Factory reset** requires typing the place name.
+The owner page shows **pending** until the device accepts the request, then
+**resetting** while it clears its cache, Wi-Fi profiles, and pairing credentials.
+It returns to the QR setup screen with a new setup password. Since forgetting
+Wi-Fi disconnects the appliance, **complete** is confirmed after it has joined
+a network again. Household photos and other devices remain intact. The device
+must run the updated provisioner and systemd units; old software leaves the
+request pending rather than reporting a wipe that did not happen.
+
+For a local test, keep the device simulator tab open, request a reset on the
+owner page, and confirm that the simulator returns to onboarding. The simulator
+rotates its credentials and removes its displayed photo, but does not change
+your computer's Wi-Fi. Check the owner's reset history before onboarding the
+simulated device again (onboarding creates a new household and owner session).
+
 Use `ASTROHUD_PUBLIC_URL` when the server is accessed through a different local
 hostname. Set `ASTROHUD_SECURE_COOKIES=true` only when it is served through
 HTTPS.

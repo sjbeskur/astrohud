@@ -30,8 +30,9 @@ pending enrollment, and can claim exactly one frame. The television retains a
 short claim code as an attended support fallback; normal onboarding does not
 ask the owner to type it or obtain a separate activation link.
 
-The service stays dormant when either a persistent household profile or its
-recovery backup exists and the device is already claimed. While an online
+The service skips Wi-Fi setup when a persistent household profile or its
+recovery backup exists. Once claimed, it stays running and checks for owner
+reset requests every ten seconds. While an online
 device is waiting to be claimed, it refreshes expired setup credentials and
 keeps the setup QR on the television. To enter setup mode locally:
 
@@ -66,6 +67,9 @@ runtime files:
 
 ```text
 /etc/astrohud/device.json
+/etc/astrohud/manufacturing.json
+/etc/astrohud/reset.json
+/var/lib/astrohud/reset-in-progress
 /var/lib/astrohud/device-credential
 /var/lib/astrohud/manifest.json
 /var/lib/astrohud/media/
@@ -98,7 +102,41 @@ sudo systemctl enable --now astrohud-provisioner.service
 
 Enabling the service on an already provisioned device is non-disruptive: it
 ensures device identity exists, adopts a matching legacy frame credential when
-present, verifies that the server recognizes it, and exits.
+present, verifies that the server recognizes it, and stays running to watch for
+owner reset requests.
+
+## Owner-requested factory reset
+
+The server stores a request until the authenticated appliance accepts it.
+The provisioner first persists `/etc/astrohud/reset.json` (0600), containing
+fresh replacement credentials and a reset-only receipt. Acceptance revokes
+media access. The provisioner then stops the viewer and Wi-Fi guard, removes
+cached state and all NetworkManager Wi-Fi connections (including legacy names),
+removes protected Wi-Fi backups and interrupted temporary copies, rotates the
+setup password/bootstrap/device credential, and returns to QR provisioning.
+Ethernet connections and manufacturing identity are preserved.
+
+`/etc/astrohud/manufacturing.json` is the stable identity record, created
+automatically from existing `device.json` on upgrade. The rotatable
+`device.json` includes a matching copy of its identifiers for compatibility.
+The journal is authoritative during reset and allows replay after interruption,
+including between the two credential-file writes. The viewer's unit condition
+blocks cached slideshow startup while `reset-in-progress` exists.
+
+Forgetting Wi-Fi normally disconnects the device before it can confirm cleanup.
+The reset stays **resetting** until Wi-Fi setup succeeds again and the appliance
+submits its restricted receipt. The server then releases the previous household
+pairing, invalidates the old bootstrap, installs the new device credential hash,
+and allows fresh enrollment. Receipt retries after completion cannot reset a
+later owner's device. The journal is removed after confirmation.
+
+Update **both systemd units** as well as the provisioner binary, then reload
+systemd and restart the provisioner. Do not deploy only the new server and
+assume older appliances will wipe themselves. Test on a spare unit before
+reassignment: normal reset, unavailable server, unavailable router, service
+failure, and power interruption during every journal stage. Automated tests
+use temporary directories and fake network cleanup; physical Wi-Fi/service
+behavior and power-loss testing have not yet been validated.
 
 ## Planned physical reset
 

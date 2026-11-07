@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 6;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
 pub const DEMO_HOUSEHOLD_ID: &str = "demo-household";
 
@@ -64,6 +64,12 @@ CREATE TABLE IF NOT EXISTS owner_access_grants (
     revoked_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS frame_photo_removals (
+    frame_id TEXT NOT NULL REFERENCES frames(id) ON DELETE CASCADE,
+    photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (frame_id, photo_id)
+);
 CREATE TABLE IF NOT EXISTS device_enrollments (
     id TEXT PRIMARY KEY,
     device_id TEXT NOT NULL UNIQUE,
@@ -98,6 +104,20 @@ CREATE TABLE IF NOT EXISTS sender_invitations (
     revoked_at TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS device_resets (
+    id TEXT PRIMARY KEY,
+    enrollment_id TEXT NOT NULL REFERENCES device_enrollments(id),
+    household_id TEXT NOT NULL REFERENCES households(id),
+    frame_id TEXT NOT NULL,
+    place_name TEXT NOT NULL,
+    state TEXT NOT NULL CHECK (state IN ('pending', 'resetting', 'complete')),
+    receipt_hash BLOB,
+    next_credential_hash BLOB,
+    requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    completed_at TEXT
+);
+CREATE UNIQUE INDEX IF NOT EXISTS device_resets_active
+ON device_resets(frame_id) WHERE state != 'complete';
 CREATE TRIGGER IF NOT EXISTS frame_subscriptions_same_household_insert
 BEFORE INSERT ON frame_subscriptions
 WHEN NOT EXISTS (
@@ -220,7 +240,7 @@ pub struct CreateChannel {
 pub struct Photo {
     pub(crate) id: String,
     channel_id: String,
-    url: String,
+    pub(crate) url: String,
     mime_type: String,
     created_at: String,
     location_label: Option<String>,
@@ -230,7 +250,7 @@ pub struct Photo {
 pub struct FrameManifest {
     frame_id: String,
     place_name: String,
-    photos: Vec<Photo>,
+    pub(crate) photos: Vec<Photo>,
 }
 
 #[derive(Debug, Serialize)]
@@ -661,6 +681,8 @@ fn manifest_for_household_with_protected_media(
              WHERE s.frame_id = ?1
                AND f.household_id = ?2
                AND c.household_id = ?2
+               AND NOT EXISTS (SELECT 1 FROM frame_photo_removals r
+                               WHERE r.frame_id = s.frame_id AND r.photo_id = p.id)
              ORDER BY p.created_at DESC, p.rowid DESC
              LIMIT 200",
     )?;
@@ -706,7 +728,9 @@ pub(crate) fn protected_media_storage_key(
              WHERE p.id = ?1
                AND s.frame_id = ?2
                AND c.household_id = ?3
-               AND f.household_id = ?3",
+               AND f.household_id = ?3
+               AND NOT EXISTS (SELECT 1 FROM frame_photo_removals r
+                               WHERE r.frame_id = s.frame_id AND r.photo_id = p.id)",
             params![photo_id, frame_id, household_id],
             |row| row.get(0),
         )

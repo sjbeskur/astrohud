@@ -101,6 +101,7 @@ pub struct OwnerContext {
     pub household_name: String,
     pub frames: Vec<OwnerFrame>,
     pub invitations: Vec<OwnerInvitation>,
+    pub resets: Vec<crate::DeviceReset>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
@@ -523,6 +524,8 @@ pub fn claimed_device_access(
             "SELECT household_id, frame_id
              FROM device_enrollments
              WHERE credential_hash = ?1 AND status = 'claimed'
+               AND NOT EXISTS (SELECT 1 FROM device_resets r
+                               WHERE r.enrollment_id = device_enrollments.id AND r.state = 'resetting')
              LIMIT 1",
             params![credential_hash.as_slice()],
             |row| {
@@ -662,6 +665,7 @@ pub fn owner_context(
         household_name: household.1,
         frames,
         invitations,
+        resets: crate::owner_resets(connection, &household.0)?,
     })
 }
 
@@ -708,6 +712,33 @@ pub fn create_sender_invitation(
     Ok(CreatedInvitation {
         invitation_id,
         label: label.to_owned(),
+        token,
+    })
+}
+
+pub fn replace_sender_invitation(
+    connection: &Connection,
+    owner_token: &str,
+    invitation_id: &str,
+) -> Result<CreatedInvitation, BetaError> {
+    let household_id = owner_household_id(connection, owner_token)?;
+    let token = random_token();
+    let token_hash = hash_secret(&token);
+    // One atomic update keeps the recipient and destination while revoking
+    // both the old activation link and sessions authenticated with its token.
+    let label = connection
+        .query_row(
+            "UPDATE sender_invitations SET token_hash = ?1
+         WHERE id = ?2 AND household_id = ?3 AND revoked_at IS NULL
+         RETURNING label",
+            params![token_hash.as_slice(), invitation_id, household_id],
+            |row| row.get::<_, String>(0),
+        )
+        .optional()?
+        .ok_or(BetaError::NotFound)?;
+    Ok(CreatedInvitation {
+        invitation_id: invitation_id.to_owned(),
+        label,
         token,
     })
 }
@@ -760,7 +791,10 @@ pub fn sender_access(
         .ok_or(BetaError::Unauthorized)
 }
 
-fn owner_household_id(connection: &Connection, owner_token: &str) -> Result<String, BetaError> {
+pub(crate) fn owner_household_id(
+    connection: &Connection,
+    owner_token: &str,
+) -> Result<String, BetaError> {
     let owner_token_hash = hash_secret(owner_token);
     connection
         .query_row(
@@ -808,13 +842,13 @@ fn validate_device_credential(device_credential: &str) -> Result<(), BetaError> 
     validate_secret(device_credential, "device credential")
 }
 
-fn validate_secret(value: &str, name: &'static str) -> Result<(), BetaError> {
+pub(crate) fn validate_secret(value: &str, name: &'static str) -> Result<(), BetaError> {
     let valid =
         (32..=512).contains(&value.len()) && value.bytes().all(|byte| !byte.is_ascii_whitespace());
     valid.then_some(()).ok_or(BetaError::InvalidInput(name))
 }
 
-fn hash_secret(secret: &str) -> [u8; 32] {
+pub(crate) fn hash_secret(secret: &str) -> [u8; 32] {
     Sha256::digest(secret.as_bytes()).into()
 }
 
@@ -822,7 +856,7 @@ fn random_token() -> String {
     format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple())
 }
 
-fn random_claim_code() -> String {
+pub(crate) fn random_claim_code() -> String {
     Uuid::new_v4()
         .as_bytes()
         .iter()

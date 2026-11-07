@@ -1,7 +1,12 @@
 # Planned reset button
 
-Status: hardware and software design only. No GPIO reset handler is installed
-on the reference frame yet.
+Status: GPIO hardware/handler remain planned. Owner-requested reset is now
+implemented in the server, browser simulator, and privileged provisioner, but
+has not been validated on the physical reference frame. Its journaled cleanup
+executor is in `astrohud-provisioner/src/reset.rs`; future physical-button
+authorization should reuse that cleanup path rather than placing deletion in
+the viewer. Offline physical-reset authorization and server reconciliation
+remain to be designed for the GPIO handler.
 
 AstroHUD should have one local recovery control that still works when Wi-Fi,
 the server, and the image viewer are unavailable. The control must distinguish
@@ -77,16 +82,19 @@ provide most of this behavior.
 This is the resale/privacy operation. It should:
 
 - remove active, candidate, setup, and backup Wi-Fi profiles;
-- remove the future owner/pairing token and customer preferences;
+- remove owner/pairing credentials and customer preferences;
 - remove cached photos and manifests;
 - preserve an immutable manufacturing identity/device code;
 - rotate the temporary setup password; and
 - immediately enter QR-guided provisioning.
 
-The current `/etc/astrohud/device.json` combines the device code and setup
-password. Split immutable identity from rotatable setup credentials before
-implementing factory reset. Never delete a future hardware identity or device
-certificate as part of a customer reset.
+`/etc/astrohud/manufacturing.json` now preserves immutable device ID, code,
+and setup SSID. `device.json` holds rotatable credentials plus matching copies
+of the identifiers for compatibility. Owner-requested resets rotate the setup
+password, device credential, and bootstrap token while retaining manufacturing
+identity. Never delete hardware identity or a device certificate as part of a
+customer reset. See `astrohud-provisioner/README.md` for the remote-reset
+journal, completion receipt, offline behavior, and deployment requirements.
 
 ## Software boundary
 

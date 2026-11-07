@@ -20,6 +20,39 @@ pub struct DeviceIdentity {
     pub bootstrap_token: String,
 }
 
+#[derive(Deserialize, Serialize, PartialEq, Eq)]
+struct ManufacturingIdentity {
+    device_id: String,
+    device_code: String,
+    setup_ssid: String,
+}
+
+pub fn rotated(identity: &DeviceIdentity) -> io::Result<DeviceIdentity> {
+    Ok(DeviceIdentity {
+        device_id: identity.device_id.clone(),
+        device_code: identity.device_code.clone(),
+        setup_ssid: identity.setup_ssid.clone(),
+        setup_password: random_human_string(16)?,
+        device_credential: random_human_string(64)?,
+        bootstrap_token: random_human_string(64)?,
+    })
+}
+
+pub fn install_rotated(
+    path: &Path,
+    credential_path: &Path,
+    identity: &DeviceIdentity,
+) -> io::Result<()> {
+    // The reset journal is authoritative until both writes have completed.
+    atomic_write_json(path, identity)?;
+    match fs::remove_file(credential_path) {
+        Ok(()) => (),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => (),
+        Err(error) => return Err(error),
+    }
+    write_credential_if_missing(credential_path, &identity.device_credential)
+}
+
 impl DeviceIdentity {
     pub fn wifi_qr_payload(&self) -> String {
         format!(
@@ -35,6 +68,12 @@ pub fn load_or_create(path: &Path, credential_path: &Path) -> io::Result<DeviceI
         fs::set_permissions(parent, fs::Permissions::from_mode(0o700))?;
     }
 
+    let manufacturing_path = path.with_file_name("manufacturing.json");
+    let saved_manufacturing: Option<ManufacturingIdentity> = match fs::read(&manufacturing_path) {
+        Ok(bytes) => Some(serde_json::from_slice(&bytes).map_err(io::Error::other)?),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => None,
+        Err(error) => return Err(error),
+    };
     let existing_credential = read_credential(credential_path)?;
     let (mut identity, mut changed) = if path.exists() {
         let bytes = fs::read(path)?;
@@ -43,13 +82,22 @@ pub fn load_or_create(path: &Path, credential_path: &Path) -> io::Result<DeviceI
             false,
         )
     } else {
-        let device_code = random_human_string(6)?;
+        let device_code = match &saved_manufacturing {
+            Some(saved) => saved.device_code.clone(),
+            None => random_human_string(6)?,
+        };
         (
             DeviceIdentity {
-                setup_ssid: format!("AstroHUD-{device_code}"),
+                setup_ssid: saved_manufacturing
+                    .as_ref()
+                    .map(|s| s.setup_ssid.clone())
+                    .unwrap_or_else(|| format!("AstroHUD-{device_code}")),
                 setup_password: random_human_string(16)?,
                 device_code,
-                device_id: Uuid::new_v4().to_string(),
+                device_id: saved_manufacturing
+                    .as_ref()
+                    .map(|s| s.device_id.clone())
+                    .unwrap_or_else(|| Uuid::new_v4().to_string()),
                 device_credential: existing_credential
                     .clone()
                     .unwrap_or(random_human_string(64)?),
@@ -87,6 +135,22 @@ pub fn load_or_create(path: &Path, credential_path: &Path) -> io::Result<DeviceI
 
     if changed {
         atomic_write_json(path, &identity)?;
+    }
+    let manufacturing = ManufacturingIdentity {
+        device_id: identity.device_id.clone(),
+        device_code: identity.device_code.clone(),
+        setup_ssid: identity.setup_ssid.clone(),
+    };
+    if manufacturing_path.exists() {
+        let saved: ManufacturingIdentity =
+            serde_json::from_slice(&fs::read(&manufacturing_path)?).map_err(io::Error::other)?;
+        if saved != manufacturing {
+            return Err(io::Error::other(
+                "manufacturing identity does not match device identity",
+            ));
+        }
+    } else {
+        atomic_write_json(&manufacturing_path, &manufacturing)?;
     }
     write_credential_if_missing(credential_path, &identity.device_credential)?;
     Ok(identity)
@@ -137,7 +201,7 @@ fn write_credential_if_missing(path: &Path, credential: &str) -> io::Result<()> 
     Ok(())
 }
 
-fn random_human_string(length: usize) -> io::Result<String> {
+pub(crate) fn random_human_string(length: usize) -> io::Result<String> {
     let mut random = File::open("/dev/urandom")?;
     let acceptance_limit = (u8::MAX as usize + 1) / HUMAN_ALPHABET.len() * HUMAN_ALPHABET.len();
     let mut result = String::with_capacity(length);
@@ -152,7 +216,7 @@ fn random_human_string(length: usize) -> io::Result<String> {
     Ok(result)
 }
 
-fn atomic_write_json(path: &Path, value: &DeviceIdentity) -> io::Result<()> {
+pub(crate) fn atomic_write_json(path: &Path, value: &impl Serialize) -> io::Result<()> {
     let temporary = path.with_extension(format!("tmp-{}", std::process::id()));
     let bytes = serde_json::to_vec_pretty(value).map_err(io::Error::other)?;
     let mut file = OpenOptions::new()
@@ -166,6 +230,7 @@ fn atomic_write_json(path: &Path, value: &DeviceIdentity) -> io::Result<()> {
     file.write_all(b"\n")?;
     file.sync_all()?;
     fs::rename(&temporary, path)?;
+    File::open(path.parent().unwrap_or(Path::new("/")))?.sync_all()?;
     Ok(())
 }
 
@@ -209,6 +274,24 @@ mod tests {
         assert!(!first.device_code.contains(['0', 'O', '1', 'I', 'L']));
 
         fs::remove_dir_all(directory).expect("remove test directory");
+    }
+
+    #[test]
+    fn manufacturing_identity_survives_recreating_rotatable_credentials() {
+        let directory =
+            std::env::temp_dir().join(format!("astrohud-manufacturing-test-{}", Uuid::new_v4()));
+        let path = directory.join("device.json");
+        let credential = directory.join("device-credential");
+        let before = load_or_create(&path, &credential).unwrap();
+        fs::remove_file(&path).unwrap();
+        fs::remove_file(&credential).unwrap();
+        let after = load_or_create(&path, &credential).unwrap();
+        assert_eq!(before.device_id, after.device_id);
+        assert_eq!(before.device_code, after.device_code);
+        assert_eq!(before.setup_ssid, after.setup_ssid);
+        assert_ne!(before.device_credential, after.device_credential);
+        assert_ne!(before.setup_password, after.setup_password);
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

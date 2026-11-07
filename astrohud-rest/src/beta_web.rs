@@ -1,9 +1,9 @@
 use crate::{
     AppState, BetaError, DeviceEnrollmentState, DeviceRegistration, claim_bootstrap_device,
     claim_device, claimed_device_access, create_sender_invitation, device_bootstrap_status,
-    enrollment_status, owner_context, protected_manifest_for_household,
+    enrollment_status, owner_context, owner_household_id, protected_manifest_for_household,
     protected_media_storage_key, register_bootstrap_device, register_device,
-    revoke_sender_invitation, sender_access, upload_invited_photo,
+    replace_sender_invitation, revoke_sender_invitation, sender_access, upload_invited_photo,
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
@@ -40,6 +40,17 @@ struct BootstrapClaimRequest {
 #[derive(Deserialize)]
 struct InvitationRequest {
     label: String,
+}
+
+#[derive(Deserialize)]
+struct ResetRequest {
+    confirm_name: String,
+}
+
+#[derive(Deserialize)]
+struct AcceptResetRequest {
+    receipt: String,
+    next_credential: String,
 }
 
 #[derive(Deserialize)]
@@ -91,12 +102,38 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
         )
         .route("/api/beta/owner", web::get().to(get_owner_context))
         .route(
+            "/api/beta/owner/frames/{frame_id}/reset",
+            web::post().to(request_reset),
+        )
+        .route("/api/beta/device/reset", web::get().to(get_reset))
+        .route(
+            "/api/beta/device/resets/{reset_id}/accept",
+            web::post().to(accept_reset),
+        )
+        .route(
+            "/api/beta/device/resets/{reset_id}/complete",
+            web::post().to(complete_reset),
+        )
+        .route(
+            "/api/beta/owner/frames/{frame_id}/photos",
+            web::get().to(get_owner_photos),
+        )
+        .service(
+            web::resource("/api/beta/owner/frames/{frame_id}/photos/{photo_id}")
+                .route(web::get().to(get_owner_photo))
+                .route(web::delete().to(remove_owner_photo)),
+        )
+        .route(
             "/api/beta/owner/invitations",
             web::post().to(create_invitation),
         )
         .route(
             "/api/beta/owner/invitations/{invitation_id}",
             web::delete().to(revoke_invitation),
+        )
+        .route(
+            "/api/beta/owner/invitations/{invitation_id}/replace",
+            web::post().to(replace_invitation),
         )
         .route(
             "/api/beta/owner/claim",
@@ -166,7 +203,26 @@ async fn create_invitation(
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     let invitation =
         create_sender_invitation(&database, &token, &request.label).map_err(beta_http_error)?;
-    Ok(HttpResponse::Created().json(invitation))
+    Ok(HttpResponse::Created()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(invitation))
+}
+
+async fn replace_invitation(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    invitation_id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let invitation =
+        replace_sender_invitation(&database, &token, &invitation_id).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(invitation))
 }
 
 async fn revoke_invitation(
@@ -194,6 +250,160 @@ async fn get_owner_context(
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     let context = owner_context(&database, &token).map_err(beta_http_error)?;
     Ok(HttpResponse::Ok().json(context))
+}
+
+async fn request_reset(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    frame: web::Path<String>,
+    body: web::Json<ResetRequest>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let reset = crate::request_device_reset(&db, &token, &frame, &body.confirm_name)
+        .map_err(beta_http_error)?;
+    Ok(HttpResponse::Accepted()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(reset))
+}
+
+async fn get_reset(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
+    let credential = bearer_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let reset = crate::pending_device_reset(&db, &credential).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(serde_json::json!({"reset": reset})))
+}
+
+async fn accept_reset(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    id: web::Path<String>,
+    body: web::Json<AcceptResetRequest>,
+) -> Result<HttpResponse> {
+    let credential = bearer_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    crate::accept_device_reset(&db, &credential, &id, &body.receipt, &body.next_credential)
+        .map_err(beta_http_error)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+async fn complete_reset(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let receipt = bearer_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    crate::complete_device_reset(&mut db, &id, &receipt).map_err(beta_http_error)?;
+    Ok(HttpResponse::NoContent().finish())
+}
+
+async fn get_owner_photos(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    frame_id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let household_id = owner_household_id(&database, &token).map_err(beta_http_error)?;
+    let mut manifest = protected_manifest_for_household(&database, &household_id, &frame_id)
+        .map_err(error::ErrorInternalServerError)?
+        .ok_or_else(|| error::ErrorNotFound("frame not found"))?;
+    for photo in &mut manifest.photos {
+        photo.url = format!("/api/beta/owner/frames/{frame_id}/photos/{}", photo.id);
+    }
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(manifest))
+}
+
+async fn get_owner_photo(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let (frame_id, photo_id) = path.into_inner();
+    let storage_key = {
+        let database = state
+            .database
+            .lock()
+            .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+        let household_id = owner_household_id(&database, &token).map_err(beta_http_error)?;
+        protected_media_storage_key(&database, &household_id, &frame_id, &photo_id)
+            .map_err(error::ErrorInternalServerError)?
+            .ok_or_else(|| error::ErrorNotFound("photo not found"))?
+    };
+    let file = NamedFile::open_async(state.media_dir.join(storage_key))
+        .await
+        .map_err(|err| match err.kind() {
+            std::io::ErrorKind::NotFound => error::ErrorNotFound("photo not found"),
+            _ => error::ErrorInternalServerError(err),
+        })?;
+    let mut response = file.into_response(&request);
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("no-store"),
+    );
+    Ok(response)
+}
+
+async fn remove_owner_photo(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    path: web::Path<(String, String)>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let (frame_id, photo_id) = path.into_inner();
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let household_id = owner_household_id(&database, &token).map_err(beta_http_error)?;
+    // Validate membership independently of the removal record so retries succeed.
+    let changed = database
+        .execute(
+            "INSERT OR IGNORE INTO frame_photo_removals (frame_id, photo_id)
+         SELECT f.id, p.id FROM frames f
+         JOIN frame_subscriptions s ON s.frame_id = f.id
+         JOIN photos p ON p.channel_id = s.channel_id
+         JOIN channels c ON c.id = p.channel_id
+         WHERE f.id = ?1 AND p.id = ?2 AND f.household_id = ?3 AND c.household_id = ?3",
+            rusqlite::params![frame_id, photo_id, household_id],
+        )
+        .map_err(error::ErrorInternalServerError)?;
+    if changed == 0 {
+        let already_removed: bool = database
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM frame_photo_removals r
+             JOIN frames f ON f.id = r.frame_id
+             WHERE r.frame_id = ?1 AND r.photo_id = ?2 AND f.household_id = ?3)",
+                rusqlite::params![frame_id, photo_id, household_id],
+                |row| row.get(0),
+            )
+            .map_err(error::ErrorInternalServerError)?;
+        if !already_removed {
+            return Err(error::ErrorNotFound("photo not found"));
+        }
+    }
+    Ok(HttpResponse::NoContent().finish())
 }
 
 async fn claim_pending_device(
@@ -444,6 +654,384 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn reset_http_flow_requires_owner_confirmation_and_device_acknowledgement() {
+        let mut database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let credential = "reset-http-device-credential-abcdefghijklmnopqrstuvwxyz";
+        let bootstrap = "reset-http-bootstrap-token-abcdefghijklmnopqrstuvwxyz";
+        let next = "reset-http-next-credential-abcdefghijklmnopqrstuvwxyz";
+        let receipt = "reset-http-receipt-token-abcdefghijklmnopqrstuvwxyz";
+        let device_id = Uuid::new_v4().to_string();
+        register_bootstrap_device(&database, &device_id, "AB23CD", credential, bootstrap).unwrap();
+        let claim = claim_bootstrap_device(&mut database, bootstrap, "Kitchen").unwrap();
+        let state = web::Data::new(AppState::new(database, PathBuf::from("unused")));
+        let app =
+            test::init_service(App::new().app_data(state).configure(configure_beta_routes)).await;
+        let uri = format!("/api/beta/owner/frames/{device_id}/reset");
+        let anonymous = test::TestRequest::post()
+            .uri(&uri)
+            .set_json(serde_json::json!({"confirm_name": "Kitchen"}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, anonymous).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let wrong_name = test::TestRequest::post()
+            .uri(&uri)
+            .cookie(Cookie::new(OWNER_COOKIE, claim.owner_token.clone()))
+            .set_json(serde_json::json!({"confirm_name": "wrong"}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, wrong_name).await.status(),
+            StatusCode::BAD_REQUEST
+        );
+        let request = test::TestRequest::post()
+            .uri(&uri)
+            .cookie(Cookie::new(OWNER_COOKIE, claim.owner_token.clone()))
+            .set_json(serde_json::json!({"confirm_name": "Kitchen"}))
+            .to_request();
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::ACCEPTED);
+        let reset: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(reset["state"], "pending");
+        let id = reset["reset_id"].as_str().unwrap();
+        let poll = test::TestRequest::get()
+            .uri("/api/beta/device/reset")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {credential}")))
+            .to_request();
+        let response = test::call_service(&app, poll).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let command: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(command["reset"]["reset_id"], id);
+        let premature = test::TestRequest::post()
+            .uri(&format!("/api/beta/device/resets/{id}/complete"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {credential}")))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, premature).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let accept = test::TestRequest::post()
+            .uri(&format!("/api/beta/device/resets/{id}/accept"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {credential}")))
+            .set_json(serde_json::json!({"receipt": receipt, "next_credential": next}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, accept).await.status(),
+            StatusCode::NO_CONTENT
+        );
+        let manifest = test::TestRequest::get()
+            .uri("/api/beta/device/manifest")
+            .insert_header((header::AUTHORIZATION, format!("Bearer {credential}")))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, manifest).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let complete = test::TestRequest::post()
+            .uri(&format!("/api/beta/device/resets/{id}/complete"))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {receipt}")))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, complete).await.status(),
+            StatusCode::NO_CONTENT
+        );
+        let owner = test::TestRequest::get()
+            .uri("/api/beta/owner")
+            .cookie(Cookie::new(OWNER_COOKIE, claim.owner_token))
+            .to_request();
+        let response = test::call_service(&app, owner).await;
+        let context: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(context["frames"], serde_json::json!([]));
+        assert_eq!(context["resets"][0]["state"], "complete");
+        assert!(context["resets"][0].get("receipt_hash").is_none());
+    }
+
+    #[actix_web::test]
+    async fn replacement_preserves_recipient_and_revokes_old_link_and_session() {
+        let mut database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let owner = create_household_owner(&mut database, "Home", "Owner").unwrap();
+        let other = create_household_owner(&mut database, "Other", "Owner").unwrap();
+        database.execute("INSERT INTO frames (id, household_id, place_name) VALUES ('kitchen', ?1, 'Kitchen')",
+            rusqlite::params![owner.household_id]).unwrap();
+        let invitation = create_sender_invitation(&database, &owner.owner_token, "Alice").unwrap();
+        let uri = format!(
+            "/api/beta/owner/invitations/{}/replace",
+            invitation.invitation_id
+        );
+        let state = web::Data::new(AppState::new(database, PathBuf::from("unused")));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        for cookie in [
+            None,
+            Some(Cookie::new(SENDER_COOKIE, invitation.token.clone())),
+        ] {
+            let mut request = test::TestRequest::post().uri(&uri);
+            if let Some(cookie) = cookie {
+                request = request.cookie(cookie);
+            }
+            assert_eq!(
+                test::call_service(&app, request.to_request())
+                    .await
+                    .status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
+        let foreign = test::TestRequest::post()
+            .uri(&uri)
+            .cookie(Cookie::new(OWNER_COOKIE, other.owner_token))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, foreign).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let existing = test::TestRequest::get()
+            .uri("/api/beta/sender")
+            .cookie(Cookie::new(SENDER_COOKIE, invitation.token.clone()))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, existing).await.status(),
+            StatusCode::OK
+        );
+        let replace = test::TestRequest::post()
+            .uri(&uri)
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        let response = test::call_service(&app, replace).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+        let replacement: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(replacement["invitation_id"], invitation.invitation_id);
+        assert_eq!(replacement["label"], "Alice");
+        let new_token = replacement["token"].as_str().unwrap();
+        assert_ne!(new_token, invitation.token);
+        let old_activation = test::TestRequest::post()
+            .uri("/api/beta/sender/session")
+            .set_json(serde_json::json!({"token": invitation.token}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, old_activation).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let old_session = test::TestRequest::get()
+            .uri("/api/beta/sender")
+            .cookie(Cookie::new(SENDER_COOKIE, invitation.token))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, old_session).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let activate = test::TestRequest::post()
+            .uri("/api/beta/sender/session")
+            .set_json(serde_json::json!({"token": new_token}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, activate).await.status(),
+            StatusCode::NO_CONTENT
+        );
+        {
+            let database = state.database.lock().unwrap();
+            let access = sender_access(&database, new_token).unwrap();
+            assert_eq!(access.channel_id, owner.default_channel_id);
+            assert_eq!(access.household_id, owner.household_id);
+            let context = owner_context(&database, &owner.owner_token).unwrap();
+            assert_eq!(context.invitations.len(), 1);
+            let stored: Vec<u8> = database
+                .query_row(
+                    "SELECT token_hash FROM sender_invitations WHERE id = ?1",
+                    rusqlite::params![invitation.invitation_id],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(stored.len(), 32);
+            assert_ne!(stored, new_token.as_bytes());
+            revoke_sender_invitation(&database, &owner.owner_token, &invitation.invitation_id)
+                .unwrap();
+        }
+        let disabled = test::TestRequest::post()
+            .uri(&uri)
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, disabled).await.status(),
+            StatusCode::NOT_FOUND
+        );
+    }
+
+    #[actix_web::test]
+    async fn owner_removal_is_private_frame_scoped_and_retryable() {
+        let mut database = Connection::open_in_memory().expect("open database");
+        initialize_database(&database).expect("initialize database");
+        let owner = create_household_owner(&mut database, "Tester", "Owner").unwrap();
+        let stranger = create_household_owner(&mut database, "Other", "Owner").unwrap();
+        for frame_id in ["kitchen", "bedroom"] {
+            database
+                .execute(
+                    "INSERT INTO frames (id, household_id, place_name) VALUES (?1, ?2, ?1)",
+                    rusqlite::params![frame_id, owner.household_id],
+                )
+                .unwrap();
+            database
+                .execute(
+                    "INSERT INTO frame_subscriptions (frame_id, channel_id) VALUES (?1, ?2)",
+                    rusqlite::params![frame_id, owner.default_channel_id],
+                )
+                .unwrap();
+        }
+        database.execute("INSERT INTO photos (id, channel_id, storage_key, mime_type) VALUES ('shared', ?1, 'shared.jpg', 'image/jpeg')",
+            rusqlite::params![owner.default_channel_id]).unwrap();
+        let media_dir =
+            std::env::temp_dir().join(format!("astrohud-removal-test-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&media_dir).unwrap();
+        std::fs::write(media_dir.join("shared.jpg"), b"private-photo").unwrap();
+        let state = web::Data::new(AppState::new(database, media_dir.clone()));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let photo_url = "/api/beta/owner/frames/kitchen/photos/shared";
+
+        for method in [
+            actix_web::http::Method::GET,
+            actix_web::http::Method::DELETE,
+        ] {
+            let anonymous = test::TestRequest::default()
+                .method(method.clone())
+                .uri(photo_url)
+                .to_request();
+            assert_eq!(
+                test::call_service(&app, anonymous).await.status(),
+                StatusCode::UNAUTHORIZED
+            );
+            let sender = test::TestRequest::default()
+                .method(method.clone())
+                .uri(photo_url)
+                .cookie(Cookie::new(SENDER_COOKIE, owner.owner_token.clone()))
+                .to_request();
+            assert_eq!(
+                test::call_service(&app, sender).await.status(),
+                StatusCode::UNAUTHORIZED
+            );
+            let foreign = test::TestRequest::default()
+                .method(method)
+                .uri(photo_url)
+                .cookie(Cookie::new(OWNER_COOKIE, stranger.owner_token.clone()))
+                .to_request();
+            assert_eq!(
+                test::call_service(&app, foreign).await.status(),
+                StatusCode::NOT_FOUND
+            );
+        }
+        let foreign_list = test::TestRequest::get()
+            .uri("/api/beta/owner/frames/kitchen/photos")
+            .cookie(Cookie::new(OWNER_COOKIE, stranger.owner_token.clone()))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, foreign_list).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let listing = test::TestRequest::get()
+            .uri("/api/beta/owner/frames/kitchen/photos")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        let response = test::call_service(&app, listing).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let body: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(body["photos"][0]["url"], photo_url);
+        let preview = test::TestRequest::get()
+            .uri(photo_url)
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        let response = test::call_service(&app, preview).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(
+            response.headers().get(header::CACHE_CONTROL).unwrap(),
+            "no-store"
+        );
+        assert_eq!(test::read_body(response).await, b"private-photo"[..]);
+
+        for _ in 0..2 {
+            let removal = test::TestRequest::delete()
+                .uri(photo_url)
+                .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+                .to_request();
+            assert_eq!(
+                test::call_service(&app, removal).await.status(),
+                StatusCode::NO_CONTENT
+            );
+        }
+        let listing = test::TestRequest::get()
+            .uri("/api/beta/owner/frames/kitchen/photos")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        let response = test::call_service(&app, listing).await;
+        let body: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(body["photos"], serde_json::json!([]));
+        let removed_preview = test::TestRequest::get()
+            .uri(photo_url)
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, removed_preview).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        {
+            let database = state.database.lock().unwrap();
+            let kitchen =
+                protected_manifest_for_household(&database, &owner.household_id, "kitchen")
+                    .unwrap()
+                    .unwrap();
+            let bedroom =
+                protected_manifest_for_household(&database, &owner.household_id, "bedroom")
+                    .unwrap()
+                    .unwrap();
+            assert!(kitchen.photos.is_empty());
+            assert_eq!(bedroom.photos.len(), 1);
+            assert!(
+                protected_media_storage_key(&database, &owner.household_id, "kitchen", "shared")
+                    .unwrap()
+                    .is_none()
+            );
+            assert!(
+                protected_media_storage_key(&database, &owner.household_id, "bedroom", "shared")
+                    .unwrap()
+                    .is_some()
+            );
+            // Removal must survive restarting the server and reinitializing its schema.
+            initialize_database(&database).unwrap();
+            assert!(
+                protected_manifest_for_household(&database, &owner.household_id, "kitchen")
+                    .unwrap()
+                    .unwrap()
+                    .photos
+                    .is_empty()
+            );
+            database.execute("UPDATE owner_access_grants SET revoked_at = CURRENT_TIMESTAMP WHERE household_id = ?1",
+                rusqlite::params![owner.household_id]).unwrap();
+        }
+        let revoked = test::TestRequest::delete()
+            .uri(photo_url)
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, revoked).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        assert!(media_dir.join("shared.jpg").is_file());
+        std::fs::remove_dir_all(media_dir).unwrap();
+    }
 
     #[actix_web::test]
     async fn device_bootstrap_claim_creates_owner_session_and_rejects_replay() {

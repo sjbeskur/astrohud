@@ -149,9 +149,12 @@ fn run_viewer(
         loop {
             match updates.try_recv() {
                 Ok(update) => {
-                    let old_first = playlist.photos.first().map(|photo| &photo.id);
-                    let new_first = update.photos.first().map(|photo| &photo.id);
-                    if old_first != new_first {
+                    if !playlist
+                        .photos
+                        .iter()
+                        .map(|photo| &photo.id)
+                        .eq(update.photos.iter().map(|photo| &photo.id))
+                    {
                         current = None;
                         next_slide = Instant::now();
                     }
@@ -191,8 +194,15 @@ fn run_viewer(
             next_setup_check = now + Duration::from_millis(500);
         }
 
-        if !setup_active && !playlist.photos.is_empty() && now >= next_slide {
-            current = show_next(&mut canvas, &playlist, current);
+        if !setup_active && now >= next_slide {
+            if playlist.photos.is_empty() {
+                canvas.set_draw_color(Color::RGB(5, 7, 12));
+                canvas.clear();
+                canvas.present();
+                current = None;
+            } else {
+                current = show_next(&mut canvas, &playlist, current);
+            }
             next_slide = now + config.slide_interval;
         }
 

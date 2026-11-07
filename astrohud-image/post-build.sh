@@ -22,6 +22,9 @@ done
 
 for forbidden in \
     etc/astrohud/device.json \
+    etc/astrohud/manufacturing.json \
+    etc/astrohud/reset.json \
+    var/lib/astrohud/reset-in-progress \
     etc/astrohud/wifi-profile.nmconnection \
     etc/NetworkManager/system-connections/astrohud-wifi.nmconnection \
     var/lib/astrohud/device-credential \

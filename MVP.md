@@ -116,7 +116,7 @@ does not need management UI for those cases.
 
 ## Deliberately deferred
 
-- Factory reset and resale automation
+- Physical reset-button handling and automated resale workflows
 - Public signup, email delivery, passwords, and account recovery
 - Self-service ownership transfer
 - Native mobile applications
@@ -124,8 +124,11 @@ does not need management UI for those cases.
 - Billing, push notifications, comments, reactions, and captions
 - General fleet management and automatic operating-system updates
 
-Loaned appliances must be manually wiped before reassignment while factory
-reset remains deferred.
+Owner-requested reset is implemented in the server, simulator, and privileged
+provisioner, with a persistent reset journal and credential rotation. Physical
+Wi-Fi cleanup, service restart, and power-loss validation on a spare appliance
+remain required before relying on it for reassignment. Existing appliances need
+the updated provisioner and systemd units.
 
 ## Delivery order
 
@@ -136,8 +139,12 @@ reset remains deferred.
 - [x] Authenticate manifest and media delivery.
 - [x] Generate per-appliance identity on first boot and carry a one-time
   bootstrap from Wi-Fi setup into owner onboarding.
-- [ ] Add frame last-seen state, cache-delivery acknowledgements, deletion, and
-  quotas.
+- [x] Add owner photo previews and removal from an individual frame, including
+  manifest/media exclusion and native cache cleanup on the next successful sync.
+- [ ] Add frame last-seen state, cache-delivery acknowledgements, and quotas.
+- [x] Implement owner-requested reset, simulator support, credential rotation,
+  and a journaled appliance cleanup path.
+- [ ] Validate factory reset and interrupted reset on a spare physical appliance.
 - [ ] Exercise three local households with simulated devices.
 - [ ] Validate the same flow on the three physical appliances.
 - [x] Deploy the service to a public HTTPS host.

@@ -2,6 +2,7 @@
 Description=AstroHUD native picture frame
 Wants=network-online.target
 After=network-online.target
+ConditionPathExists=!/var/lib/astrohud/reset-in-progress
 Conflicts=getty@tty1.service
 
 [Service]

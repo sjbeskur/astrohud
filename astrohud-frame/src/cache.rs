@@ -276,6 +276,34 @@ mod tests {
     }
 
     #[test]
+    fn removed_photos_are_purged_and_do_not_return_after_restart() {
+        let directory = TestDirectory::new();
+        let store = CacheStore::open(&directory.0, 1024 * 1024).unwrap();
+        let first = photo("first");
+        let second = photo("second");
+        store.install(&first, Cursor::new(png_bytes(2, 2))).unwrap();
+        store
+            .install(&second, Cursor::new(png_bytes(2, 2)))
+            .unwrap();
+        let mut manifest = FrameManifest {
+            frame_id: "demo-frame".to_owned(),
+            place_name: "Kitchen".to_owned(),
+            photos: vec![second.clone()],
+        };
+        let playlist = store.reconcile(&manifest).unwrap();
+        store.save_manifest(&manifest).unwrap();
+        assert_eq!(playlist.photos.len(), 1);
+        assert!(!store.contains(&first));
+        assert!(store.contains(&second));
+        manifest.photos.clear();
+        assert!(store.reconcile(&manifest).unwrap().photos.is_empty());
+        store.save_manifest(&manifest).unwrap();
+        let reopened = CacheStore::open(&directory.0, 1024 * 1024).unwrap();
+        assert!(reopened.cached_playlist().unwrap().photos.is_empty());
+        assert_eq!(reopened.total_bytes().unwrap(), 0);
+    }
+
+    #[test]
     fn unsafe_manifest_ids_cannot_escape_the_cache() {
         let directory = TestDirectory::new();
         let store = CacheStore::open(&directory.0, 1024).expect("open cache");

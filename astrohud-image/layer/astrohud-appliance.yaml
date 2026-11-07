@@ -52,6 +52,8 @@ mmdebstrap:
       rm -f $1/etc/ssh/ssh_host_ed25519_key $1/etc/ssh/ssh_host_ed25519_key.pub
       rm -f $1/etc/ssh/ssh_host_rsa_key $1/etc/ssh/ssh_host_rsa_key.pub
       rm -f $1/etc/astrohud/device.json
+      rm -f $1/etc/astrohud/manufacturing.json $1/etc/astrohud/reset.json
+      rm -f $1/var/lib/astrohud/reset-in-progress
       rm -f $1/etc/astrohud/wifi-profile.nmconnection
       rm -f $1/etc/NetworkManager/system-connections/astrohud-wifi.nmconnection
       rm -f $1/var/lib/astrohud/device-credential

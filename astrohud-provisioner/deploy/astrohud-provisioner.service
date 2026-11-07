@@ -17,6 +17,7 @@ ProtectHome=true
 ProtectSystem=strict
 ReadWritePaths=/etc/astrohud
 ReadWritePaths=/etc/NetworkManager/system-connections
+ReadWritePaths=/run/NetworkManager
 ReadWritePaths=/var/lib/astrohud
 ProtectKernelTunables=true
 ProtectKernelModules=true

@@ -7,7 +7,7 @@
   <title>Set up your AstroHUD</title>
   <link rel="stylesheet" href="/astrohud-theme.css">
 </head>
-<body>
+<body class="owner-page">
   <header class="hud-nav">
     <div class="hud-shell hud-nav-row">
       <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
@@ -18,9 +18,14 @@
   <main class="hud-shell sender-main">
     <header class="sender-intro">
       <p class="signal-label">Place control / <span id="household-name">Loading</span></p>
-      <h1>Your place, <em>connected.</em></h1>
-      <p>See the frame assigned to this place and create private sender links for friends and family.</p>
+      <h1>Your screen. Your people.</h1>
+      <p>Share photos with friends and family on your own personal digital display.</p>
     </header>
+
+    <nav id="owner-actions" class="owner-actions" aria-label="Owner actions" hidden>
+      <a class="signal-button" href="#invite-panel">Invite someone →</a>
+      <a class="signal-button secondary" href="#photos-panel">Manage photos</a>
+    </nav>
 
     <div class="instrument-stack">
       <section id="owner-access-help" class="instrument-panel" hidden aria-labelledby="owner-access-title">
@@ -71,7 +76,7 @@
           <p class="instrument-label">Private links</p>
         </div>
         <h2 id="invite-title">Invite friends and family</h2>
-        <p class="instrument-copy">Name the person so you can disable only their link later. They will not need an account or an app.</p>
+        <p class="instrument-copy">Create a private link for each person. To send a link again later, choose Replace link below; their old link and browser access will stop working until they open the new one.</p>
         <form id="invite-form">
           <label for="sender-name">Who is this link for?</label>
           <div class="field-row">
@@ -94,6 +99,27 @@
         </div>
         <div id="invitations" class="connection-summary"></div>
       </section>
+
+      <section id="device-settings" class="instrument-panel" hidden>
+        <details>
+          <summary>Device settings</summary>
+          <p class="instrument-copy">Factory reset removes photos stored on the device, its Wi-Fi settings, and its owner pairing. Your household's photos and other devices stay available. You will need to set up the device again.</p>
+          <div id="device-controls" class="connection-summary"></div>
+          <div id="reset-history" class="connection-summary" role="status"></div>
+        </details>
+      </section>
+
+      <section id="photos-panel" class="instrument-panel" hidden aria-labelledby="photos-title">
+        <div class="owner-photo-heading">
+          <h2 id="photos-title">Photos on your frame</h2>
+          <button id="refresh-photos" class="signal-button secondary" type="button">Refresh photos</button>
+        </div>
+        <p class="instrument-copy">Remove a photo from the selected frame. Other frames keep their copy. An offline frame removes it when it reconnects.</p>
+        <label for="photo-frame">Frame</label>
+        <select id="photo-frame"></select>
+        <p id="photo-status" role="status"></p>
+        <div id="frame-photos" class="owner-photo-grid"></div>
+      </section>
     </div>
     <p id="status" class="status-line" role="status">Loading owner access…</p>
   </main>
@@ -104,7 +130,14 @@
     const claimPanel = document.querySelector('#claim-panel');
     const connectedPanel = document.querySelector('#connected-panel');
     const invitePanel = document.querySelector('#invite-panel');
+    const ownerActions = document.querySelector('#owner-actions');
     const frames = document.querySelector('#frames');
+    const photosPanel = document.querySelector('#photos-panel');
+    const photoFrame = document.querySelector('#photo-frame');
+    const framePhotos = document.querySelector('#frame-photos');
+    const photoStatus = document.querySelector('#photo-status');
+    let photoRequest = 0;
+    let resetTimer;
     const invitations = document.querySelector('#invitations');
     const invitationCount = document.querySelector('#invitation-count');
     const newInvitation = document.querySelector('#new-invitation');
@@ -129,11 +162,23 @@
     }
 
     function render(context) {
+      renderDeviceSettings(context);
       householdName.textContent = context.household_name;
       const connected = context.frames.length > 0;
       claimPanel.hidden = connected;
       connectedPanel.hidden = !connected;
       invitePanel.hidden = !connected;
+      ownerActions.hidden = !connected;
+      photosPanel.hidden = !connected;
+      const selectedFrame = photoFrame.value;
+      photoFrame.replaceChildren(...context.frames.map(frame => {
+        const option = document.createElement('option');
+        option.value = frame.frame_id;
+        option.textContent = frame.place_name;
+        return option;
+      }));
+      if (context.frames.some(frame => frame.frame_id === selectedFrame)) photoFrame.value = selectedFrame;
+      if (connected) loadPhotos();
       frames.replaceChildren(...context.frames.map(frame => {
         const card = document.createElement('div');
         card.className = 'connection-card';
@@ -160,7 +205,15 @@
         revoke.type = 'button';
         revoke.textContent = 'Disable';
         revoke.addEventListener('click', () => revokeInvitation(invitation));
-        card.append(identity, revoke);
+        const replace = document.createElement('button');
+        replace.className = 'quiet-button';
+        replace.type = 'button';
+        replace.textContent = 'Replace link';
+        replace.addEventListener('click', () => replaceInvitation(invitation, replace));
+        const actions = document.createElement('div');
+        actions.className = 'invitation-actions';
+        actions.append(replace, revoke);
+        card.append(identity, actions);
         return card;
       }));
       if (!activeInvitations.length) {
@@ -178,6 +231,10 @@
         claimPanel.hidden = true;
         connectedPanel.hidden = true;
         invitePanel.hidden = true;
+        ownerActions.hidden = true;
+        photosPanel.hidden = true;
+        document.querySelector('#device-settings').hidden = true;
+        clearTimeout(resetTimer);
         ownerAccessHelp.hidden = false;
         throw new Error('Owner access is missing in this browser. Use the phone that set up the frame, or open a private recovery activation link from AstroHUD support.');
       }
@@ -185,6 +242,131 @@
       ownerAccessHelp.hidden = true;
       render(await response.json());
     }
+
+    function renderDeviceSettings(context) {
+      clearTimeout(resetTimer);
+      const resets = context.resets || [];
+      document.querySelector('#device-settings').hidden = !context.frames.length && !resets.length;
+      document.querySelector('#device-controls').replaceChildren(...context.frames.map(frame => {
+        const card = document.createElement('div');
+        card.className = 'invitation-card';
+        const name = document.createElement('strong');
+        name.textContent = frame.place_name;
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'quiet-button danger';
+        const active = resets.find(reset => reset.frame_id === frame.frame_id && reset.state !== 'complete');
+        button.disabled = Boolean(active);
+        button.textContent = active ? 'Reset in progress' : 'Factory reset';
+        button.addEventListener('click', () => resetDevice(frame, button));
+        card.append(name, button);
+        return card;
+      }));
+      const messages = {
+        pending: 'Reset pending — waiting for the device to connect and accept the request.',
+        resetting: 'Resetting — completion will be confirmed after the device is cleared and connected to Wi-Fi again.',
+        complete: 'Reset complete — the device is ready for setup and is no longer paired with this household.'
+      };
+      document.querySelector('#reset-history').replaceChildren(...resets.map(reset => {
+        const note = document.createElement('p');
+        note.className = 'empty-note';
+        note.textContent = `${reset.place_name}: ${messages[reset.state] || reset.state}`;
+        return note;
+      }));
+      if (resets.some(reset => reset.state !== 'complete')) {
+        document.querySelector('#device-settings details').open = true;
+        resetTimer = setTimeout(async function pollReset() {
+          try {
+            const response = await fetch('/api/beta/owner', {cache: 'no-store'});
+            if (!response.ok) throw new Error('Could not check reset status');
+            const next = await response.json();
+            const activeIds = resets.filter(reset => reset.state !== 'complete').map(reset => reset.reset_id);
+            if ((next.resets || []).some(reset => activeIds.includes(reset.reset_id) && reset.state === 'complete')) {
+              render(next);
+            } else {
+              renderDeviceSettings(next);
+            }
+          } catch (_) {
+            resetTimer = setTimeout(pollReset, 5000);
+          }
+        }, 5000);
+      }
+    }
+
+    async function resetDevice(frame, button) {
+      const name = prompt(`Factory reset “${frame.place_name}”? This removes its photos, Wi-Fi settings, and pairing. You will need to set it up again.\n\nType the place name exactly to confirm:`);
+      if (name === null) return;
+      if (name !== frame.place_name) {
+        setStatus('Reset cancelled / The place name did not match.', 'error');
+        return;
+      }
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frame.frame_id)}/reset`, {
+          method: 'POST', headers: {'content-type': 'application/json'}, body: JSON.stringify({confirm_name: name})
+        });
+        if (!response.ok) throw new Error(await response.text());
+        await loadOwner();
+        setStatus('Reset requested / Check Device settings for progress.', 'success');
+      } catch (error) {
+        setStatus(`Reset request failed / ${error.message}`, 'error');
+        button.disabled = false;
+      }
+    }
+
+    async function loadPhotos() {
+      const request = ++photoRequest;
+      const frameId = photoFrame.value;
+      framePhotos.replaceChildren();
+      photoStatus.textContent = 'Loading photos…';
+      try {
+        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos`, {cache: 'no-store'});
+        if (!response.ok) throw new Error(await response.text());
+        const manifest = await response.json();
+        if (request !== photoRequest) return;
+        photoStatus.textContent = manifest.photos.length ? `${manifest.photos.length} photos (newest first)` : 'No photos on this frame yet.';
+        framePhotos.replaceChildren(...manifest.photos.map(photo => {
+          const card = document.createElement('figure');
+          card.className = 'photo-preview';
+          const image = document.createElement('img');
+          image.src = photo.url;
+          image.alt = `Photo sent ${photo.created_at} UTC`;
+          image.loading = 'lazy';
+          const caption = document.createElement('figcaption');
+          const date = document.createElement('span');
+          date.textContent = `Sent ${photo.created_at} UTC`;
+          const remove = document.createElement('button');
+          remove.type = 'button';
+          remove.className = 'quiet-button danger';
+          remove.textContent = 'Remove from this frame';
+          remove.addEventListener('click', async () => {
+            if (!confirm(`Remove this photo from ${manifest.place_name}? It will disappear when the frame next syncs.`)) return;
+            remove.disabled = true;
+            try {
+              const result = await fetch(photo.url, {method: 'DELETE'});
+              if (!result.ok) throw new Error(await result.text());
+              if (photoFrame.value === frameId) await loadPhotos();
+              setStatus('Photo removed / The frame will update on its next sync.', 'success');
+            } catch (error) {
+              setStatus(`Photo removal failed / ${error.message}`, 'error');
+            } finally {
+              remove.disabled = false;
+            }
+          });
+          caption.append(date, remove);
+          card.append(image, caption);
+          return card;
+        }));
+      } catch (error) {
+        if (request === photoRequest) photoStatus.textContent = `Could not load photos / ${error.message}`;
+      }
+    }
+
+    photoFrame.addEventListener('change', loadPhotos);
+    document.querySelector('#refresh-photos').addEventListener('click', loadPhotos);
+    document.addEventListener('visibilitychange', () => {
+      if (!document.hidden && !photosPanel.hidden && photoFrame.value) loadPhotos();
+    });
 
     claimCodeInput.addEventListener('input', event => {
       event.target.value = event.target.value.toUpperCase().replace(/[^ABCDEFGHJKMNPQRSTUVWXYZ23456789]/g, '');
@@ -228,8 +410,7 @@
         });
         if (!response.ok) throw new Error(await response.text());
         const invitation = await response.json();
-        invitationUrl.value = `${location.origin}/sender-activate.html#${invitation.token}`;
-        newInvitation.hidden = false;
+        revealInvitation(invitation);
         event.target.reset();
         await loadOwner();
         setStatus(`Private link ready / Copy and send it to ${invitation.label}.`, 'success');
@@ -280,12 +461,40 @@
       }
     });
 
+    function revealInvitation(invitation) {
+      invitationUrl.value = `${location.origin}/sender-activate.html#${invitation.token}`;
+      newInvitation.dataset.invitationId = invitation.invitation_id;
+      newInvitation.querySelector('strong').textContent = `Private link for ${invitation.label}`;
+      newInvitation.hidden = false;
+    }
+
+    async function replaceInvitation(invitation, button) {
+      if (!confirm(`Replace ${invitation.label}'s link? Their old link and current browser access will stop working immediately. Send them the new link to restore access.`)) return;
+      button.disabled = true;
+      setStatus(`Replacing ${invitation.label}'s link…`, 'sending');
+      try {
+        const response = await fetch(`/api/beta/owner/invitations/${encodeURIComponent(invitation.invitation_id)}/replace`, {method: 'POST'});
+        if (!response.ok) throw new Error(await response.text());
+        revealInvitation(await response.json());
+        newInvitation.scrollIntoView({block: 'nearest'});
+        setStatus(`New link ready for ${invitation.label} / Their old link is disabled. Copy or share the new link now.`, 'success');
+      } catch (error) {
+        setStatus(`Link replacement failed / ${error.message}`, 'error');
+      } finally {
+        button.disabled = false;
+      }
+    }
+
     async function revokeInvitation(invitation) {
       if (!confirm(`Disable ${invitation.label}'s sender link?`)) return;
       setStatus(`Disabling ${invitation.label}'s link…`, 'sending');
       try {
         const response = await fetch(`/api/beta/owner/invitations/${invitation.invitation_id}`, {method: 'DELETE'});
         if (!response.ok) throw new Error(await response.text());
+        if (newInvitation.dataset.invitationId === invitation.invitation_id) {
+          newInvitation.hidden = true;
+          invitationUrl.value = '';
+        }
         await loadOwner();
         setStatus(`Access disabled / ${invitation.label}'s old link no longer works.`, 'success');
       } catch (error) {

@@ -65,6 +65,31 @@ pub struct NetworkManager {
 }
 
 impl NetworkManager {
+    pub fn forget_customer_connections(&self) -> Result<(), String> {
+        // Include older/operator-created Wi-Fi profiles, so none can restore
+        // household credentials or silently reconnect after a factory reset.
+        let connections = nmcli_output(["--terse", "--fields", "UUID,TYPE", "connection", "show"])?;
+        if !connections.status.success() {
+            return Err("could not enumerate Wi-Fi profiles for reset".into());
+        }
+        for line in String::from_utf8_lossy(&connections.stdout).lines() {
+            let Some((uuid, kind)) = line.split_once(':') else {
+                continue;
+            };
+            if !matches!(kind, "802-11-wireless" | "wifi") {
+                continue;
+            }
+            let output = nmcli_output(["--wait", "10", "connection", "delete", "uuid", uuid])?;
+            if !output.status.success() && output.status.code() != Some(10) {
+                return Err(format!(
+                    "could not remove AstroHUD network profile: {}",
+                    output.status
+                ));
+            }
+        }
+        Ok(())
+    }
+
     pub fn new(paths: ProvisioningPaths) -> Self {
         Self { paths }
     }

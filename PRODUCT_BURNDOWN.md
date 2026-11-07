@@ -53,7 +53,7 @@ risk and effort than an `S` display refinement.
 | ID | Priority | Size | Status | Outcome / acceptance evidence | Depends on |
 | --- | --- | --- | --- | --- | --- |
 | `D-101` | P0 | M | Waiting | Install and test the documented GPIO17 recovery button. Short presses do nothing, medium holds enter change-Wi-Fi mode, and long holds clearly authorize factory reset. | Physical button and mounting test |
-| `D-102` | P0 | M | Ready | Separate immutable manufacturing identity from rotatable setup credentials; factory reset removes owner data, Wi-Fi, and cached media but preserves hardware identity and resumes safely after power loss. | `D-101` |
+| `D-102` | P0 | M | Implemented; physical validation pending | Immutable manufacturing identity, owner-requested reset, rotatable credentials, and journaled appliance cleanup are implemented. Validate Wi-Fi wipe, service transitions, and power interruption on a spare unit; GPIO authorization remains under `D-101`. | Updated provisioner and systemd units; spare appliance |
 | `D-103` | P0 | M | Waiting | Benchmark the regular Pi Zero W for decode time, slideshow smoothness, sync latency, memory, thermals, and onboarding responsiveness before choosing it as the cost target. | Pi Zero W hardware |
 | `D-104` | P0 | L | Ready | Produce a versioned appliance image or deterministic provisioning process from a blank SD card, including users, permissions, services, NetworkManager, log limits, and first boot. | `D-102`, `D-105` |
 | `D-105` | P0 | M | Waiting | Provision a unique device credential and authenticate every manifest/media request. Revocation stops a lost or resold frame without affecting others. | `C-103` |

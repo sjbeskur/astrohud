@@ -4,8 +4,9 @@ AstroHUD uses the same retro-futurist operational language as the Advanced
 Data Machines company homepage. It should feel like part of the same product
 family without turning a picture frame into a busy control panel.
 
-The reference implementation is the `feature/company-homepage-refresh` branch
-of `~/repos/nemesis/adm-website`.
+The related company website is in the sibling `../adm-website` directory.
+AstroHUD retains its warmer consumer palette and sans-serif typography rather
+than adopting the company website's terminal styling.
 
 ## Principles
 
@@ -16,7 +17,7 @@ of `~/repos/nemesis/adm-website`.
 3. Status is explicit. Prefer language such as `SIGNAL READY`, `SETUP LINK`,
    and `TRANSFER ACTIVE` over ambiguous spinners.
 4. Color communicates structure, not decoration. Amber identifies the product,
-   salmon marks panel rails, lavender marks primary actions, blue indicates
+   salmon marks small attention accents, lavender marks secondary actions, blue indicates
    work in progress, and green confirms a healthy link.
 5. The visual reference is a calm, original retro-futurist console—not copied
    franchise logos, insignia, typefaces, or terminology.
@@ -51,7 +52,10 @@ must work without internet access or external font and stylesheet requests.
 
 - Use near-square left edges with generously rounded right edges, typically
   `5px 20px 20px 5px`.
-- Use a narrow colored rail at the left edge of instrument panels.
+- Web pages use thin neutral panel borders. Do not add the multicolor page-edge
+  stripe, colored vertical rails, or panel-edge accent blocks. Keep the original
+  colors in buttons, headings, and status indicators. Native photo chrome and
+  the captive portal retain their existing appliance-specific treatment.
 - Use one-pixel separators and restrained shadows rather than floating cards.
 - Use the platform sans-serif stack for human instructions.
 - Use the platform monospace stack, uppercase, small size, and generous letter
@@ -59,6 +63,8 @@ must work without internet access or external font and stylesheet requests.
 - A serif italic may be used sparingly for a single warm, human word in large
   headings. It should not appear in operational labels.
 - Preserve visible keyboard focus and reduced-motion behavior.
+- Owner invitations precede the photo gallery, with sticky shortcuts to both
+  sections and mobile touch targets at least 44px tall.
 
 ## Implementations
 

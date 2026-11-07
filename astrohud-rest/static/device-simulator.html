@@ -134,6 +134,7 @@
 
     async function syncFrame(device) {
       try {
+        if (await processReset(device)) return;
         const headers = {authorization: `Bearer ${device.credential}`};
         const response = await fetch('/api/beta/device/manifest', {headers});
         if (!response.ok) throw new Error(await response.text());
@@ -171,6 +172,10 @@
 
     async function start() {
       const device = identity();
+      if (sessionStorage.getItem('astrohud-simulated-reset')) {
+        await processReset(device);
+        return;
+      }
       const response = await fetch('/api/beta/devices/enrollments', {
         method: 'POST',
         headers: {'content-type': 'application/json'},
@@ -182,9 +187,52 @@
       if (registration.status === 'pending') pollTimer = setTimeout(() => poll(registration, device), 1000);
     }
 
+    async function processReset(device) {
+      let plan = JSON.parse(sessionStorage.getItem('astrohud-simulated-reset') || 'null');
+      if (!plan) {
+        const response = await fetch('/api/beta/device/reset', {headers: {authorization: `Bearer ${device.credential}`}, cache: 'no-store'});
+        if (!response.ok) throw new Error(await response.text());
+        const command = (await response.json()).reset;
+        if (!command) return false;
+        plan = {
+          reset_id: command.reset_id, receipt: `${randomUuid()}${randomUuid()}`, accepted: false,
+          next: {...device, credential: `${randomUuid()}${randomUuid()}`, bootstrap_token: `${randomUuid()}${randomUuid()}`}
+        };
+        sessionStorage.setItem('astrohud-simulated-reset', JSON.stringify(plan));
+      }
+      if (!plan.accepted) {
+        let response;
+        for (const credential of [device.credential, plan.receipt]) {
+          response = await fetch(`/api/beta/device/resets/${plan.reset_id}/accept`, {
+            method: 'POST', headers: {authorization: `Bearer ${credential}`, 'content-type': 'application/json'},
+            body: JSON.stringify({receipt: plan.receipt, next_credential: plan.next.credential})
+          });
+          if (response.status !== 401) break;
+        }
+        if (!response.ok) throw new Error(await response.text());
+        plan.accepted = true;
+        sessionStorage.setItem('astrohud-simulated-reset', JSON.stringify(plan));
+      }
+      displayPhoto.hidden = true;
+      displayPhoto.removeAttribute('src');
+      if (displayUrl) URL.revokeObjectURL(displayUrl);
+      displayUrl = undefined;
+      currentPhotoId = undefined;
+      sessionStorage.setItem('astrohud-simulated-device', JSON.stringify(plan.next));
+      status.textContent = 'Resetting / Clearing simulated device access and photos…';
+      const completed = await fetch(`/api/beta/device/resets/${plan.reset_id}/complete`, {
+        method: 'POST', headers: {authorization: `Bearer ${plan.receipt}`}
+      });
+      if (!completed.ok) throw new Error(await completed.text());
+      sessionStorage.removeItem('astrohud-simulated-reset');
+      location.reload();
+      return true;
+    }
+
     start().catch(error => {
       status.textContent = `Simulator error / ${error.message}`;
       status.dataset.state = 'error';
+      if (sessionStorage.getItem('astrohud-simulated-reset')) setTimeout(() => location.reload(), 5000);
     });
   </script>
 </body>
