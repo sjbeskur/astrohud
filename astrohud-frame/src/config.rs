@@ -139,7 +139,7 @@ pub fn usage() -> &'static str {
     "Usage: astrohud-frame [options]\n\
      \n\
      Options:\n\
-       --server URL          AstroHUD service URL\n\
+       --server URL          M3mory L4ne service URL\n\
        --frame ID            Frame identity (default: demo-frame)\n\
        --credential-file PATH\n\
                             Device credential used for secure delivery\n\

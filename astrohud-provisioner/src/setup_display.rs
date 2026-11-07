@@ -67,7 +67,7 @@ fn render(identity: &DeviceIdentity) -> Result<Vec<u8>, String> {
     canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
 
     canvas.fill_rect(40, 30, 455, 62, AMBER);
-    canvas.text(70, 49, 3, "AH / ASTROHUD", VOID);
+    canvas.text(70, 49, 3, "ML / M3mory L4ne", VOID);
     canvas.text(900, 52, 2, "SETUP LINK / ACTIVE", GREEN);
 
     canvas.fill_rect(40, 112, 1200, 568, LINE);
@@ -115,7 +115,7 @@ fn render_connecting(identity: &DeviceIdentity, wifi_ssid: &str) -> Vec<u8> {
     canvas.fill_rect(0, 345, 9, 187, LAVENDER);
     canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
     canvas.fill_rect(40, 30, 455, 62, BLUE);
-    canvas.text(70, 49, 3, "AH / ASTROHUD", VOID);
+    canvas.text(70, 49, 3, "ML / M3mory L4ne", VOID);
     canvas.text(840, 52, 2, "NETWORK LINK / CONNECTING", BLUE);
 
     canvas.fill_rect(40, 112, 1200, 568, LINE);
@@ -162,7 +162,7 @@ fn render_claim(
     canvas.fill_rect(0, 345, 9, 187, LAVENDER);
     canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
     canvas.fill_rect(40, 30, 455, 62, LAVENDER);
-    canvas.text(70, 49, 3, "AH / ASTROHUD", VOID);
+    canvas.text(70, 49, 3, "ML / M3mory L4ne", VOID);
     canvas.text(900, 52, 2, "PAIRING LINK / ACTIVE", GREEN);
 
     canvas.fill_rect(40, 112, 1200, 568, LINE);

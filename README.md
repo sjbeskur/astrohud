@@ -1,6 +1,6 @@
-# AstroHUD
+# M3mory L4ne
 
-AstroHUD currently contains a small proof of concept for sending an image to an
+M3mory L4ne (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
 Actix WebSocket service and displaying it in a browser through WebAssembly.
 
 The project is being rehabilitated as the foundation for a channel-based
@@ -25,7 +25,7 @@ revocable private sender links. Images are persisted locally and the native
 frame caches them offline. Device-authenticated media sync and hosted storage
 are not yet implemented.
 
-AstroHUD's shared visual tokens and interface rules are documented in
+M3mory L4ne's shared visual tokens and interface rules are documented in
 [`UI_THEME.md`](UI_THEME.md). They adapt the operational design language from
 the Advanced Data Machines company homepage while keeping photographs primary.
 
@@ -208,8 +208,9 @@ configuration, cache semantics, and the physical-Pi validation checklist.
 ## Device provisioning MVP
 
 `astrohud-provisioner` supplies the no-mobile-app first-boot path. An
-unprovisioned frame broadcasts a protected, per-device `AstroHUD-XXXXXX`
-network, displays a scannable Wi-Fi QR setup card, and serves a local Wi-Fi
+unprovisioned frame broadcasts a protected, per-device `M3mory-L4ne-XXXXXX`
+network (existing appliances retain their `AstroHUD-XXXXXX` setup name),
+displays a scannable Wi-Fi QR setup card, and serves a local Wi-Fi
 selection page. It tests candidate credentials before atomically replacing the
 active NetworkManager profile and its recovery backup. Once online, it
 generates an appliance-only device credential, enrolls with the server,

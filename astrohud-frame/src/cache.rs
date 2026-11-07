@@ -155,7 +155,7 @@ impl CacheStore {
         match self.load_manifest()? {
             Some(manifest) => self.reconcile(&manifest),
             None => Ok(Playlist {
-                place_name: "AstroHUD".to_owned(),
+                place_name: "M3mory L4ne".to_owned(),
                 photos: Vec::new(),
             }),
         }

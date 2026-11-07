@@ -108,7 +108,7 @@ fn run_viewer(
     let video = sdl.video().map_err(other)?;
     sdl2::hint::set("SDL_RENDER_SCALE_QUALITY", "best");
 
-    let mut window_builder = video.window("AstroHUD", 960, 540);
+    let mut window_builder = video.window("M3mory L4ne", 960, 540);
     if config.windowed {
         window_builder.position_centered().resizable();
     } else {
@@ -161,7 +161,7 @@ fn run_viewer(
                     playlist = update;
                     let _ = canvas
                         .window_mut()
-                        .set_title(&format!("AstroHUD — {}", playlist.place_name));
+                        .set_title(&format!("M3mory L4ne — {}", playlist.place_name));
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => break,

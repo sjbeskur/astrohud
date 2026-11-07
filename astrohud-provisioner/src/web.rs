@@ -143,7 +143,7 @@ fn handle_request(
                     "text/html; charset=utf-8",
                     message_page(
                         "Could not update the television",
-                        "Reconnect to the AstroHUD network and try again.",
+                        "Reconnect to the setup network shown on your screen and try again.",
                     ),
                 );
                 return;
@@ -244,33 +244,84 @@ fn setup_page(
         ),
         _ => String::new(),
     };
+    let manual_mode = networks.is_empty();
+    let placeholder = if manual_mode {
+        ""
+    } else {
+        "<option value=\"\" disabled selected>Choose your Wi-Fi network</option>"
+    };
     page_shell(
-        "Connect your AstroHUD",
+        "Connect your M3mory L4ne",
         &format!(
             r#"
             <section class="intro">
               <p class="signal-label"><span></span> Setup / {device_code}</p>
               <h1>Bring your frame <em>online.</em></h1>
-              <p>Choose the Wi-Fi network this frame should use. Your phone will leave the temporary AstroHUD link while the frame tests it.</p>
+              <p>Choose the Wi-Fi network this frame should use. Your phone will leave the temporary M3mory L4ne link while the frame tests it.</p>
             </section>
             {status_message}
             <section class="instrument-panel">
               <div class="instrument-heading"><span><b>01</b> / Network link</span><span>Protected setup</span></div>
               <form method="post" action="/configure">
-                <label for="ssid">Nearby network</label>
-                <select id="ssid" name="ssid">{options}</select>
-                <label for="manual_ssid">Or enter a network name manually</label>
-                <input id="manual_ssid" name="manual_ssid" maxlength="32" autocomplete="off">
-                <label for="password">Wi-Fi password</label>
-                <input id="password" name="password" type="password" maxlength="63" autocomplete="current-password">
-                <button type="submit">Connect frame <span aria-hidden="true">→</span></button>
+                <label for="ssid">Wi-Fi network</label>
+                <select id="ssid" name="ssid">{placeholder}{options}<option value="" data-manual{manual_selected}>My network isn't listed…</option></select>
+                <div id="manual-network" {manual_hidden}>
+                  <label for="manual_ssid">Network name</label>
+                  <input id="manual_ssid" name="manual_ssid" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="manual-help" {manual_attributes}>
+                  <p id="manual-help" class="field-help">{manual_help}</p>
+                </div>
+                {noscript_manual}
+                <label id="password-label" for="password">Wi-Fi password</label>
+                <input id="password" name="password" type="password" maxlength="64" autocomplete="current-password" aria-describedby="password-help">
+                <p id="password-help" class="field-help">Choose a network above, then enter its password.</p>
+                <button id="connect-frame" type="submit">Connect frame <span aria-hidden="true">→</span></button>
               </form>
             </section>
+            <script>
+              const networkSelect = document.querySelector('#ssid');
+              const manualGroup = document.querySelector('#manual-network');
+              const manualName = document.querySelector('#manual_ssid');
+              const wifiPassword = document.querySelector('#password');
+              function updateNetwork(clearPassword = false) {{
+                const manual = networkSelect.options[networkSelect.selectedIndex].hasAttribute('data-manual');
+                manualGroup.hidden = !manual;
+                manualName.disabled = !manual;
+                manualName.required = manual;
+                networkSelect.required = !manual;
+                const name = manual ? manualName.value.trim() : networkSelect.value;
+                document.querySelector('#password-label').textContent = name ? `Password for “${{name}}”` : 'Wi-Fi password';
+                document.querySelector('#password-help').textContent = name
+                  ? 'Use this network’s Wi-Fi password. Leave blank only if it has no password.'
+                  : 'Choose a network or enter its name above, then enter its password.';
+                wifiPassword.disabled = !name;
+                document.querySelector('#connect-frame').disabled = !name;
+                if (clearPassword) wifiPassword.value = '';
+              }}
+              networkSelect.addEventListener('change', () => {{
+                updateNetwork(true);
+                if (!manualGroup.hidden) manualName.focus();
+              }});
+              manualName.addEventListener('input', () => updateNetwork());
+              updateNetwork();
+            </script>
             <p class="status-line"><i></i> Setup link active / {ssid}</p>
-            <p class="fine">If the connection fails, reconnect to this AstroHUD setup link and try again.</p>
+            <p class="fine">If the connection fails, reconnect to this M3mory L4ne setup link and try again.</p>
             "#,
             ssid = escape_html(&identity.setup_ssid),
             device_code = escape_html(&identity.device_code),
+            manual_selected = if manual_mode { " selected" } else { "" },
+            manual_hidden = if manual_mode { "" } else { "hidden" },
+            manual_attributes = if manual_mode { "required" } else { "disabled" },
+            noscript_manual = if manual_mode {
+                ""
+            } else {
+                "<noscript><label for=\"manual-fallback\">Network not listed? Enter its name</label><input id=\"manual-fallback\" name=\"manual_ssid\" maxlength=\"32\" autocomplete=\"off\" autocapitalize=\"none\"></noscript>"
+            },
+            manual_help = if manual_mode {
+                "No nearby networks were found. Enter your Wi-Fi network name exactly."
+            } else {
+                "Enter the exact name of your hidden or unlisted Wi-Fi network."
+            },
         ),
     )
 }
@@ -278,10 +329,10 @@ fn setup_page(
 fn onboarding_url(server_url: &str, bootstrap_token: &str) -> Result<String, String> {
     let mut url = Url::parse(server_url).map_err(|error| error.to_string())?;
     if !matches!(url.scheme(), "http" | "https") {
-        return Err("AstroHUD server URL must use HTTP or HTTPS".to_owned());
+        return Err("M3mory L4ne server URL must use HTTP or HTTPS".to_owned());
     }
     url.path_segments_mut()
-        .map_err(|_| "AstroHUD server URL cannot be a base URL".to_owned())?
+        .map_err(|_| "M3mory L4ne server URL cannot be a base URL".to_owned())?
         .clear()
         .extend(["onboard.html"]);
     url.set_fragment(Some(bootstrap_token));
@@ -318,6 +369,7 @@ fn page_shell(title: &str, content: &str) -> String {
 <title>{}</title><style>
 :root {{ color-scheme:dark; --void:#070910; --surface:#101520; --raised:#171e2b; --line:#303a4b; --text:#edf2f7; --muted:#99a6b8; --amber:#efb46a; --salmon:#e98c77; --lavender:#ad96d8; --blue:#70a9d6; --green:#69d59b; font-family:Inter,ui-sans-serif,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif; }}
 * {{ box-sizing:border-box; }} html {{ min-height:100%; background:var(--void); }}
+[hidden] {{ display:none!important; }}
 body {{ margin:0; min-height:100vh; color:var(--text); background:radial-gradient(circle at 82% 0%,#252b48 0,transparent 30rem),var(--void); }}
 body::before {{ position:fixed; inset:0 auto 0 0; width:5px; background:linear-gradient(var(--amber) 0 22%,var(--salmon) 22% 48%,var(--lavender) 48% 74%,var(--blue) 74%); content:""; }}
 .nav {{ border-bottom:1px solid var(--line); background:#070910eb; }} .nav-row {{ display:flex; width:min(42rem,calc(100% - 2rem)); min-height:58px; margin:auto; align-items:center; justify-content:space-between; gap:1rem; }}
@@ -334,12 +386,14 @@ p {{ line-height:1.65; }} .intro>p:last-child,.message-panel>p {{ color:var(--mu
 .instrument-heading {{ display:flex; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; color:var(--muted); font-size:.55rem; }} .instrument-heading b {{ color:var(--salmon); }}
 label {{ display:block; margin:1rem 0 .4rem; font-size:.78rem; font-weight:800; }} select,input,button {{ width:100%; min-height:50px; border-radius:5px 17px 17px 5px; padding:.75rem .9rem; color:var(--text); font:inherit; }}
 select,input {{ border:1px solid #465269; background:#0b0f18; }} button,.signal-button {{ display:flex; align-items:center; justify-content:space-between; margin-top:1.4rem; border:0; padding:.8rem 1.2rem; color:#17120d; background:var(--lavender); font-size:.8rem; font-weight:900; text-decoration:none; cursor:pointer; }}
+.field-help {{ margin:.45rem 0 0; color:var(--muted); font-size:.78rem; line-height:1.5; }} button:disabled,input:disabled {{ opacity:.55; cursor:default; }}
+:focus-visible {{ outline:3px solid var(--blue); outline-offset:3px; }}
 .fine {{ margin-top:1.3rem; color:var(--muted); font-size:.75rem; }} .notice {{ margin:1.5rem 0; border:1px solid var(--line); border-left:5px solid var(--salmon); border-radius:4px 18px 18px 4px; padding:.9rem 1rem; background:#171e2b; }} .error {{ color:#ffc0b5; }}
 .status-line {{ display:flex; align-items:center; gap:.55rem; margin:1px 0 0; border:1px solid var(--line); border-radius:5px 20px 20px 5px; padding:1rem 1.2rem; color:var(--green); background:#0b0e16; font-size:.56rem; }} .status-line.pending {{ color:var(--blue); }} .status-line.pending i {{ background:var(--blue); box-shadow:0 0 10px #70a9d680; }}
 .message-panel {{ margin-top:0; }} .message-panel .signal-button {{ margin-top:2rem; }} strong {{ color:var(--text); }}
 @media(max-width:520px) {{ .nav-row,main {{ width:min(100% - 1.5rem,42rem); }} .brand {{ margin-left:-.75rem;padding-left:.75rem; }} .nav-state {{ letter-spacing:.04em; }} .instrument-heading {{ flex-direction:column; }} }}
 @media(prefers-reduced-motion:reduce) {{ *,*::before,*::after {{ transition-duration:.01ms!important; }} }}
-</style></head><body><header class="nav"><div class="nav-row"><div class="brand"><span class="mark">AH</span> ASTROHUD</div><div class="nav-state"><i></i> Setup link / Active</div></div></header><main>{}</main></body></html>"##,
+</style></head><body><header class="nav"><div class="nav-row"><div class="brand"><span class="mark">ML</span> M3mory L4ne</div><div class="nav-state"><i></i> Setup link / Active</div></div></header><main>{}</main></body></html>"##,
         escape_html(title),
         content
     )
@@ -400,7 +454,7 @@ mod tests {
     fn write_portal_preview() {
         let identity = DeviceIdentity {
             device_code: "AB23CD".to_owned(),
-            setup_ssid: "AstroHUD-AB23CD".to_owned(),
+            setup_ssid: "M3mory L4ne-AB23CD".to_owned(),
             setup_password: "23456789ABCDEFGH".to_owned(),
             device_id: "00000000-0000-4000-8000-000000000000".to_owned(),
             device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".to_owned(),

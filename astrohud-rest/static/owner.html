@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
-  <title>Set up your AstroHUD</title>
+  <title>Set up your M3mory L4ne</title>
   <link rel="stylesheet" href="/astrohud-theme.css?v=69ec528d05c7">
 </head>
 <body class="owner-page">
   <header class="hud-nav">
     <div class="hud-shell hud-nav-row">
-      <div class="hud-brand"><span class="hud-mark">AH</span> AstroHUD</div>
+      <div class="hud-brand"><span class="hud-mark">ML</span> M3mory L4ne</div>
       <div class="hud-link-state"><i class="status-light"></i> Owner link / Private</div>
     </div>
   </header>
@@ -34,7 +34,7 @@
           <p class="instrument-label">This browser</p>
         </div>
         <h2 id="owner-access-title">Owner access is missing</h2>
-        <p class="instrument-copy">New-frame setup creates access automatically on the phone that configures Wi-Fi. For recovery on another browser, open the private owner activation link supplied by AstroHUD support. Access does not carry between devices or private windows.</p>
+        <p class="instrument-copy">New-frame setup creates access automatically on the phone that configures Wi-Fi. For recovery on another browser, open the private owner activation link supplied by M3mory L4ne support. Access does not carry between devices or private windows.</p>
       </section>
 
       <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
@@ -237,7 +237,7 @@
         document.querySelector('#device-settings').hidden = true;
         clearTimeout(resetTimer);
         ownerAccessHelp.hidden = false;
-        throw new Error('Owner access is missing in this browser. Use the phone that set up the frame, or open a private recovery activation link from AstroHUD support.');
+        throw new Error('Owner access is missing in this browser. Use the phone that set up the frame, or open a private recovery activation link from M3mory L4ne support.');
       }
       if (!response.ok) throw new Error(await response.text());
       ownerAccessHelp.hidden = true;
@@ -490,7 +490,7 @@
     shareLink.addEventListener('click', async () => {
       try {
         await navigator.share({
-          title: 'Send a photo to my AstroHUD',
+          title: 'Send a photo to my M3mory L4ne',
           text: 'Open this private link in Safari or Chrome to send a photo.',
           url: invitationUrl.value
         });
