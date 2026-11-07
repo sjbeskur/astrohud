@@ -249,7 +249,9 @@ async fn get_owner_context(
         .lock()
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     let context = owner_context(&database, &token).map_err(beta_http_error)?;
-    Ok(HttpResponse::Ok().json(context))
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(context))
 }
 
 async fn request_reset(

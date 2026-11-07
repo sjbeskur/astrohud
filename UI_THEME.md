@@ -78,3 +78,8 @@ must work without internet access or external font and stylesheet requests.
 
 When adding a new AstroHUD UI, begin with these tokens and interaction rules.
 Do not copy the large company homepage stylesheet into the product.
+
+Web pages include a content hash in the stylesheet URL to prevent an older
+mobile cache from mixing new controls with old styling. When changing the
+shared CSS, update its `?v=` value in the HTML pages to the first 12 characters
+of the stylesheet's SHA-256 hash.

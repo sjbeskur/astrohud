@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Set up your AstroHUD</title>
-  <link rel="stylesheet" href="/astrohud-theme.css">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=afb7ed35865b">
 </head>
 <body class="owner-page">
   <header class="hud-nav">
@@ -68,6 +68,7 @@
         <h2 id="connected-title">Your frame is connected</h2>
         <p class="instrument-copy">Create a separate private link for each person you trust to send photos.</p>
         <div id="frames" class="connection-summary"></div>
+        <button id="open-device-settings" class="quiet-button" type="button">Device settings →</button>
       </section>
 
       <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
@@ -100,7 +101,7 @@
         <div id="invitations" class="connection-summary"></div>
       </section>
 
-      <section id="device-settings" class="instrument-panel" hidden>
+      <section id="device-settings" class="instrument-panel" hidden aria-label="Device settings">
         <details>
           <summary>Device settings</summary>
           <p class="instrument-copy">Factory reset removes photos stored on the device, its Wi-Fi settings, and its owner pairing. Your household's photos and other devices stay available. You will need to set up the device again.</p>
@@ -226,7 +227,7 @@
     }
 
     async function loadOwner() {
-      const response = await fetch('/api/beta/owner');
+      const response = await fetch('/api/beta/owner', {cache: 'no-store'});
       if (response.status === 401) {
         claimPanel.hidden = true;
         connectedPanel.hidden = true;
@@ -242,6 +243,13 @@
       ownerAccessHelp.hidden = true;
       render(await response.json());
     }
+
+    document.querySelector('#open-device-settings').addEventListener('click', () => {
+      const settings = document.querySelector('#device-settings');
+      settings.querySelector('details').open = true;
+      settings.scrollIntoView({block: 'start'});
+      settings.querySelector('summary').focus({preventScroll: true});
+    });
 
     function renderDeviceSettings(context) {
       clearTimeout(resetTimer);
