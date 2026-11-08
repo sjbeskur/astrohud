@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=bae44a29ab21">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=161095272de7">
 </head>
 <body class="owner-page">
   <main class="hud-shell owner-shell">
@@ -137,7 +137,9 @@
         </div>
         <div class="gallery-playback"><p id="playback-status" role="status"></p><button id="resume-slideshow" class="quiet-button" type="button" hidden>Resume slideshow</button></div>
         <p id="photo-status" role="status"></p>
-        <div id="frame-photos" class="owner-photo-grid"></div>
+        <div id="sender-filters" class="sender-filters" role="group" aria-label="Filter photos by sender"></div>
+        <div id="frame-photos" class="owner-photo-groups"></div>
+        <button id="more-owner-photos" class="quiet-button" type="button" hidden>Load more photos</button>
       </section>
     </div>
 
@@ -218,6 +220,10 @@
     let pinDraftPhotoId = null;
     let galleryLoading = false;
     let slideshowBusy = false;
+    let senderFilter = '';
+    let gallerySenders = [];
+    let galleryCursor = null;
+    let galleryExpanded = false;
     let galleryVersion = '';
     const photoDialog = document.querySelector('#photo-dialog');
     const slideshowDialog = document.querySelector('#slideshow-dialog');
@@ -642,16 +648,19 @@
       catch (error) { document.querySelector('#playback-status').textContent = error.message; }
     });
 
-    async function loadPhotos({background = false} = {}) {
-      if (background && galleryLoading) return;
+    async function loadPhotos({background = false, append = false} = {}) {
+      if ((background && (galleryLoading || galleryExpanded)) || (append && (galleryLoading || !galleryCursor))) return;
       const request = ++photoRequest;
       galleryLoading = true;
       if (!background) document.querySelector('#open-slideshow').disabled = true;
       const frameId = photoFrame.value;
       updateFrameContext();
-      if (!background) { galleryVersion = ''; framePhotos.replaceChildren(); photoStatus.textContent = 'Loading photos…'; }
+      if (!background && !append) { galleryExpanded = false; galleryCursor = null; document.querySelector('#more-owner-photos').hidden = true; galleryVersion = ''; framePhotos.replaceChildren(); photoStatus.textContent = 'Loading photos…'; }
       try {
-        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos`, {cache: 'no-store'});
+        const params = new URLSearchParams();
+        if (senderFilter) params.set('sender', senderFilter);
+        if (append) params.set('before', String(galleryCursor));
+        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos?${params}`, {cache: 'no-store'});
         if (!response.ok) throw new Error(await response.text());
         const manifest = await response.json();
         if (request !== photoRequest) return;
@@ -672,7 +681,14 @@
           : `Every ${seconds} seconds`;
         photoStatus.textContent = manifest.photos.length ? `${manifest.photos.length} photos available · Tap to view` : 'No photos on this frame yet.';
         const previousIndex = galleryPhotos.findIndex(photo => photo.id === selectedPhotoId);
-        galleryPhotos = manifest.photos;
+        galleryPhotos = append ? [...new Map([...galleryPhotos, ...manifest.photos].map(photo => [photo.id, photo])).values()] : manifest.photos;
+        galleryExpanded ||= append;
+        galleryCursor = manifest.next_cursor;
+        gallerySenders = manifest.senders || [];
+        document.querySelector('#more-owner-photos').hidden = !galleryCursor;
+        document.querySelector('#more-owner-photos').disabled = false;
+        renderSenderFilters();
+        photoStatus.textContent = galleryPhotos.length ? `${galleryPhotos.length} photos shown · Tap to view` : senderFilter ? 'No photos from this sender on this frame.' : 'No photos on this frame yet.';
         galleryPlayback = playback;
         galleryFrameId = frameId;
         document.querySelector('#slideshow-destination strong').textContent = manifest.place_name;
@@ -683,6 +699,7 @@
         }
       } catch (error) {
         if (request === photoRequest) {
+          document.querySelector('#more-owner-photos').disabled = false;
           galleryLoading = false;
           document.querySelector('#open-slideshow').disabled = galleryFrameId !== frameId;
           photoStatus.textContent = 'Could not refresh photos. Check your connection; we’ll retry automatically.';
@@ -704,20 +721,47 @@
       document.querySelector('#slideshow-destination strong').textContent = frameName(photoFrame.value);
       sendDestinations.configure(ownerContext?.frames || [], photoFrame.value);
     }
-    function renderGallery() {
-      framePhotos.replaceChildren(...galleryPhotos.map((photo, index) => {
-        const button = document.createElement('button');
-        button.className = 'gallery-tile'; button.type = 'button'; button.dataset.photoId = photo.id;
-        button.setAttribute('aria-label', `Open photo ${index + 1}${galleryPlayback.pinned_photo_id === photo.id ? ', pinned' : ''}`);
-        const image = document.createElement('img'); image.src = photo.url; image.alt = ''; image.loading = index < 9 ? 'eager' : 'lazy'; image.decoding = 'async';
-        button.append(image);
-        if (galleryPlayback.pinned_photo_id === photo.id) {
-          const badge = document.createElement('span'); badge.className = 'photo-badge'; badge.textContent = 'Pinned'; button.append(badge);
-        }
-        button.addEventListener('click', () => {
-          selectedPhotoId = photo.id; pinDraftPhotoId = null; renderPhotoDetail(); photoDialog.showModal();
-        });
+    function senderLabel(sender) { return sender?.key === 'owner' ? 'You' : sender?.label || 'Earlier uploads'; }
+    function renderSenderFilters() {
+      const allCount = gallerySenders.reduce((sum, sender) => sum + sender.count, 0);
+      const options = [{key:'', label:'All', count:allCount}, ...gallerySenders];
+      if (senderFilter && !options.some(option => option.key === senderFilter)) options.push({key:senderFilter,label:'Selected sender',count:0});
+      document.querySelector('#sender-filters').replaceChildren(...options.map(option => {
+        const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet-button';
+        button.textContent = `${option.key === 'owner' ? 'You' : option.label} · ${option.count}`;
+        button.setAttribute('aria-pressed', String(senderFilter === option.key));
+        button.addEventListener('click', () => { senderFilter = option.key; selectedPhotoId = null; loadPhotos(); });
         return button;
+      }));
+    }
+    document.querySelector('#more-owner-photos').addEventListener('click', event => { event.currentTarget.disabled = true; loadPhotos({append:true}); });
+    function renderGallery() {
+      const groups = new Map();
+      for (const photo of galleryPhotos) {
+        const key = photo.sender?.key || 'earlier';
+        if (!groups.has(key)) groups.set(key, []);
+        groups.get(key).push(photo);
+      }
+      galleryPhotos = [...groups.values()].flat();
+      framePhotos.replaceChildren(...[...groups].map(([key, photos]) => {
+        const section = document.createElement('section'); section.className = 'sender-photo-group';
+        const title = document.createElement('h2');
+        const total = gallerySenders.find(sender => sender.key === key)?.count || photos.length;
+        title.textContent = `${senderLabel(photos[0].sender)} · ${photos.length < total ? `${photos.length} of ${total}` : total}`;
+        const grid = document.createElement('div'); grid.className = 'owner-photo-grid';
+        grid.append(...photos.map(photo => {
+          const index = galleryPhotos.findIndex(item => item.id === photo.id);
+          const button = document.createElement('button');
+          button.className = 'gallery-tile'; button.type = 'button'; button.dataset.photoId = photo.id;
+          button.setAttribute('aria-label', `Open photo ${index + 1} from ${senderLabel(photo.sender)}${galleryPlayback.pinned_photo_id === photo.id ? ', pinned' : ''}`);
+          const image = document.createElement('img'); image.src = photo.url; image.alt = ''; image.loading = index < 9 ? 'eager' : 'lazy'; image.decoding = 'async'; button.append(image);
+          if (galleryPlayback.pinned_photo_id === photo.id) { const badge = document.createElement('span'); badge.className = 'photo-badge'; badge.textContent = 'Pinned'; button.append(badge); }
+          button.addEventListener('click', () => { selectedPhotoId = photo.id; pinDraftPhotoId = null; renderPhotoDetail(); photoDialog.showModal(); });
+          return button;
+        }));
+        section.append(title,grid);
+        if (key === 'earlier') { const note = document.createElement('p'); note.className = 'field-help'; note.textContent = 'These photos were uploaded before sender names were recorded.'; section.append(note); }
+        return section;
       }));
     }
     function renderPhotoDetail() {
@@ -727,7 +771,7 @@
       document.querySelector('#photo-detail-frame strong').textContent = frameName(galleryFrameId);
       document.querySelector('#photo-detail-image').src = photo.url;
       document.querySelector('#photo-detail-position').textContent = `${index + 1} of ${galleryPhotos.length}`;
-      document.querySelector('#photo-detail-date').textContent = `Sent ${photo.created_at} UTC`;
+      document.querySelector('#photo-detail-date').textContent = `From ${senderLabel(photo.sender)} · ${photo.created_at} UTC`;
       document.querySelector('#photo-detail-state').textContent = pinned ? 'Pinned on this frame'
         : galleryPlayback.pinned_photo_id ? 'Another photo is pinned. Show now or Pin photo will replace it.' : '';
       document.querySelector('#show-photo').disabled = pinned || photoActionBusy;
@@ -819,7 +863,7 @@
     }
     photoDialog.addEventListener('close', () => {
       pinDraftPhotoId = null;
-      const tile = [...framePhotos.children].find(tile => tile.dataset.photoId === selectedPhotoId);
+      const tile = [...framePhotos.querySelectorAll('.gallery-tile')].find(tile => tile.dataset.photoId === selectedPhotoId);
       if (!photosPanel.hidden) (tile || document.querySelector('#add-photos')).focus({preventScroll:true});
     });
     window.addEventListener('hashchange', () => { photoDialog.close(); slideshowDialog.close(); });
@@ -827,7 +871,7 @@
       selectedFrameId = photoFrame.value;
       rememberFrame();
       photoDialog.close(); slideshowDialog.close();
-      selectedPhotoId = null; pinDraftPhotoId = null; galleryVersion = '';
+      selectedPhotoId = null; pinDraftPhotoId = null; galleryVersion = ''; senderFilter = ''; galleryExpanded = false; galleryCursor = null;
       ++photoRequest; galleryLoading = false;
       framePhotos.replaceChildren(); galleryPhotos = []; galleryPlayback = {};
       updateFrameContext();

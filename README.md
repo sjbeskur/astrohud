@@ -161,8 +161,34 @@ above the gallery. Choose **Remove from this frame** to remove a photo from
 that frame's manifest and protected media access. The native frame deletes its cached copy at its next successful sync;
 an offline frame applies the change when it reconnects. Removal is specific to
 the selected frame: other subscribed frames and the server's original photo
-remain available. The gallery shows up to 200 photos, keeping a selected or
-pinned photo available even when newer uploads would otherwise push it out.
+remain available. The owner gallery loads 50 photos at a time, groups them by
+sender, and offers sender filters and **Load more photos** for older uploads.
+Device manifests retain their existing 200-photo window and pin priority.
+
+### Sender history and owner categories
+
+Invited senders have **Send photos** and **My photos** tabs. My photos loads
+all of that invitation's retained uploads through cursor-based pages, with
+read-only previews and Previous/Next navigation. It remains available when
+an owner removes a photo from a frame or resets the last frame. A current,
+active invitation is still required; replacement links retain the invitation
+identity and history, while old or disabled links cannot access it.
+
+New owner and invited-sender uploads record their author atomically with the
+photo and delivery plan. Owners see named groups and sender filters for the
+selected frame, including **You** for owner uploads. Older images have no
+recoverable author information and appear under **Earlier uploads**. Labels
+are presentation data; authorization uses the stable invitation ID.
+
+These galleries reuse the server's existing image files. They do not create
+another image copy. The server retains a display image, not just a thumbnail:
+images larger than 1,600 pixels on their long edge are resized to JPEG;
+smaller images remain as uploaded. Browser thumbnails are previews of those
+same files. Native device manifest fields remain unchanged.
+
+Sender history uses schema 10 and a pre-upgrade database snapshot through the
+existing startup guard. Use the schema-compatible API checkpoint below for
+a UI rollback; older schema-9 releases cannot open this database.
 
 The gallery also offers **Show now**, **Pin photo**, and **Resume slideshow**.
 Owners can choose the time per photo and a soft, blurred background that fills
@@ -234,21 +260,21 @@ Render supplies `PORT` automatically. Do not set it manually.
 #### Photo-routing release and rollback
 
 Deploy the API and website from the same revision. `/api/health`, the owner
-context, and sender context advertise `photo_routing_version: 1`. The new
+context, and sender context advertise `photo_routing_version: 1`. Health and
+sender context also advertise `photo_history_version: 1`. The new
 pages block sending when this capability is absent; old pages can still send
 through the updated API and default to one eligible frame.
 
-Before upgrading an existing database to schema 9, server startup uses
+Before upgrading an existing database to schema 10, server startup uses
 SQLite `VACUUM INTO` to create a consistent snapshot under
-`$ASTROHUD_DATA_DIR/backups/before-schema-8-to-9-<id>.sqlite3` (the filename
+`$ASTROHUD_DATA_DIR/backups/before-schema-9-to-10-<id>.sqlite3` (the filename
 records the actual previous version). If snapshot creation fails, startup
 stops before changing the schema. Existing media files are unchanged.
 
-For a UI rollback, deploy API checkpoint **`db68b1b`**: it retains the new
-routing rules and database safeguards while serving the previous website.
-Do not deploy an API older than that checkpoint against a database containing
-new targeted uploads; it would ignore the delivery plans. Prefer this
-compatible checkpoint or a forward fix. Restoring the pre-upgrade snapshot
+For a UI rollback, deploy API checkpoint **`6113e15`**: it retains photo
+routing, sender history, attribution, and schema-10 support while serving the
+previous website. The earlier schema-9 checkpoint `db68b1b` is no longer a
+compatible rollback target. Prefer the current checkpoint or a forward fix. Restoring the pre-upgrade snapshot
 would also discard later metadata and is not an ordinary release rollback.
 The server rejects databases from schema versions newer than it supports.
 

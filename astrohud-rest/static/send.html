@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Send a photo with Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=bae44a29ab21">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=161095272de7">
 </head>
 <body class="simple-page">
 
@@ -13,10 +13,11 @@
     <header class="sender-intro">
       <p class="simple-destination" hidden>Sending to <span id="place-label">Loading</span></p>
       <div class="page-heading"><h1 id="send-title">Send a photo</h1><button id="sender-photo-options" class="photo-icon-button" type="button" aria-label="Photo options" title="Photo options" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9.2 3-.6 2.2-1.5.9-2.2-.5-2.2 3.8 1.6 1.7v1.8l-1.6 1.7 2.2 3.8 2.2-.5 1.5.9.6 2.2h4.4l.6-2.2 1.5-.9 2.2.5 2.2-3.8-1.6-1.7v-1.8l1.6-1.7-2.2-3.8-2.2.5-1.5-.9-.6-2.2z"/><circle cx="11.4" cy="12" r="3"/></svg></button></div>
-      <p class="page-context"><span class="frame-context-label">Sending to</span><strong id="place-name" class="context-name">the frame</strong></p>
+      <nav class="sender-tabs" aria-label="Sender pages"><button id="sender-send-tab" class="quiet-button" type="button" aria-pressed="true">Send photos</button><button id="sender-history-tab" class="quiet-button" type="button" aria-pressed="false" disabled>My photos</button></nav>
+      <p class="page-context"><span id="sender-context-label" class="frame-context-label">Sending to</span><strong id="place-name" class="context-name">the frame</strong></p>
     </header>
 
-    <div class="instrument-stack">
+    <div id="sender-send-view" class="instrument-stack">
       <section class="instrument-panel" aria-labelledby="send-title">
         <div class="instrument-heading">
           <p id="sender-label" class="instrument-label">Private invitation</p>
@@ -39,6 +40,11 @@
         </form>
       </section>
     </div>
+    <section id="sender-history-view" hidden aria-labelledby="send-title">
+      <p id="history-status" role="status"></p>
+      <div id="sent-photos" class="owner-photo-grid"></div>
+      <button id="more-sent-photos" class="quiet-button" type="button" hidden>Load more photos</button>
+    </section>
     <p id="status" class="status-line" role="status">Opening your private destination…</p>
   </main>
 
@@ -50,6 +56,12 @@
               <span><strong>Show approximate location</strong><small>Off by default. If the photo contains GPS, only a broad place label appears on the frame.</small></span>
             </label>
   </dialog>
+  <dialog id="sent-photo-dialog" class="photo-dialog" aria-labelledby="sent-photo-title">
+    <div class="dialog-heading"><h2 id="sent-photo-title">Your photo</h2><button id="close-sent-photo" class="quiet-button" type="button">Close</button></div>
+    <img id="sent-photo-image" alt="Photo you sent">
+    <div class="photo-navigation"><button id="previous-sent-photo" class="quiet-button" type="button">← Previous</button><p id="sent-photo-position"></p><button id="next-sent-photo" class="quiet-button" type="button">Next →</button></div>
+    <p id="sent-photo-date" class="field-help"></p>
+  </dialog>
   <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
   <script>
     const form = document.querySelector('#photo-form');
@@ -59,9 +71,17 @@
     const status = document.querySelector('#status');
     let previewUrl;
     let photoRoutingSupported = false;
+    let senderContext = null;
+    let sentPhotos = [];
+    let historyCursor = null;
+    let historyExpanded = false;
+    let historyLoading = false;
+    let historyRequest = 0;
+    let selectedSentId = null;
+    const historyView = document.querySelector('#sender-history-view');
+    const sentDialog = document.querySelector('#sent-photo-dialog');
     const destinations = new MemoryLaneDestinations(document.querySelector('#sender-destinations'), () => {
-      document.querySelector('#place-name').textContent = destinations.summary || 'Choose frames below';
-      document.querySelector('#sender-options-frame').textContent = destinations.summary;
+      updateSenderContext();
     });
     document.querySelector('#sender-photo-options').addEventListener('click', () => document.querySelector('#sender-options-dialog').showModal());
     document.querySelector('#close-sender-options').addEventListener('click', () => document.querySelector('#sender-options-dialog').close());
@@ -76,15 +96,19 @@
       if (response.status === 401) throw new Error('Sender access is missing in this browser. Open the complete private invitation link in this same Safari or Chrome browser.');
       if (!response.ok) throw new Error(await response.text());
       const context = await response.json();
+      senderContext = context;
       photoRoutingSupported = context.photo_routing_version === 1;
       if (!photoRoutingSupported) throw new Error('Photo sending is temporarily unavailable. Please refresh later.');
       document.querySelector('#place-label').textContent = context.place_name;
       document.querySelector('#place-name').textContent = context.place_name;
       document.querySelector('#sender-options-frame').textContent = context.place_name;
       document.querySelector('#button-place').textContent = context.place_name;
-      destinations.configure(context.frames, context.frames[0].frame_id);
+      destinations.configure(context.frames, context.frames[0]?.frame_id || '');
+      document.querySelector('#sender-history-tab').disabled = false;
       document.querySelector('#sender-label').textContent = `Shared with ${context.invitation_label}`;
-      setStatus('Choose a photo and its destinations.');
+      form.hidden = !context.frames.length;
+      setStatus(context.frames.length ? 'Choose a photo and its destinations.' : 'No frames are connected. You can still view My photos.');
+      renderSenderView();
     }
 
     photo.addEventListener('change', () => {
@@ -121,7 +145,7 @@
         previewShell.hidden = true;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = undefined;
-        setStatus(`Photo received for ${destinationLabel}. Waiting for the frames to connect.`, 'success');
+        setStatus(`Photo received for ${destinationLabel}. Find it in My photos any time.`, 'success');
       } catch (error) {
         setStatus(`Send failed / ${error.message}`, 'error');
       } finally {
@@ -129,6 +153,68 @@
         document.querySelector('#sender-destinations').disabled = false;
       }
     });
+
+    function updateSenderContext() {
+      const history = location.hash === '#my-photos';
+      document.querySelector('#sender-context-label').textContent = history ? 'Sent by' : 'Sending to';
+      document.querySelector('#place-name').textContent = history ? senderContext?.invitation_label || '' : destinations.summary || 'Choose frames below';
+      document.querySelector('#sender-options-frame').textContent = destinations.summary;
+    }
+    function renderSenderView() {
+      const history = location.hash === '#my-photos';
+      document.querySelector('#sender-send-view').hidden = history;
+      historyView.hidden = !history;
+      document.querySelector('#status').hidden = history;
+      document.querySelector('#sender-photo-options').hidden = history;
+      document.querySelector('#sender-send-tab').setAttribute('aria-pressed', String(!history));
+      document.querySelector('#sender-history-tab').setAttribute('aria-pressed', String(history));
+      document.querySelector('#send-title').textContent = history ? 'My photos' : 'Send a photo';
+      document.title = `${history ? 'My photos' : 'Send a photo'} · Memory Lane`;
+      updateSenderContext();
+      if (history && senderContext) loadSentPhotos();
+    }
+    document.querySelector('#sender-send-tab').addEventListener('click', () => location.hash = 'send');
+    document.querySelector('#sender-history-tab').addEventListener('click', () => location.hash = 'my-photos');
+    window.addEventListener('hashchange', () => { sentDialog.close(); renderSenderView(); });
+    async function loadSentPhotos({append = false} = {}) {
+      const feedback = document.querySelector('#history-status');
+      if (senderContext?.photo_history_version !== 1) { feedback.textContent = 'Photo history is temporarily unavailable. Please try again later.'; return; }
+      if (append && (historyLoading || !historyCursor)) return;
+      const request = ++historyRequest; historyLoading = true;
+      feedback.textContent = 'Loading your photos…';
+      if (!append) { historyExpanded = false; historyCursor = null; document.querySelector('#more-sent-photos').hidden = true; sentPhotos = []; document.querySelector('#sent-photos').replaceChildren(); }
+      try {
+        const response = await fetch(`/api/beta/sender/photos${append ? `?before=${historyCursor}` : ''}`, {cache:'no-store'});
+        if (!response.ok) throw new Error(response.status === 401 ? 'Open your current invitation link to view your photos.' : 'Could not load your photos. Please try again.');
+        const page = await response.json(); if (request !== historyRequest) return;
+        sentPhotos = append ? [...sentPhotos, ...page.photos] : page.photos;
+        historyCursor = page.next_cursor; historyExpanded ||= append;
+        document.querySelector('#more-sent-photos').hidden = !historyCursor;
+        feedback.textContent = sentPhotos.length ? `${sentPhotos.length} photos shown · Tap to view` : 'Your sent photos will appear here.';
+        document.querySelector('#sent-photos').replaceChildren(...sentPhotos.map((photo,index) => {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'gallery-tile'; button.dataset.photoId = photo.id; button.setAttribute('aria-label', `Open your photo ${index + 1}`);
+          const image = document.createElement('img'); image.src = photo.url; image.alt = ''; image.loading = index < 9 ? 'eager' : 'lazy'; button.append(image);
+          button.addEventListener('click', () => { selectedSentId = photo.id; renderSentPhoto(); sentDialog.showModal(); }); return button;
+        }));
+      } catch(error) { if (request === historyRequest) feedback.textContent = error.message; }
+      finally { if (request === historyRequest) { historyLoading = false; document.querySelector('#more-sent-photos').disabled = false; } }
+    }
+    function renderSentPhoto() {
+      const index = sentPhotos.findIndex(photo => photo.id === selectedSentId); const photo = sentPhotos[index]; if (!photo) return;
+      document.querySelector('#sent-photo-image').src = photo.url;
+      document.querySelector('#sent-photo-position').textContent = `${index + 1} of ${sentPhotos.length}`;
+      document.querySelector('#sent-photo-date').textContent = `Sent ${photo.created_at} UTC`;
+      document.querySelector('#previous-sent-photo').disabled = index === 0;
+      document.querySelector('#next-sent-photo').disabled = index === sentPhotos.length - 1;
+    }
+    function stepSentPhoto(direction) { const index = sentPhotos.findIndex(photo => photo.id === selectedSentId); if (sentPhotos[index + direction]) { selectedSentId = sentPhotos[index + direction].id; renderSentPhoto(); } }
+    document.querySelector('#previous-sent-photo').addEventListener('click', () => stepSentPhoto(-1));
+    document.querySelector('#next-sent-photo').addEventListener('click', () => stepSentPhoto(1));
+    sentDialog.addEventListener('keydown', event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); stepSentPhoto(event.key === 'ArrowLeft' ? -1 : 1); } });
+    document.querySelector('#close-sent-photo').addEventListener('click', () => sentDialog.close());
+    sentDialog.addEventListener('close', () => { [...document.querySelectorAll('#sent-photos button')].find(button => button.dataset.photoId === selectedSentId)?.focus({preventScroll:true}); });
+    document.querySelector('#more-sent-photos').addEventListener('click', event => { event.currentTarget.disabled = true; loadSentPhotos({append:true}); });
+    document.addEventListener('visibilitychange', () => { if (!document.hidden && !historyView.hidden && !sentDialog.open && !historyExpanded && senderContext) loadSentPhotos(); });
 
     loadDestination().catch(error => {
       form.hidden = true;

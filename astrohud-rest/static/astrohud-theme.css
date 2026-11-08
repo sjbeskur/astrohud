@@ -445,3 +445,14 @@ body:has(dialog[open]) { overflow: hidden; }
 .destination-choices input { width: 20px; height: 20px; min-height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--hud-amber); }
 .destination-summary { margin: 0.5rem 0 0; color: var(--hud-amber); font-size: 0.85rem; line-height: 1.5; overflow-wrap: anywhere; }
 #photo-form > .send-destinations { margin-bottom: 1rem; }
+
+.sender-tabs { display: flex; gap: 0.5rem; margin: 0.75rem 0; }
+.sender-tabs button { min-height: 44px; flex: 1; }
+.sender-tabs [aria-pressed="true"], .sender-filters [aria-pressed="true"] { color: var(--hud-amber); border-color: var(--hud-amber); background: #efb46a18; }
+.sender-filters { display: flex; gap: 0.5rem; overflow-x: auto; padding: 0.4rem 0.2rem; margin-bottom: 0.5rem; }
+.owner-page .sender-filters button { flex-shrink: 0; min-height: 44px; font-size: 0.85rem; }
+.sender-photo-group { margin-bottom: 1.25rem; }
+.owner-page .sender-photo-group h2 { margin: 0.6rem 0; font-size: 1rem; }
+#more-owner-photos, #more-sent-photos { min-height: 44px; width: 100%; margin-top: 1rem; }
+#sent-photo-image { display: block; width: 100%; height: auto; max-height: 55dvh; object-fit: contain; border-radius: 8px; }
+#history-status, #sent-photo-position { color: var(--hud-muted); font-size: 0.85rem; }
