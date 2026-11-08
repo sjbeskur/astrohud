@@ -390,6 +390,24 @@ pub fn claim_bootstrap_device(
     bootstrap_token: &str,
     place_name: &str,
 ) -> Result<BootstrapClaim, BetaError> {
+    claim_bootstrap_device_with_owner(connection, bootstrap_token, place_name, None)
+}
+
+pub fn claim_bootstrap_device_for_owner(
+    connection: &mut Connection,
+    bootstrap_token: &str,
+    place_name: &str,
+    owner_token: &str,
+) -> Result<BootstrapClaim, BetaError> {
+    claim_bootstrap_device_with_owner(connection, bootstrap_token, place_name, Some(owner_token))
+}
+
+fn claim_bootstrap_device_with_owner(
+    connection: &mut Connection,
+    bootstrap_token: &str,
+    place_name: &str,
+    existing_owner: Option<&str>,
+) -> Result<BootstrapClaim, BetaError> {
     validate_secret(bootstrap_token, "bootstrap token")?;
     let place_name = bounded_text(place_name, "place name", 80)?;
     let token_hash = hash_secret(bootstrap_token);
@@ -410,24 +428,35 @@ pub fn claim_bootstrap_device(
         .optional()?
         .ok_or(BetaError::ClaimUnavailable)?;
 
-    let household_id = Uuid::new_v4().to_string();
-    let channel_id = Uuid::new_v4().to_string();
-    let grant_id = Uuid::new_v4().to_string();
-    let owner_token = random_token();
-    let owner_token_hash = hash_secret(&owner_token);
-    transaction.execute(
-        "INSERT INTO households (id, name) VALUES (?1, ?2)",
-        params![household_id, place_name],
-    )?;
-    transaction.execute(
-        "INSERT INTO channels (id, household_id, name) VALUES (?1, ?2, 'Family')",
-        params![channel_id, household_id],
-    )?;
-    transaction.execute(
-        "INSERT INTO owner_access_grants (id, household_id, label, token_hash)
-         VALUES (?1, ?2, 'Owner', ?3)",
-        params![grant_id, household_id, owner_token_hash.as_slice()],
-    )?;
+    let (household_id, channel_id, owner_token) = if let Some(owner_token) = existing_owner {
+        let household_id = owner_household_id(&transaction, owner_token)?;
+        let channel_id: String = transaction.query_row(
+            "SELECT id FROM channels WHERE household_id = ?1 ORDER BY created_at, rowid LIMIT 1",
+            params![household_id],
+            |row| row.get(0),
+        )?;
+        (household_id, channel_id, owner_token.to_owned())
+    } else {
+        let household_id = Uuid::new_v4().to_string();
+        let channel_id = Uuid::new_v4().to_string();
+        let grant_id = Uuid::new_v4().to_string();
+        let owner_token = random_token();
+        let owner_token_hash = hash_secret(&owner_token);
+        transaction.execute(
+            "INSERT INTO households (id, name) VALUES (?1, ?2)",
+            params![household_id, place_name],
+        )?;
+        transaction.execute(
+            "INSERT INTO channels (id, household_id, name) VALUES (?1, ?2, 'Family')",
+            params![channel_id, household_id],
+        )?;
+        transaction.execute(
+            "INSERT INTO owner_access_grants (id, household_id, label, token_hash)
+             VALUES (?1, ?2, 'Owner', ?3)",
+            params![grant_id, household_id, owner_token_hash.as_slice()],
+        )?;
+        (household_id, channel_id, owner_token)
+    };
     transaction.execute(
         "INSERT INTO frames (id, household_id, place_name) VALUES (?1, ?2, ?3)",
         params![frame_id, household_id, place_name],

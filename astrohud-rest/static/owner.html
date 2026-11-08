@@ -4,47 +4,27 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
-  <title>Set up your Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=cb125ed5ac10">
+  <title>Memory Lane</title>
+  <link rel="stylesheet" href="/astrohud-theme.css?v=6088f52be418">
 </head>
 <body class="owner-page">
-  <header class="hud-nav">
-    <div class="hud-shell hud-nav-row">
-      <div class="hud-brand"><span class="hud-mark">ML</span> Memory Lane</div>
-      <div class="hud-link-state"><i class="status-light"></i> Owner link / Private</div>
-    </div>
-  </header>
+  <main class="hud-shell owner-shell">
+    <a id="owner-home-link" class="owner-back" href="#home" hidden>← Home</a>
+    <div class="owner-views">
 
-  <main class="hud-shell sender-main">
-    <header class="sender-intro">
-      <p class="signal-label">Place control / <span id="household-name">Loading</span></p>
-      <h1>Your screen. Your people.</h1>
-      <p>Share photos with friends and family on your own personal digital display.</p>
-    </header>
-
-    <nav id="owner-actions" class="owner-actions" aria-label="Owner actions" hidden>
-      <a class="signal-button" href="#owner-send-panel">Send a photo</a>
-      <a class="signal-button secondary" href="#invite-panel">Invite</a>
-      <a class="signal-button secondary" href="#photos-panel">Photos</a>
-    </nav>
-
-    <div class="instrument-stack">
       <section id="owner-access-help" class="instrument-panel" hidden aria-labelledby="owner-access-title">
-        <div class="instrument-heading">
-          <p class="instrument-label"><span class="instrument-number">!</span> / Private owner access</p>
-          <p class="instrument-label">This browser</p>
-        </div>
-        <h2 id="owner-access-title">Owner access is missing</h2>
-        <p class="instrument-copy">Open your saved private recovery link to restore owner access on this phone or another device. If another browser still has access, create a recovery link in its Device settings. If you have neither, contact Memory Lane support for recovery.</p>
+        <h1 id="owner-access-title">Memory Lane</h1>
+        <p class="owner-subtitle">A place for your favorite photos.</p>
+        <a class="signal-button full-width owner-start" href="#claim-panel">Add a device</a>
+        <details class="owner-help"><summary>Already set up?</summary><p>Open your saved private recovery link to restore access. If another browser still has access, save a recovery link from Settings there.</p></details>
       </section>
 
-      <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
-        <div class="instrument-heading">
-          <p class="instrument-label"><span class="instrument-number">01</span> / Appliance link</p>
-          <p class="instrument-label">About two minutes</p>
-        </div>
-        <h2 id="claim-title">Claim your frame</h2>
-        <p class="instrument-copy">Keep this private owner page available on your phone while connecting the appliance to Wi-Fi. When the television shows its claim QR, scan it to return here with the code filled in.</p>
+      <section id="claim-panel" class="instrument-panel" hidden aria-labelledby="claim-title">
+        <h1 id="claim-title">Add a device</h1>
+        <p class="instrument-copy">Start with the new device and your phone.</p>
+        <ol class="owner-steps"><li>Plug in the device and turn on its screen.</li><li>Scan its Wi-Fi QR code with your phone.</li><li>Follow the setup steps, then give the device a name.</li></ol>
+        <p class="instrument-copy">Use the same browser you use for Memory Lane to add it here.</p>
+        <details id="manual-claim" class="owner-help"><summary>Enter a setup code instead</summary>
         <form id="claim-form">
           <div class="field-grid">
             <div>
@@ -57,25 +37,30 @@
               <p class="field-hint">Senders will see this destination name.</p>
             </div>
           </div>
-          <button class="signal-button full-width" type="submit">Connect frame →</button>
+          <button class="signal-button full-width" type="submit">Add device</button>
         </form>
+        </details>
       </section>
 
-      <section id="connected-panel" class="instrument-panel" hidden aria-labelledby="connected-title">
-        <div class="instrument-heading">
-          <p class="instrument-label"><span class="instrument-number">✓</span> / Appliance linked</p>
-          <p class="instrument-label">Ready</p>
-        </div>
-        <h2 id="connected-title">Your frame is connected</h2>
-        <p class="instrument-copy">Create a separate private link for each person you trust to send photos.</p>
-        <div id="frames" class="connection-summary"></div>
-        <button id="open-device-settings" class="quiet-button" type="button"><span aria-hidden="true" style="margin-right: 0.4rem;">&#9881;&#65038;</span>Device settings</button>
-        <p id="recovery-reminder" class="instrument-copy" hidden>Keep owner access if you change phones or clear browser data. <button id="save-recovery-shortcut" class="quiet-button" type="button">Save a recovery link</button></p>
+      <section id="connected-panel" class="instrument-panel owner-home" hidden aria-labelledby="connected-title">
+        <h1 id="connected-title">Memory Lane</h1>
+        <p id="household-name" class="owner-subtitle">Your photos. Your people.</p>
+        <nav id="owner-actions" class="owner-actions" aria-label="Main actions">
+          <a href="#invite-panel"><strong>Invite</strong><span>Let friends and family send photos</span><i aria-hidden="true">→</i></a>
+          <a href="#owner-send-panel"><strong>Send photos</strong><span>Choose a photo from your phone</span><i aria-hidden="true">→</i></a>
+          <a href="#claim-panel"><strong>Add a device</strong><span>Connect another screen</span><i aria-hidden="true">+</i></a>
+        </nav>
+        <nav class="owner-secondary" aria-label="More actions">
+          <a href="#photos-panel">Photos</a>
+          <button id="open-device-settings" type="button"><span aria-hidden="true">⚙</span> Settings</button>
+        </nav>
+        <p id="frames" class="owner-device-summary"></p>
+        <p id="recovery-reminder" class="owner-recovery-reminder" hidden><button id="save-recovery-shortcut" type="button">Save a recovery link</button> to keep access if you change phones.</p>
       </section>
 
       <section id="owner-send-panel" class="instrument-panel" hidden aria-labelledby="owner-send-title">
-        <h2 id="owner-send-title">Send a photo</h2>
-        <p class="instrument-copy">Send straight to your frame from here.</p>
+        <h1 id="owner-send-title">Send photos</h1>
+        <p class="instrument-copy">Choose a photo, then send it to your screen.</p>
         <form id="owner-photo-form">
           <div id="upload-frame-field" class="owner-field">
             <label for="upload-frame">Send to which frame?</label>
@@ -87,30 +72,28 @@
             <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" required>
             <p class="field-help">JPEG or PNG, up to 20 MB.</p>
           </div>
-          <figure id="owner-preview-shell" class="photo-preview" hidden><img id="owner-preview" alt="Photo ready to send"><figcaption>Preview / Nothing sent yet</figcaption></figure>
+          <figure id="owner-preview-shell" class="photo-preview" hidden><img id="owner-preview" alt="Photo ready to send"><figcaption>Ready to send</figcaption></figure>
+          <details class="owner-help"><summary>Photo options</summary>
           <label class="privacy-option" for="owner-location"><input id="owner-location" type="checkbox" name="include_location" value="true"><span><strong>Show approximate location</strong><small>Optional, if this photo contains GPS information.</small></span></label>
-          <button class="signal-button full-width" type="submit">Send photo →</button>
+          </details>
+          <button class="signal-button full-width" type="submit">Send photo</button>
         </form>
         <p id="owner-send-status" role="status"></p>
       </section>
 
       <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
-        <div class="instrument-heading">
-          <p class="instrument-label"><span class="instrument-number">02</span> / Sender access</p>
-          <p class="instrument-label">Private links</p>
-        </div>
-        <h2 id="invite-title">Invite friends and family</h2>
-        <p class="instrument-copy">Create a private link for each person. To send a link again later, choose Replace link below; their old link and browser access will stop working until they open the new one.</p>
+        <h1 id="invite-title">Invite</h1>
+        <p class="instrument-copy">Create a private link so someone can send photos to your screen.</p>
         <form id="invite-form">
           <label for="sender-name">Who is this link for?</label>
           <div class="field-row">
             <input id="sender-name" name="label" maxlength="80" placeholder="Alice" required>
-            <button class="signal-button" type="submit">Create link →</button>
+            <button class="signal-button" type="submit">Create invitation</button>
           </div>
         </form>
         <div id="new-invitation" class="link-reveal" hidden>
-          <strong>Private link ready</strong>
-          <p>Send this complete link only to the person named above. They should open it in the same Safari or Chrome browser they will use to send photos.</p>
+          <strong>Your invitation is ready</strong>
+          <p>Copy or share this private link with them.</p>
           <div class="field-row">
             <input id="invitation-url" readonly aria-label="New private sender link">
             <button id="copy-link" class="signal-button secondary" type="button">Copy link</button>
@@ -118,18 +101,17 @@
           </div>
         </div>
         <div class="invitation-heading">
-          <h3>Active links</h3>
+          <h2>People you invited</h2>
           <span id="invitation-count" class="instrument-label">0 people</span>
         </div>
         <div id="invitations" class="connection-summary"></div>
       </section>
 
-      <section id="device-settings" class="instrument-panel" hidden aria-label="Device settings">
-        <details>
-          <summary>Device settings</summary>
+      <section id="device-settings" class="instrument-panel" hidden aria-labelledby="settings-title">
+        <h1 id="settings-title">Settings</h1>
           <div class="owner-recovery">
-            <h3>Owner recovery</h3>
-            <p class="instrument-copy">Save a private recovery link in your password manager or secure notes. It restores access on phones, tablets, and computers, even after browser data is cleared. Anyone with this link has owner access.</p>
+            <h2>Keep your owner access</h2>
+            <p class="instrument-copy">Save a private recovery link in your password manager. It lets you return after changing phones or clearing browser data.</p>
             <p id="recovery-state" class="instrument-copy"></p>
             <button id="create-recovery" class="quiet-button" type="button">Create recovery link</button>
             <div id="recovery-reveal" class="link-reveal" hidden>
@@ -144,16 +126,15 @@
               <p id="recovery-feedback" role="status"></p>
             </div>
           </div>
-          <h3>Factory reset</h3>
-          <p class="instrument-copy">Factory reset removes photos stored on the device, its Wi-Fi settings, and its owner pairing. Your household's photos and other devices stay available. You will need to set up the device again.</p>
+          <h2>Your devices</h2>
+          <p class="instrument-copy">Factory reset clears a device's photos, Wi-Fi, and pairing. Other devices and your saved photos stay available.</p>
           <div id="device-controls" class="connection-summary"></div>
           <div id="reset-history" class="connection-summary" role="status"></div>
-        </details>
       </section>
 
       <section id="photos-panel" class="instrument-panel" hidden aria-labelledby="photos-title">
         <div class="owner-photo-heading">
-          <h2 id="photos-title">Your photos</h2>
+          <h1 id="photos-title">Photos</h1>
           <button id="refresh-photos" class="signal-button secondary" type="button">Refresh photos</button>
         </div>
         <p class="instrument-copy">Show a photo now, pin a favorite, or remove it from this frame.</p>
@@ -164,7 +145,7 @@
         <p id="photo-destination" class="owner-destination" hidden>Photos for <strong></strong></p>
         <div class="owner-playback-controls">
           <form id="display-form" class="display-controls" aria-labelledby="display-title">
-            <h3 id="display-title">Slideshow settings</h3>
+            <h2 id="display-title">Slideshow settings</h2>
             <div class="owner-field">
               <label for="slide-seconds">Change photo every</label>
               <select id="slide-seconds" aria-describedby="slide-help"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select>
@@ -174,7 +155,7 @@
             <button class="quiet-button" type="submit">Save slideshow settings</button>
           </form>
           <div class="pin-controls" aria-labelledby="pin-title">
-            <h3 id="pin-title">Pin a favorite</h3>
+            <h2 id="pin-title">Pin a favorite</h2>
             <div class="owner-field">
               <label for="pin-seconds">Keep a pinned photo on screen for</label>
               <select id="pin-seconds" aria-describedby="pin-help"><option value="900">15 minutes</option><option value="1800" selected>30 minutes</option><option value="3600">1 hour</option><option value="10800">3 hours</option><option value="0">Until I resume</option></select>
@@ -188,21 +169,17 @@
         <div id="frame-photos" class="owner-photo-grid"></div>
       </section>
     </div>
-    <p id="status" class="status-line" role="status">Loading owner access…</p>
+    <p id="status" class="owner-status" role="status">Loading Memory Lane…</p>
   </main>
 
   <script>
     const householdName = document.querySelector('#household-name');
-    const ownerAccessHelp = document.querySelector('#owner-access-help');
-    const claimPanel = document.querySelector('#claim-panel');
-    const connectedPanel = document.querySelector('#connected-panel');
-    const invitePanel = document.querySelector('#invite-panel');
-    const ownerActions = document.querySelector('#owner-actions');
     const frames = document.querySelector('#frames');
     const photosPanel = document.querySelector('#photos-panel');
     const photoFrame = document.querySelector('#photo-frame');
     const framePhotos = document.querySelector('#frame-photos');
     const photoStatus = document.querySelector('#photo-status');
+    let ownerContext = null;
     let photoRequest = 0;
     let resetTimer;
     let recoveryExists = false;
@@ -221,25 +198,50 @@
       history.replaceState(null, '', `${pageUrl.pathname}${pageUrl.search}${pageUrl.hash}`);
       if (/^[ABCDEFGHJKMNPQRSTUVWXYZ23456789]{8}$/.test(claimCode)) {
         claimCodeInput.value = claimCode;
-        document.querySelector('#place-name').focus();
+        location.hash = 'claim-panel';
+        document.querySelector('#manual-claim').open = true;
       }
     }
 
     function setStatus(message, state = 'ready') {
       status.textContent = message;
       status.dataset.state = state;
+      status.hidden = !message;
     }
 
+    function showOwnerView(focus = false) {
+      const sections = ['owner-access-help', 'connected-panel', 'claim-panel', 'owner-send-panel', 'invite-panel', 'photos-panel', 'device-settings'];
+      const requested = location.hash.slice(1);
+      let view = sections.includes(requested) ? requested : 'connected-panel';
+      if (!ownerContext && view !== 'claim-panel') view = 'owner-access-help';
+      if (ownerContext && view === 'owner-access-help') view = 'connected-panel';
+      if (ownerContext && !ownerContext.frames.length && ['owner-send-panel', 'invite-panel', 'photos-panel'].includes(view)) {
+        view = 'claim-panel';
+        setStatus('Add a device first to start sharing photos.');
+      }
+      for (const id of sections) document.getElementById(id).hidden = id !== view;
+      document.querySelector('#manual-claim').hidden = !ownerContext;
+      document.querySelector('#owner-home-link').hidden = ['connected-panel', 'owner-access-help'].includes(view);
+      const heading = document.getElementById(view).querySelector('h1');
+      document.title = view === 'connected-panel' || view === 'owner-access-help' ? 'Memory Lane' : `${heading.textContent} · Memory Lane`;
+      if (focus) {
+        heading.tabIndex = -1;
+        heading.focus({preventScroll: true});
+        window.scrollTo(0, 0);
+      }
+      if (view === 'photos-panel' && photoFrame.value) loadPhotos();
+    }
+
+    window.addEventListener('hashchange', () => {
+      setStatus('');
+      showOwnerView(true);
+    });
+
     function render(context) {
+      ownerContext = context;
       renderDeviceSettings(context);
-      householdName.textContent = context.household_name;
+      householdName.textContent = 'Your photos. Your people.';
       const connected = context.frames.length > 0;
-      claimPanel.hidden = connected;
-      connectedPanel.hidden = !connected;
-      invitePanel.hidden = !connected;
-      ownerActions.hidden = !connected;
-      photosPanel.hidden = !connected;
-      document.querySelector('#owner-send-panel').hidden = !connected;
       const uploadFrame = document.querySelector('#upload-frame');
       const selectedUpload = uploadFrame.value;
       uploadFrame.replaceChildren(...context.frames.map(frame => {
@@ -262,17 +264,9 @@
         summary.hidden = multipleFrames || !connected;
         summary.querySelector('strong').textContent = context.frames[0]?.place_name || '';
       }
-      if (connected) loadPhotos();
-      frames.replaceChildren(...context.frames.map(frame => {
-        const card = document.createElement('div');
-        card.className = 'connection-card';
-        const name = document.createElement('strong');
-        name.textContent = frame.place_name;
-        const detail = document.createElement('span');
-        detail.textContent = 'Frame linked / Ready to receive photos';
-        card.append(name, detail);
-        return card;
-      }));
+      frames.textContent = connected
+        ? context.frames.map(frame => frame.place_name).join(' · ')
+        : 'Add your first device to get started.';
       const activeInvitations = context.invitations || [];
       invitationCount.textContent = `${activeInvitations.length} ${activeInvitations.length === 1 ? 'person' : 'people'}`;
       invitations.replaceChildren(...activeInvitations.map(invitation => {
@@ -282,7 +276,7 @@
         const name = document.createElement('strong');
         name.textContent = invitation.label;
         const detail = document.createElement('span');
-        detail.textContent = `Active / Created ${invitation.created_at} UTC`;
+        detail.textContent = `Created ${invitation.created_at} UTC`;
         identity.append(name, detail);
         const revoke = document.createElement('button');
         revoke.className = 'quiet-button danger';
@@ -306,38 +300,29 @@
         empty.textContent = 'No one has a sender link yet.';
         invitations.append(empty);
       }
-      setStatus(connected ? 'Link established / Your frame is assigned to this place.' : 'Ready / Enter the code shown on your television.');
+      setStatus('');
+      showOwnerView();
     }
 
     async function loadOwner() {
       const response = await fetch('/api/beta/owner', {cache: 'no-store'});
       if (response.status === 401) {
-        claimPanel.hidden = true;
-        connectedPanel.hidden = true;
-        invitePanel.hidden = true;
-        ownerActions.hidden = true;
-        photosPanel.hidden = true;
-        document.querySelector('#owner-send-panel').hidden = true;
-        document.querySelector('#device-settings').hidden = true;
+        ownerContext = null;
         clearTimeout(resetTimer);
-        ownerAccessHelp.hidden = false;
-        throw new Error('Owner access is missing in this browser. Open your saved private recovery link, or use a browser where you still have access.');
+        setStatus('');
+        showOwnerView();
+        return;
       }
       if (!response.ok) throw new Error(await response.text());
-      ownerAccessHelp.hidden = true;
       render(await response.json());
     }
 
     document.querySelector('#open-device-settings').addEventListener('click', () => {
-      const settings = document.querySelector('#device-settings');
-      settings.querySelector('details').open = true;
-      settings.scrollIntoView({block: 'start'});
-      settings.querySelector('summary').focus({preventScroll: true});
+      location.hash = 'device-settings';
     });
 
     document.querySelector('#save-recovery-shortcut').addEventListener('click', () => {
-      document.querySelector('#open-device-settings').click();
-      document.querySelector('#create-recovery').focus();
+      location.hash = 'device-settings';
     });
 
     document.querySelector('#create-recovery').addEventListener('click', async event => {
@@ -396,7 +381,6 @@
     function renderDeviceSettings(context) {
       clearTimeout(resetTimer);
       const resets = context.resets || [];
-      document.querySelector('#device-settings').hidden = false;
       recoveryExists = Boolean(context.recovery);
       document.querySelector('#create-recovery').textContent = recoveryExists ? 'Replace recovery link' : 'Create recovery link';
       document.querySelector('#recovery-reminder').hidden = recoveryExists;
@@ -463,7 +447,6 @@
         return card;
       }));
       if (resets.some(reset => reset.state !== 'complete')) {
-        document.querySelector('#device-settings details').open = true;
         resetTimer = setTimeout(async function pollReset() {
           try {
             const response = await fetch('/api/beta/owner', {cache: 'no-store'});
@@ -635,7 +618,7 @@
       event.preventDefault();
       const button = event.target.querySelector('button');
       button.disabled = true;
-      setStatus('Link active / Claiming this frame…', 'sending');
+      setStatus('Adding your device…', 'sending');
       try {
         const payload = Object.fromEntries(new FormData(event.target));
         const response = await fetch('/api/beta/owner/claim', {
@@ -648,6 +631,8 @@
           throw new Error(await response.text());
         }
         render(await response.json());
+        event.target.reset();
+        location.hash = 'home';
       } catch (error) {
         setStatus(`Connection error / ${error.message}`, 'error');
       } finally {

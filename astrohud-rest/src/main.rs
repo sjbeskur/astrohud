@@ -38,7 +38,7 @@ async fn main() -> std::io::Result<()> {
             .route("/media/{storage_key}", web::get().to(demo_media))
             .service(
                 Files::new("/", env!("CARGO_MANIFEST_DIR").to_string() + "/static")
-                    .index_file("sender.html"),
+                    .index_file("owner.html"),
             )
     })
     .bind(args.endpoint)?

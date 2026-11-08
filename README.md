@@ -64,10 +64,11 @@ Start the service from any directory:
 cargo run --package astrohud-rest -- 0.0.0.0:8080
 ```
 
-The rehabilitation branch currently exposes three browser views:
+The server exposes these browser views:
 
-- `http://localhost:8080/` creates channels and publishes photos. The explicit
-  `/sender.html` path serves the same interface.
+- `http://localhost:8080/` opens the Memory Lane owner home, also available at
+  `/owner.html`, with Invite, Send photos, and Add a device actions.
+- `/sender.html` preserves the legacy channel and publishing demo.
 - `http://localhost:8080/frame.html` displays the persistent manifest for the
   proof-of-concept frame named `Grandma's kitchen`.
 - `http://localhost:8080/wasm_index.html` preserves the original WebSocket/WASM

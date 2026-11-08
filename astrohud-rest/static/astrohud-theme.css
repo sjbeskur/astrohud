@@ -204,14 +204,11 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 @keyframes reset-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.45; } }
 .owner-page .sender-intro h1 { max-width: 28ch; font-size: clamp(1.6rem, 5vw, 2.2rem); font-weight: 600; letter-spacing: -0.035em; line-height: 1.2; }
 .owner-photo-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 1rem; margin-bottom: 1rem; }
-.owner-actions { position: sticky; top: 0; z-index: 10; display: flex; gap: 0.65rem; padding: 0.75rem 0; background: var(--hud-void); border-bottom: 1px solid var(--hud-line); }
-.owner-actions a { display: flex; align-items: center; justify-content: center; text-decoration: none; text-align: center; }
 .owner-page #invite-panel, .owner-page #photos-panel, .owner-page .link-reveal { scroll-margin-top: 6rem; }
 .owner-photo-grid figcaption { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; }
 
 @media (max-width: 620px) {
   .owner-playback-controls { grid-template-columns: 1fr; }
-  .owner-actions a { flex: 1; min-width: 0; padding-inline: 0.65rem; }
   .owner-page .invitation-actions { width: 100%; }
   .owner-page .quiet-button { min-height: 44px; }
   .owner-page .sender-main { padding-top: 1.5rem; }
@@ -232,3 +229,59 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
   .reset-progress-fill { animation: none; }
   *, *::before, *::after { scroll-behavior: auto !important; transition-duration: 0.01ms !important; }
 }
+
+/* Keep the owner home focused on the three everyday actions. */
+.owner-shell { width: min(560px, calc(100% - 40px)); padding: 2.5rem 0 3rem; }
+.owner-views > .instrument-panel { padding: 0; background: none; }
+.owner-page h1 { margin: 0 0 0.65rem; font-size: 2rem; font-weight: 650; line-height: 1.2; letter-spacing: -0.035em; }
+.owner-page h2 { margin: 1.5rem 0 0.75rem; font-size: 1.1rem; font-weight: 650; }
+.owner-page .instrument-copy { font-size: 0.95rem; line-height: 1.6; }
+.owner-subtitle { margin: 0 0 2rem; color: var(--hud-muted); font-size: 1rem; line-height: 1.6; }
+.owner-back { display: inline-flex; min-height: 44px; align-items: center; margin-bottom: 1.5rem; color: var(--hud-muted); text-decoration: none; }
+.owner-back:hover { color: var(--hud-text); }
+.owner-actions { position: static; display: grid; gap: 0.8rem; margin: 0; padding: 0; border: 0; background: none; }
+.owner-actions a { position: relative; display: grid; gap: 0.35rem; min-height: 88px; align-content: center; justify-content: stretch; padding: 1rem 3rem 1rem 1.25rem; border: 1px solid var(--hud-line); border-radius: 16px; color: var(--hud-text); background: var(--hud-surface); text-align: left; text-decoration: none; transition: border-color 150ms ease, background 150ms ease; }
+.owner-actions a:hover { border-color: var(--hud-lavender); background: var(--hud-raised); }
+.owner-actions strong { font-size: 1.15rem; font-weight: 650; }
+.owner-actions a:first-child strong { color: var(--hud-amber); }
+.owner-actions span { color: var(--hud-muted); font-size: 0.85rem; line-height: 1.5; }
+.owner-actions i { position: absolute; top: 50%; right: 1.25rem; transform: translateY(-50%); color: var(--hud-muted); font-size: 1.4rem; font-style: normal; }
+.owner-secondary { display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; }
+.owner-secondary a, .owner-secondary button { display: inline-flex; min-height: 48px; align-items: center; gap: 0.4rem; margin: 0; padding: 0.5rem; border: 0; color: var(--hud-text); background: none; font-size: 0.95rem; text-decoration: none; }
+.owner-secondary #open-device-settings { margin-top: 0; }
+.owner-device-summary { margin: 1.5rem 0 0; color: var(--hud-muted); font-size: 0.85rem; text-align: center; overflow-wrap: anywhere; }
+.owner-recovery-reminder { margin: 1rem auto 0; max-width: 35ch; color: var(--hud-muted); font-size: 0.8rem; line-height: 1.6; text-align: center; }
+.owner-recovery-reminder button { min-height: 44px; margin: 0; padding: 0; border: 0; color: var(--hud-lavender); background: none; text-decoration: underline; text-underline-offset: 3px; }
+.owner-status { margin: 1.5rem 0 0; color: var(--hud-muted); font-size: 0.9rem; line-height: 1.6; overflow-wrap: anywhere; }
+.owner-status[data-state="error"] { color: var(--hud-danger); }
+.owner-status[data-state="success"] { color: var(--hud-green); }
+.owner-page input, .owner-page .signal-button, .owner-page .quiet-button, .owner-page .privacy-option, .owner-page .link-reveal, .owner-page .reset-progress-card { border-radius: 12px; }
+.owner-page .signal-button, .owner-page .quiet-button { font-size: 0.95rem; font-weight: 650; letter-spacing: 0; }
+.owner-page .field-hint, .owner-page .instrument-label { font-family: inherit; font-size: 0.8rem; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.owner-page .photo-preview figcaption { font-family: inherit; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.owner-start { display: flex; align-items: center; justify-content: center; text-decoration: none; }
+.owner-help { margin: 1.25rem 0; color: var(--hud-muted); font-size: 0.9rem; line-height: 1.6; }
+.owner-help summary { min-height: 44px; padding-block: 0.6rem; color: var(--hud-text); cursor: pointer; }
+.owner-help form { margin-top: 1rem; }
+#owner-photo-form .owner-help { margin: 0; }
+.owner-steps { margin: 1.5rem 0; padding-left: 1.4rem; color: var(--hud-text); font-size: 1rem; line-height: 1.6; }
+.owner-steps li + li { margin-top: 1rem; }
+.owner-playback-controls { grid-template-columns: 1fr; }
+.owner-playback-controls h2 { margin: 0; font-size: 1rem; }
+.owner-photo-heading { align-items: center; }
+.owner-photo-heading h1 { margin: 0; }
+
+/* The invitation and setup screens use the same quiet, compact layout. */
+.simple-page .sender-main { width: min(560px, calc(100% - 40px)); padding: 2.5rem 0 3rem; }
+.simple-page .sender-intro h1 { font-size: 2rem; font-weight: 650; letter-spacing: -0.035em; line-height: 1.2; }
+.simple-page .sender-intro > p:last-child { margin: 0.75rem 0 1.75rem; font-size: 0.95rem; line-height: 1.6; }
+.simple-page .instrument-stack { border: 0; border-radius: 0; box-shadow: none; background: none; }
+.simple-page .instrument-panel { padding: 0; background: none; }
+.simple-page .instrument-label, .simple-page .field-hint, .simple-page .status-line { font-family: inherit; font-weight: 400; letter-spacing: 0; text-transform: none; }
+.simple-page .instrument-label, .simple-page .field-hint { font-size: 0.8rem; }
+.simple-page .status-line { min-height: 0; margin-top: 1.5rem; padding: 0; border: 0; border-radius: 0; background: none; font-size: 0.9rem; line-height: 1.6; }
+.simple-page .simple-destination { margin: 0 0 0.75rem; color: var(--hud-muted); font-size: 0.9rem; }
+.simple-page .signal-button { border-radius: 12px; font-size: 1rem; font-weight: 650; letter-spacing: 0; }
+.simple-page input, .simple-page .privacy-option { border-radius: 12px; }
+.simple-page input, .simple-page label { font-size: 1rem; }
+.simple-page .privacy-option small { font-family: inherit; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 0.8rem; }

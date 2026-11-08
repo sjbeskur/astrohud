@@ -1,9 +1,10 @@
 use crate::{
     AppState, BetaError, DeviceEnrollmentState, DeviceRegistration, claim_bootstrap_device,
-    claim_device, claimed_device_access, create_sender_invitation, device_bootstrap_status,
-    enrollment_status, owner_context, owner_household_id, protected_manifest_for_household,
-    protected_media_storage_key, register_bootstrap_device, register_device,
-    replace_sender_invitation, revoke_sender_invitation, sender_access, upload_invited_photo,
+    claim_bootstrap_device_for_owner, claim_device, claimed_device_access,
+    create_sender_invitation, device_bootstrap_status, enrollment_status, owner_context,
+    owner_household_id, protected_manifest_for_household, protected_media_storage_key,
+    register_bootstrap_device, register_device, replace_sender_invitation,
+    revoke_sender_invitation, sender_access, upload_invited_photo,
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
@@ -154,6 +155,10 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             web::post().to(get_bootstrap_status),
         )
         .route("/api/beta/bootstrap/claim", web::post().to(claim_bootstrap))
+        .route(
+            "/api/beta/owner/devices/claim",
+            web::post().to(claim_owner_bootstrap),
+        )
         .route(
             "/api/beta/devices/enrollments",
             web::post().to(create_device_enrollment),
@@ -529,6 +534,27 @@ async fn claim_bootstrap(
     Ok(HttpResponse::Ok()
         .cookie(access_cookie(OWNER_COOKIE, &claim.owner_token))
         .json(context))
+}
+
+async fn claim_owner_bootstrap(
+    state: web::Data<AppState>,
+    http_request: HttpRequest,
+    request: web::Json<BootstrapClaimRequest>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&http_request)?;
+    let mut database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let claim = claim_bootstrap_device_for_owner(
+        &mut database,
+        request.token.trim(),
+        &request.place_name,
+        &token,
+    )
+    .map_err(beta_http_error)?;
+    let context = owner_context(&database, &claim.owner_token).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok().json(context))
 }
 
 async fn create_device_enrollment(
@@ -1319,6 +1345,97 @@ mod tests {
         );
         assert!(media_dir.join("shared.jpg").is_file());
         std::fs::remove_dir_all(media_dir).unwrap();
+    }
+
+    #[actix_web::test]
+    async fn adding_a_device_keeps_the_existing_owner_and_requires_authentication() {
+        let mut database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let owner = create_household_owner(&mut database, "Family", "Owner").unwrap();
+        let first = register_device(
+            &database,
+            &Uuid::new_v4().to_string(),
+            "ABC2D3",
+            "first-device-credential-abcdefghijklmnopqrstuvwxyz",
+        )
+        .unwrap();
+        let DeviceEnrollmentState::Pending { claim_code, .. } = first.state else {
+            panic!("pending enrollment");
+        };
+        claim_device(
+            &mut database,
+            &owner.owner_token,
+            &claim_code,
+            "Living room",
+        )
+        .unwrap();
+        let invitation = create_sender_invitation(&database, &owner.owner_token, "Alice").unwrap();
+        let bootstrap = "second-device-bootstrap-abcdefghijklmnopqrstuvwxyz0123456789";
+        register_bootstrap_device(
+            &database,
+            &Uuid::new_v4().to_string(),
+            "XYZ2D3",
+            "second-device-credential-abcdefghijklmnopqrstuvwxyz",
+            bootstrap,
+        )
+        .unwrap();
+        let state = web::Data::new(AppState::new(database, PathBuf::from("unused")));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let payload = serde_json::json!({"token": bootstrap, "place_name": "Kitchen"});
+        for cookie in [None, Some("invalid-owner-token-abcdefghijklmnopqrstuvwxyz")] {
+            let mut request = test::TestRequest::post()
+                .uri("/api/beta/owner/devices/claim")
+                .set_json(&payload);
+            if let Some(token) = cookie {
+                request = request.cookie(Cookie::new(OWNER_COOKIE, token));
+            }
+            assert_eq!(
+                test::call_service(&app, request.to_request())
+                    .await
+                    .status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
+        let request = test::TestRequest::post()
+            .uri("/api/beta/owner/devices/claim")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .set_json(&payload)
+            .to_request();
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert!(response.response().cookies().next().is_none());
+        let context: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(context["household_name"], "Family");
+        assert_eq!(context["frames"].as_array().unwrap().len(), 2);
+        assert_eq!(context["invitations"][0]["label"], "Alice");
+        let replay = test::TestRequest::post()
+            .uri("/api/beta/owner/devices/claim")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .set_json(&payload)
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, replay).await.status(),
+            StatusCode::CONFLICT
+        );
+        let db = state.database.lock().unwrap();
+        assert!(sender_access(&db, &invitation.token).is_ok());
+        assert_eq!(
+            owner_household_id(&db, &owner.owner_token).unwrap(),
+            owner.household_id
+        );
+        let grants: i64 = db
+            .query_row(
+                "SELECT COUNT(*) FROM owner_access_grants WHERE household_id = ?1",
+                [&owner.household_id],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(grants, 1);
     }
 
     #[actix_web::test]
