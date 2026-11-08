@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=4bb79127b5bf">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=a271caa4fb0c">
 </head>
 <body class="owner-page">
   <main class="hud-shell owner-shell">
@@ -315,7 +315,8 @@
       document.querySelector('#invite-destination strong').textContent = context.frames.map(frame => frame.place_name).join(' · ');
       document.querySelector('#co-owner-choice').hidden = context.co_owner_version !== 1;
       document.querySelector('#co-owner-choice input').disabled = context.co_owner_version !== 1;
-      const activeInvitations = [...(context.invitations || []).map(invitation => ({...invitation, role:'sender'})), ...(context.co_owners || []).map(invitation => ({...invitation, role:'co-owner'}))];
+      const promotedSenders = new Set((context.co_owners || []).map(invitation => invitation.sender_invitation_id).filter(Boolean));
+      const activeInvitations = [...(context.invitations || []).filter(invitation => !promotedSenders.has(invitation.invitation_id)).map(invitation => ({...invitation, role:'sender'})), ...(context.co_owners || []).map(invitation => ({...invitation, role:'co-owner'}))];
       invitationCount.textContent = `${activeInvitations.length} ${activeInvitations.length === 1 ? 'person' : 'people'}`;
       invitations.replaceChildren(...activeInvitations.map(invitation => {
         const card = document.createElement('div');
@@ -330,7 +331,7 @@
         const revoke = document.createElement('button');
         revoke.className = 'quiet-button danger invite-icon-button';
         revoke.type = 'button';
-        revoke.setAttribute('aria-label', `Disable ${invitation.label}'s access`);
+        revoke.setAttribute('aria-label', `Disable ${invitation.label}'s ${invitation.role === 'co-owner' ? 'co-owner' : 'sender'} access`);
         revoke.title = invitation.is_you ? 'Ask another owner to change your access' : `Disable ${invitation.label}'s access`;
         revoke.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></svg>';
         revoke.addEventListener('click', () => revokeInvitation(invitation));
@@ -346,6 +347,13 @@
         actions.setAttribute('role', 'group');
         actions.setAttribute('aria-label', `Manage ${invitation.label}'s invitation`);
         replace.disabled = revoke.disabled = invitation.is_you === true;
+        if (invitation.role === 'sender' && context.owner_promotion_version === 1) {
+          const promote = document.createElement('button'); promote.type = 'button'; promote.className = 'quiet-button invite-icon-button promote';
+          promote.setAttribute('aria-label', `Promote ${invitation.label} to co-owner`); promote.title = `Promote ${invitation.label} to co-owner`;
+          promote.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="7" r="3"/><path d="M2 21v-2a6 6 0 0 1 12 0v2M19 17V6M15 10l4-4 4 4"/></svg>';
+          promote.addEventListener('click', () => promoteInvitation(invitation,promote));
+          actions.append(promote);
+        }
         actions.append(replace, revoke);
         card.append(identity, actions);
         return card;
@@ -1011,11 +1019,28 @@
 
     function revealInvitation(invitation) {
       newInvitation.dataset.role = invitation.role || 'sender';
+      newInvitation.querySelector('p').textContent = invitation.promoted ? 'Share this new co-owner link. Their existing sender link and photo history still work.' : 'Copy or share this private link with them.';
       invitationUrl.value = `${location.origin}/${invitation.role === 'co-owner' ? 'activate' : 'sender-activate'}.html#${invitation.token}`;
       invitationUrl.setAttribute('aria-label', invitation.role === 'co-owner' ? 'New private co-owner link' : 'New private sender link');
       newInvitation.dataset.invitationId = invitation.invitation_id;
       newInvitation.querySelector('strong').textContent = `${invitation.role === 'co-owner' ? 'Co-owner' : 'Photo sender'} link for ${invitation.label}`;
       newInvitation.hidden = false;
+    }
+
+    async function promoteInvitation(invitation, button) {
+      if (!confirm(`Promote ${invitation.label} to co-owner? They will have full household access, including photos, invitations, device reset, and recovery. Share the new co-owner link with them. Their existing sender link keeps its current permissions.`)) return;
+      button.disabled = true;
+      setStatus(`Promoting ${invitation.label}…`, 'sending');
+      try {
+        const response = await fetch(`/api/beta/owner/invitations/${encodeURIComponent(invitation.invitation_id)}/promote`, {method:'POST'});
+        if (!response.ok) throw new Error(await response.text());
+        revealInvitation({...await response.json(), role:'co-owner', promoted:true});
+        await loadOwner();
+        newInvitation.scrollIntoView({block:'nearest'});
+        setStatus(`Co-owner access ready for ${invitation.label}. Copy or share their new link.`, 'success');
+        document.querySelector('#copy-link').focus({preventScroll:true});
+      } catch(error) { setStatus(`Promotion failed / ${error.message}`, 'error'); }
+      finally { button.disabled = false; }
     }
 
     async function replaceInvitation(invitation, button) {
@@ -1036,7 +1061,7 @@
     }
 
     async function revokeInvitation(invitation) {
-      if (!confirm(`Disable ${invitation.label}'s ${invitation.role === 'co-owner' ? 'co-owner' : 'sender'} access?${invitation.role === 'co-owner' ? ' This stops their invitation link and browser access. Replace any household recovery link you shared with them separately.' : ''}`)) return;
+      if (!confirm(`Disable ${invitation.label}'s ${invitation.role === 'co-owner' ? 'co-owner' : 'sender'} access?${invitation.role === 'co-owner' ? ` This stops their co-owner link and browser access.${invitation.sender_invitation_id ? ' Their original sender link will still work.' : ''} Replace any household recovery link you shared with them separately.` : ''}`)) return;
       setStatus(`Disabling ${invitation.label}'s link…`, 'sending');
       try {
         const response = await fetch(`/api/beta/owner/${invitation.role === 'co-owner' ? 'co-owners' : 'invitations'}/${encodeURIComponent(invitation.invitation_id)}`, {method: 'DELETE'});
@@ -1046,7 +1071,7 @@
           invitationUrl.value = '';
         }
         await loadOwner();
-        setStatus(`Access disabled / ${invitation.label}'s old link no longer works.`, 'success');
+        setStatus(`${invitation.role === 'co-owner' ? 'Co-owner' : 'Sender'} access disabled / ${invitation.label}'s ${invitation.role === 'co-owner' ? 'co-owner' : 'sender'} link no longer works.${invitation.sender_invitation_id ? ' Their original sender access remains available.' : ''}`, 'success');
       } catch (error) {
         setStatus(`Invitation error / ${error.message}`, 'error');
       }

@@ -486,3 +486,5 @@ body:has(> .site-footer) > .simulator-view { min-height: 0; }
 .owner-page #invitations .invitation-actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 0.4rem; }
 .owner-page #invitations .invitation-actions .invite-icon-button { width: 44px; }
 .owner-page #invite-panel .link-reveal { padding: 0.75rem; }
+
+.owner-page .invite-icon-button.promote { color: var(--hud-amber); }

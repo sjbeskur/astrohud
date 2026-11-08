@@ -1,7 +1,10 @@
 # Memory Lane
 
-Current hosted release: **v0.4.0**. The server reports its package version at
+Current hosted release: **v0.5.0**. The server reports its package version at
 `/api/health`; Pi software is versioned independently.
+
+This release adds invitation promotion and uses schema 12. Older schema-11
+releases cannot open the database after this upgrade.
 
 Memory Lane (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
 Actix WebSocket service and displaying it in a browser through WebAssembly.
@@ -196,7 +199,7 @@ same files. Existing native manifest fields remain compatible; Display next
 adds optional playback fields for the updated viewer.
 
 Sender history was introduced in schema 10. The current schema
-is 11, with a pre-upgrade database snapshot through the existing startup guard.
+is 12, with a pre-upgrade database snapshot through the existing startup guard.
 See the rollback notes below before deploying or reverting this release.
 
 The gallery also offers **Show now**, **Pin photo**, and **Resume slideshow**.
@@ -274,19 +277,19 @@ sender context also advertise `photo_history_version: 1`. The new
 pages block sending when this capability is absent; old pages can still send
 through the updated API and default to one eligible frame.
 
-Before upgrading an existing database to schema 11, server startup uses
+Before upgrading an existing database to schema 12, server startup uses
 SQLite `VACUUM INTO` to create a consistent snapshot under
-`$ASTROHUD_DATA_DIR/backups/before-schema-10-to-11-<id>.sqlite3` (the filename
+`$ASTROHUD_DATA_DIR/backups/before-schema-11-to-12-<id>.sqlite3` (the filename
 records the actual previous version). If snapshot creation fails, startup
 stops before changing the schema. Existing media files are unchanged.
 
-After a schema-11 upgrade, any rollback must retain schema-11 support.
-API checkpoint **`3e19596`** retains the schema-11 APIs with the previous
-website and can be deployed for a UI rollback.
-Published v0.3.0 and the earlier API checkpoints `6113e15` and `db68b1b`
-cannot open a schema-11 database. Prefer a compatible forward fix. Restoring
-the pre-upgrade snapshot discards later metadata and cannot restore photo
-files deleted since that snapshot. The server rejects newer schemas.
+After a schema-12 upgrade, any rollback must retain schema-12 support.
+API checkpoint **`e788b92`** retains the schema-12 APIs with the previous
+website and can be deployed for a UI rollback. Published v0.4.0 and older
+API checkpoints `3e19596`, `6113e15`, and `db68b1b` cannot open schema 12.
+Prefer a compatible forward fix. Restoring the pre-upgrade snapshot discards
+later metadata and cannot restore photo files deleted since that snapshot.
+The server rejects newer schemas.
 
 ### Guest photo controls and co-owners
 
@@ -413,3 +416,22 @@ an explicit household-scoped frame subscription.
 The current branch predates the picture-frame product direction. Rehabilitation
 work should keep the transport demo operational while the first persistent
 vertical slice is introduced.
+
+### Promote an existing sender
+
+The amber person/arrow icon beside a photo sender promotes them to co-owner
+after confirmation. Share the newly generated owner link with that person.
+Their existing sender link keeps its original permissions and their uploaded
+photo history stays attached to the same invitation. An old or forwarded
+sender link never gains owner privileges.
+
+The list shows one co-owner row for the linked invitation. Disabling that
+co-owner grant removes owner access and shows the original sender row again;
+it does not revoke the original sender link. Re-promoting rotates the owner
+credential and reuses the existing grant. Repeated promotion while already
+a co-owner is rejected; use Replace link instead.
+
+The schema-12 upgrade adds only the invitation-to-owner relationship table
+and creates the usual pre-upgrade snapshot. A rollback requires the
+schema-12-compatible checkpoint `e788b92` or a newer compatible server.
+No Pi update is needed for invitation promotion.

@@ -1,5 +1,11 @@
 # Release notes
 
+## v0.5.0 — 2026-11-08
+
+- Promote an existing photo sender to co-owner using a new owner link, preserving sender access and upload history and showing one invitation row.
+- Schema 12 records the promotion relationship; upgrading creates a snapshot and rollback requires schema-12 support.
+- Pi viewer v0.2.1 hides the mouse cursor in fullscreen mode while retaining it in windowed desktop mode.
+
 ## v0.4.0 — 2026-11-08
 
 - Center-cropped, more blurred and slightly darker photo backgrounds.

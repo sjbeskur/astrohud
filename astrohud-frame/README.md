@@ -193,3 +193,6 @@ Owner commands and pins take priority. Consumed revisions are saved in
 `guest-display-revision` in the cache directory so polling or restarting
 does not replay a request. Older servers omit these fields and keep normal
 slideshow behavior.
+
+Fullscreen appliance mode hides the mouse cursor before the first rendered
+screen. Windowed desktop mode retains the pointer for local development.
