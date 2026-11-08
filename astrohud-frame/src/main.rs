@@ -37,10 +37,7 @@ fn main() -> Result<(), BoxError> {
         return Ok(());
     }
     let config = Config::from_env_and_args()?;
-    let initial =
-        CacheStore::open(&config.cache_dir, config.cache_limit_bytes)?.cached_playlist()?;
-    let updates = spawn_sync(config.clone());
-    run_viewer(&config, initial, updates)
+    run_viewer(&config)
 }
 
 fn spawn_sync(config: Config) -> Receiver<Playlist> {
@@ -101,11 +98,7 @@ fn load_device_credential(path: Option<&Path>) -> Result<Option<String>, BoxErro
     Ok(Some(credential.to_owned()))
 }
 
-fn run_viewer(
-    config: &Config,
-    mut playlist: Playlist,
-    updates: Receiver<Playlist>,
-) -> Result<(), BoxError> {
+fn run_viewer(config: &Config) -> Result<(), BoxError> {
     let sdl = sdl2::init().map_err(other)?;
     let video = sdl.video().map_err(other)?;
     sdl2::hint::set("SDL_RENDER_SCALE_QUALITY", "best");
@@ -122,9 +115,12 @@ fn run_viewer(
         .present_vsync()
         .build()
         .map_err(other)?;
-    canvas.set_draw_color(Color::RGB(5, 7, 12));
-    canvas.clear();
-    canvas.present();
+    render_brand_card(&mut canvas, "Starting up...")?;
+    // Paint the startup card before reading the cache or waiting for credentials.
+    let started = Instant::now();
+    let mut playlist =
+        CacheStore::open(&config.cache_dir, config.cache_limit_bytes)?.cached_playlist()?;
+    let updates = spawn_sync(config.clone());
 
     let mut events = sdl.event_pump().map_err(other)?;
     let mut current = None;
@@ -233,7 +229,14 @@ fn run_viewer(
                 || (now >= next_slide && pinned.is_none())
             {
                 if playlist.photos.is_empty() {
-                    render_waiting(&mut canvas)?;
+                    render_brand_card(
+                        &mut canvas,
+                        if started.elapsed() < Duration::from_secs(20) {
+                            "Starting up..."
+                        } else {
+                            "Waiting for your photos"
+                        },
+                    )?;
                     current = None;
                 } else {
                     let target = forced.unwrap_or_else(|| {
@@ -323,28 +326,32 @@ fn show_photo(
     None
 }
 
-fn render_waiting(canvas: &mut Canvas<Window>) -> Result<(), BoxError> {
+fn render_brand_card(canvas: &mut Canvas<Window>, message: &str) -> Result<(), BoxError> {
     canvas.set_draw_color(Color::RGB(5, 7, 12));
     canvas.clear();
-    // A quiet, branded userspace startup/empty state replaces a black screen.
     let (w, h) = canvas.output_size().map_err(other)?;
+    let title = "Memory Lane";
+    let scale = (w / 300).clamp(2, 6);
+    let subtitle_scale = (scale / 2).max(1);
+    let title_width = title.len() as u32 * 9 * scale;
+    let subtitle_width = message.len() as u32 * 9 * subtitle_scale;
+    let title_y = (h / 2).saturating_sub(scale * 10);
     draw_bitmap_text(
         canvas,
-        40,
-        (h / 2).saturating_sub(24) as i32,
-        3,
-        "Memory Lane",
-        HUD_TEXT,
+        (w.saturating_sub(title_width) / 2) as i32,
+        title_y as i32,
+        scale,
+        title,
+        HUD_AMBER,
     )?;
     draw_bitmap_text(
         canvas,
-        40,
-        (h / 2 + 24) as i32,
-        1,
-        "WAITING FOR PHOTOS / SETUP MAY BE STARTING",
-        HUD_BLUE,
+        (w.saturating_sub(subtitle_width) / 2) as i32,
+        (title_y + scale * 14) as i32,
+        subtitle_scale,
+        message,
+        Color::RGB(153, 166, 184),
     )?;
-    let _ = w;
     canvas.present();
     Ok(())
 }
@@ -710,6 +717,29 @@ fn other(error: impl std::fmt::Display) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "renders a manual preview; run with SDL_VIDEODRIVER=dummy"]
+    fn write_startup_preview() {
+        let sdl = sdl2::init().unwrap();
+        let video = sdl.video().unwrap();
+        let window = video
+            .window("Startup preview", 1280, 720)
+            .hidden()
+            .build()
+            .unwrap();
+        let mut canvas = window.into_canvas().software().build().unwrap();
+        render_brand_card(&mut canvas, "Starting up...").unwrap();
+        let pixels = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
+        image::save_buffer(
+            "/tmp/memory-lane-startup.png",
+            &pixels,
+            1280,
+            720,
+            image::ColorType::Rgb8,
+        )
+        .unwrap();
+    }
 
     #[test]
     fn setup_screen_revision_detects_atomic_replacement() {

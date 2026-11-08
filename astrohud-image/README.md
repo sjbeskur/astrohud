@@ -93,6 +93,14 @@ mask the tty1 login prompt. Diagnostic logs remain available over SSH. The
 viewer starts without waiting for Internet access. Verify the complete boot
 sequence on a spare Pi before distributing the image.
 
+The native viewer paints a centered Memory Lane / Starting up card as soon as
+graphics are ready, before loading its cache. Cached photos and the Wi-Fi setup
+card replace it immediately when available; no artificial boot delay or extra
+splash daemon is added. The earliest firmware/kernel interval remains blank.
+The Pi-hosted phone setup uses a Wi-Fi → Password → Finish wizard with a Back
+action, password visibility toggle, and plain panel borders without decorative
+vertical color bars.
+
 The clone path below refreshes the existing beta OS; it does not produce the
 smaller clean minbase image. That separate build requires the pinned image
 generator and its host dependencies. The application updater is planned but

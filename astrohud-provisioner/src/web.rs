@@ -235,6 +235,25 @@ fn respond(request: Request, status: u16, content_type: &str, body: String) {
     let _ = request.respond(response);
 }
 
+fn setup_steps(current: usize) -> String {
+    let steps = ["Wi-Fi", "Password", "Finish"]
+        .iter()
+        .enumerate()
+        .map(|(index, label)| {
+            let number = index + 1;
+            format!(
+                "<li{}><span class=\"step-number\">{number}</span><span>{label}</span></li>",
+                if number == current {
+                    " aria-current=\"step\""
+                } else {
+                    ""
+                }
+            )
+        })
+        .collect::<String>();
+    format!("<nav class=\"setup-progress\" aria-label=\"Setup progress\"><ol>{steps}</ol></nav>")
+}
+
 fn setup_page(
     identity: &DeviceIdentity,
     networks: &[WifiNetwork],
@@ -255,7 +274,7 @@ fn setup_page(
         .join("");
     let status_message = match status {
         ProvisioningStatus::Failed(message) => format!(
-            "<div class=\"notice error\"><strong>Could not connect.</strong> {}</div>",
+            "<div class=\"notice error\" role=\"alert\"><strong>Could not connect.</strong> {}</div>",
             escape_html(message)
         ),
         _ => String::new(),
@@ -270,27 +289,40 @@ fn setup_page(
         "Connect your Memory Lane",
         &format!(
             r#"
+            {progress}
             <section class="intro">
-              <p class="signal-label"><span></span> Setup / {device_code}</p>
-              <h1>Bring your frame <em>online.</em></h1>
-              <p>Choose the Wi-Fi network this frame should use. Your phone will leave the temporary Memory Lane link while the frame tests it.</p>
+              <h1>Let's connect your frame.</h1>
+              <p>A couple of steps, then you're ready to share photos.</p>
             </section>
             {status_message}
             <section class="instrument-panel">
-              <div class="instrument-heading"><span><b>01</b> / Network link</span><span>Protected setup</span></div>
-              <form method="post" action="/configure">
-                <label for="ssid">Wi-Fi network</label>
-                <select id="ssid" name="ssid">{placeholder}{options}<option value="" data-manual{manual_selected}>My network isn't listed…</option></select>
-                <div id="manual-network" {manual_hidden}>
-                  <label for="manual_ssid">Network name</label>
-                  <input id="manual_ssid" name="manual_ssid" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="manual-help" {manual_attributes}>
-                  <p id="manual-help" class="field-help">{manual_help}</p>
-                </div>
-                {noscript_manual}
-                <label id="password-label" for="password">Wi-Fi password</label>
-                <input id="password" name="password" type="password" maxlength="64" autocomplete="current-password" aria-describedby="password-help">
-                <p id="password-help" class="field-help">Choose a network above, then enter its password.</p>
-                <button id="connect-frame" type="submit">Connect frame <span aria-hidden="true">→</span></button>
+              <form id="wifi-form" method="post" action="/configure">
+                <section id="network-step" aria-labelledby="network-title">
+                  <h2 id="network-title" tabindex="-1">Choose your Wi-Fi</h2>
+                  <p class="step-copy">Choose the home network your frame will use.</p>
+                  <label for="ssid">Wi-Fi network</label>
+                  <select id="ssid" name="ssid">{placeholder}{options}<option value="" data-manual{manual_selected}>My network isn't listed…</option></select>
+                  <div id="manual-network" {manual_hidden}>
+                    <label for="manual_ssid">Network name</label>
+                    <input id="manual_ssid" name="manual_ssid" maxlength="32" autocomplete="off" autocapitalize="none" spellcheck="false" aria-describedby="manual-help" {manual_attributes}>
+                    <p id="manual-help" class="field-help">{manual_help}</p>
+                  </div>
+                  {noscript_manual}
+                  <button id="next-step" type="button" hidden>Next <span aria-hidden="true">→</span></button>
+                </section>
+                <section id="password-step" aria-labelledby="password-title">
+                  <h2 id="password-title" tabindex="-1">Enter the password</h2>
+                  <p class="step-copy">For <strong id="password-network">your home Wi-Fi</strong></p>
+                  <label for="password">Wi-Fi password</label>
+                  <input id="password" name="password" type="password" maxlength="64" autocomplete="current-password" aria-describedby="password-help">
+                  <p id="password-help" class="field-help">Leave blank only if this network has no password.</p>
+                  <label class="checkbox-label" id="show-password-label" hidden><input id="show-password" type="checkbox">Show password</label>
+                  <p class="field-help">Your phone may disconnect from the setup network while the frame connects.</p>
+                  <div class="wizard-actions">
+                    <button id="previous-step" class="secondary" type="button" hidden>Back</button>
+                    <button id="connect-frame" type="submit">Connect frame <span aria-hidden="true">→</span></button>
+                  </div>
+                </section>
               </form>
             </section>
             <script>
@@ -298,6 +330,11 @@ fn setup_page(
               const manualGroup = document.querySelector('#manual-network');
               const manualName = document.querySelector('#manual_ssid');
               const wifiPassword = document.querySelector('#password');
+              const networkStep = document.querySelector('#network-step');
+              const passwordStep = document.querySelector('#password-step');
+              const nextStep = document.querySelector('#next-step');
+              const previousStep = document.querySelector('#previous-step');
+              const showPassword = document.querySelector('#show-password');
               function updateNetwork(clearPassword = false) {{
                 const manual = networkSelect.options[networkSelect.selectedIndex].hasAttribute('data-manual');
                 manualGroup.hidden = !manual;
@@ -305,24 +342,54 @@ fn setup_page(
                 manualName.required = manual;
                 networkSelect.required = !manual;
                 const name = manual ? manualName.value.trim() : networkSelect.value;
-                document.querySelector('#password-label').textContent = name ? `Password for “${{name}}”` : 'Wi-Fi password';
-                document.querySelector('#password-help').textContent = name
-                  ? 'Use this network’s Wi-Fi password. Leave blank only if it has no password.'
-                  : 'Choose a network or enter its name above, then enter its password.';
-                wifiPassword.disabled = !name;
-                document.querySelector('#connect-frame').disabled = !name;
+                manualName.setCustomValidity(manual && !name ? 'Enter your network name.'
+                  : manual && new TextEncoder().encode(name).length > 32 ? 'Use a network name up to 32 bytes long.' : '');
+                document.querySelector('#password-network').textContent = name || 'your home Wi-Fi';
+                nextStep.disabled = !name;
                 if (clearPassword) wifiPassword.value = '';
+              }}
+              function showStep(number) {{
+                networkStep.hidden = number !== 1;
+                passwordStep.hidden = number !== 2;
+                document.querySelectorAll('.setup-progress li').forEach((step, index) => {{
+                  if (index + 1 === number) step.setAttribute('aria-current', 'step');
+                  else step.removeAttribute('aria-current');
+                }});
+                const title = document.querySelector(number === 1 ? '#network-title' : '#password-title');
+                title.focus();
+                title.scrollIntoView({{block: 'nearest'}});
+              }}
+              function advance() {{
+                updateNetwork();
+                if (!networkSelect.reportValidity() || (!manualName.disabled && !manualName.reportValidity())) return;
+                showStep(2);
               }}
               networkSelect.addEventListener('change', () => {{
                 updateNetwork(true);
                 if (!manualGroup.hidden) manualName.focus();
               }});
-              manualName.addEventListener('input', () => updateNetwork());
+              manualName.addEventListener('input', () => updateNetwork(true));
+              manualName.addEventListener('keydown', event => {{
+                if (event.key === 'Enter') {{ event.preventDefault(); advance(); }}
+              }});
+              nextStep.addEventListener('click', advance);
+              previousStep.addEventListener('click', () => showStep(1));
+              showPassword.addEventListener('change', () => {{ wifiPassword.type = showPassword.checked ? 'text' : 'password'; }});
+              document.querySelector('#wifi-form').addEventListener('submit', event => {{
+                if (!networkStep.hidden) {{ event.preventDefault(); advance(); return; }}
+                const button = document.querySelector('#connect-frame');
+                button.disabled = true;
+                button.textContent = 'Connecting…';
+              }});
+              nextStep.hidden = false;
+              previousStep.hidden = false;
+              document.querySelector('#show-password-label').hidden = false;
+              passwordStep.hidden = true;
               updateNetwork();
             </script>
-            <p class="status-line"><i></i> Setup link active / {ssid}</p>
-            <p class="fine">If the connection fails, reconnect to this Memory Lane setup link and try again.</p>
+            <p class="fine setup-link">Connected to {ssid} · Frame {device_code}</p>
             "#,
+            progress = setup_steps(1),
             ssid = escape_html(&identity.setup_ssid),
             device_code = escape_html(&identity.device_code),
             manual_selected = if manual_mode { " selected" } else { "" },
@@ -359,7 +426,7 @@ fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
     page_shell(
         "Connecting",
         &format!(
-            r#"<section class="message-panel">
+            r#"{progress}<section class="message-panel">
               <p class="signal-label"><span></span> Network link / Testing</p>
               <h1 id="connection-title">Connecting…</h1>
               <p>The frame is testing <strong>{}</strong>. This can take about 35 seconds.</p>
@@ -402,7 +469,8 @@ fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
               setTimeout(checkConnection, 1500);
             </script>"#,
             escape_html(ssid),
-            escape_html(onboarding_url)
+            escape_html(onboarding_url),
+            progress = setup_steps(3),
         ),
     )
 }
@@ -428,26 +496,34 @@ fn page_shell(title: &str, content: &str) -> String {
 * {{ box-sizing:border-box; }} html {{ min-height:100%; background:var(--void); }}
 [hidden] {{ display:none!important; }}
 body {{ margin:0; min-height:100vh; color:var(--text); background:radial-gradient(circle at 82% 0%,#252b48 0,transparent 30rem),var(--void); }}
-body::before {{ position:fixed; inset:0 auto 0 0; width:5px; background:linear-gradient(var(--amber) 0 22%,var(--salmon) 22% 48%,var(--lavender) 48% 74%,var(--blue) 74%); content:""; }}
 .nav {{ border-bottom:1px solid var(--line); background:#070910eb; }} .nav-row {{ display:flex; width:min(42rem,calc(100% - 2rem)); min-height:58px; margin:auto; align-items:center; justify-content:space-between; gap:1rem; }}
 .brand {{ display:inline-flex; min-height:42px; align-items:center; gap:.65rem; margin-left:-1rem; border-radius:0 22px 22px 0; padding:.4rem 1.15rem .4rem 1rem; color:#17120d; background:var(--amber); font-size:.75rem; font-weight:900; letter-spacing:.13em; }}
 .mark {{ display:grid; width:28px; height:28px; place-items:center; border:2px solid currentcolor; border-radius:50%; font-size:.55rem; letter-spacing:-.04em; }}
 .nav-state,.signal-label,.instrument-heading,.status-line {{ font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace; font-weight:800; letter-spacing:.11em; text-transform:uppercase; }}
 .nav-state {{ display:flex; align-items:center; gap:.5rem; color:var(--muted); font-size:.55rem; }} .nav-state i,.status-line i {{ width:7px; height:7px; border-radius:50%; background:var(--green); box-shadow:0 0 10px #69d59b80; }}
-main {{ width:min(42rem,calc(100% - 2rem)); margin:auto; padding:clamp(3rem,10vw,5.5rem) 0 4rem; }}
+main {{ width:min(42rem,calc(100% - 2rem)); margin:auto; padding:2rem 0 3rem; }}
 .signal-label {{ display:flex; align-items:center; gap:.65rem; margin:0 0 1rem; color:var(--amber); font-size:.62rem; }} .signal-label span {{ width:28px; height:2px; background:currentcolor; }}
-h1 {{ margin:0 0 1.25rem; font-size:clamp(2.8rem,12vw,5rem); font-weight:650; letter-spacing:-.065em; line-height:.94; }} h1 em {{ color:var(--lavender); font-family:Iowan Old Style,Baskerville,"Times New Roman",serif; font-weight:400; }}
+h1 {{ margin:0 0 1.25rem; font-size:clamp(1.75rem,6vw,2.5rem); font-weight:650; letter-spacing:-.065em; line-height:1.12; }} h1 em {{ color:var(--lavender); font-family:Iowan Old Style,Baskerville,"Times New Roman",serif; font-weight:400; }}
 p {{ line-height:1.65; }} .intro>p:last-child,.message-panel>p {{ color:var(--muted); }}
-.instrument-panel,.message-panel {{ position:relative; margin-top:2rem; border:1px solid var(--line); border-left:7px solid var(--salmon); border-radius:6px 26px 26px 6px; padding:clamp(1.25rem,5vw,2rem); background:linear-gradient(145deg,var(--raised),var(--surface)); box-shadow:14px 14px 0 #0d111b; }}
-.instrument-panel::before,.message-panel::before {{ position:absolute; top:-1px; left:-7px; width:7px; height:72px; border-radius:5px 0 0; background:var(--amber); content:""; }}
+.instrument-panel,.message-panel {{ position:relative; margin-top:2rem; border:1px solid var(--line); border-radius:20px; padding:clamp(1.25rem,5vw,2rem); background:linear-gradient(145deg,var(--raised),var(--surface)); box-shadow:0 12px 36px #0003; }}
 .instrument-heading {{ display:flex; justify-content:space-between; gap:1rem; margin-bottom:1.5rem; color:var(--muted); font-size:.55rem; }} .instrument-heading b {{ color:var(--salmon); }}
-label {{ display:block; margin:1rem 0 .4rem; font-size:.78rem; font-weight:800; }} select,input,button {{ width:100%; min-height:50px; border-radius:5px 17px 17px 5px; padding:.75rem .9rem; color:var(--text); font:inherit; }}
-select,input {{ border:1px solid #465269; background:#0b0f18; }} button,.signal-button {{ display:flex; align-items:center; justify-content:space-between; margin-top:1.4rem; border:0; padding:.8rem 1.2rem; color:#17120d; background:var(--lavender); font-size:.8rem; font-weight:900; text-decoration:none; cursor:pointer; }}
+label {{ display:block; margin:1rem 0 .4rem; font-size:.95rem; font-weight:650; }} select,input,button {{ width:100%; min-height:50px; border-radius:12px; padding:.75rem .9rem; color:var(--text); font:inherit; }}
+select,input {{ border:1px solid #465269; background:#0b0f18; }} button,.signal-button {{ display:flex; align-items:center; justify-content:space-between; margin-top:1.4rem; border:0; padding:.8rem 1.2rem; color:#17120d; background:var(--amber); font-size:1rem; font-weight:750; text-decoration:none; cursor:pointer; }}
 .field-help {{ margin:.45rem 0 0; color:var(--muted); font-size:.78rem; line-height:1.5; }} button:disabled,input:disabled {{ opacity:.55; cursor:default; }}
 :focus-visible {{ outline:3px solid var(--blue); outline-offset:3px; }}
-.fine {{ margin-top:1.3rem; color:var(--muted); font-size:.75rem; }} .notice {{ margin:1.5rem 0; border:1px solid var(--line); border-left:5px solid var(--salmon); border-radius:4px 18px 18px 4px; padding:.9rem 1rem; background:#171e2b; }} .error {{ color:#ffc0b5; }}
+.fine {{ margin-top:1.3rem; color:var(--muted); font-size:.75rem; }} .notice {{ margin:1.5rem 0; border:1px solid var(--line); border-radius:4px 18px 18px 4px; padding:.9rem 1rem; background:#171e2b; }} .error {{ color:#ffc0b5; }}
 .status-line {{ display:flex; align-items:center; gap:.55rem; margin:1px 0 0; border:1px solid var(--line); border-radius:5px 20px 20px 5px; padding:1rem 1.2rem; color:var(--green); background:#0b0e16; font-size:.56rem; }} .status-line.pending {{ color:var(--blue); }} .status-line.pending i {{ background:var(--blue); box-shadow:0 0 10px #70a9d680; }}
 .message-panel {{ margin-top:0; }} .message-panel .signal-button {{ margin-top:2rem; }} strong {{ color:var(--text); }}
+
+h2 {{ margin:0 0 .65rem; font-size:1.3rem; letter-spacing:-.025em; }}
+.step-copy {{ margin:.5rem 0 1.25rem; color:var(--muted); overflow-wrap:anywhere; }}
+.setup-progress {{ margin:0 0 2rem; }} .setup-progress ol {{ display:flex; gap:.8rem; margin:0; padding:0; list-style:none; }}
+.setup-progress li {{ flex:1; display:flex; align-items:center; gap:.5rem; color:var(--muted); font-size:.8rem; }}
+.step-number {{ display:grid; place-items:center; width:28px; height:28px; flex-shrink:0; border:1px solid var(--line); border-radius:50%; }}
+.setup-progress [aria-current=step] {{ color:var(--text); font-weight:750; }} .setup-progress [aria-current=step] .step-number {{ border-color:var(--amber); color:#17120d; background:var(--amber); }}
+.wizard-actions {{ display:flex; align-items:center; gap:.8rem; }} .wizard-actions .secondary {{ width:auto; justify-content:center; border:1px solid var(--line); color:var(--text); background:transparent; }}
+.checkbox-label {{ display:flex; align-items:center; gap:.65rem; margin:1rem 0; font-weight:400; }} .checkbox-label input {{ width:20px; min-height:20px; height:20px; accent-color:var(--amber); }}
+.setup-link {{ overflow-wrap:anywhere; text-align:center; }}
 @media(max-width:520px) {{ .nav-row,main {{ width:min(100% - 1.5rem,42rem); }} .brand {{ margin-left:-.75rem;padding-left:.75rem; }} .nav-state {{ letter-spacing:.04em; }} .instrument-heading {{ flex-direction:column; }} }}
 @media(prefers-reduced-motion:reduce) {{ *,*::before,*::after {{ transition-duration:.01ms!important; }} }}
 </style></head><body><header class="nav"><div class="nav-row"><div class="brand"><span class="mark">ML</span> Memory Lane</div><div class="nav-state"><i></i> Setup link / Active</div></div></header><main>{}</main></body></html>"##,
@@ -536,6 +612,11 @@ mod tests {
             setup_page(&identity, &networks, &ProvisioningStatus::Ready),
         )
         .expect("write portal preview");
+        std::fs::write(
+            "/tmp/astrohud-portal-empty-preview.html",
+            setup_page(&identity, &[], &ProvisioningStatus::Ready),
+        )
+        .expect("write empty-list preview");
         std::fs::write(
             "/tmp/astrohud-connecting-preview.html",
             connecting_page(
