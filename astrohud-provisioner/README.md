@@ -4,7 +4,8 @@
 frame. On an unprovisioned device, or after an explicit local reset, it:
 
 1. creates a stable random device code and setup password;
-2. scans nearby Wi-Fi networks;
+2. runs a fresh nearby Wi-Fi scan before starting the AP (first boot has no
+   scan cache); a failed scan is logged and manual network entry remains available;
 3. starts the protected `Memory-Lane-XXXXXX` access point (existing appliances
    retain their manufacturing-assigned setup name);
 4. shows a large Wi-Fi QR code on the frame for one-tap joining;
@@ -12,7 +13,9 @@ frame. On an unprovisioned device, or after an explicit local reset, it:
 6. stops the AP and tests the selected household network;
 7. atomically commits both the NetworkManager profile and protected backup; or
 8. restores the setup AP when the candidate connection fails;
-9. carries a private device-bound setup link onto the owner's phone, creates a
+9. asks the owner to reconnect their phone to the internet and tap **Continue
+   setup** once the TV confirms Wi-Fi was saved, carrying a private device-bound
+   setup link onto the owner's phone; creates a
    unique device ID and credential locally, and enrolls with the server;
 10. asks the owner to name the place as soon as the server sees the frame; and
 11. removes the setup screen automatically after the owner claims the frame.
@@ -45,6 +48,11 @@ This intentionally disconnects the current Wi-Fi connection. The existing
 Wi-Fi guard ignores the interface while
 `/var/lib/astrohud/provisioning-required` exists. Successful provisioning
 removes the marker; a failed candidate reopens the setup AP.
+
+The connecting page polls the local status endpoint and displays a returned
+failure with a retry link. It never redirects merely because a timer elapsed:
+losing the setup AP does not prove that the household connection succeeded.
+The setup AP disables Wi-Fi power saving, as the saved household profile does.
 
 To cancel setup locally and restore the protected household profile:
 

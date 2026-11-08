@@ -96,6 +96,8 @@ impl NetworkManager {
 
     pub fn scan(&self) -> Result<Vec<WifiNetwork>, String> {
         let output = nmcli_output([
+            "--wait",
+            "8",
             "--terse",
             "--escape",
             "yes",
@@ -107,7 +109,7 @@ impl NetworkManager {
             "ifname",
             INTERFACE,
             "--rescan",
-            "no",
+            "yes",
         ])?;
         if !output.status.success() {
             return Err(command_error(&output));
@@ -116,7 +118,16 @@ impl NetworkManager {
     }
 
     pub fn start_setup_ap(&self, identity: &DeviceIdentity) -> Result<Vec<WifiNetwork>, String> {
-        let networks = self.scan().unwrap_or_default();
+        // Scan while the radio is still in station mode. An image's first boot
+        // has no cached results, and the radio may not scan once it hosts the AP.
+        // Complete this bounded scan before advertising the setup QR.
+        let networks = match self.scan() {
+            Ok(networks) => networks,
+            Err(error) => {
+                eprintln!("nearby Wi-Fi scan failed; manual entry remains available: {error}");
+                Vec::new()
+            }
+        };
         let _ = nmcli(["connection", "delete", SETUP_CONNECTION]);
         write_setup_profile(identity).map_err(display_error)?;
         nmcli(["connection", "load", SETUP_PROFILE])?;
@@ -245,7 +256,7 @@ fn connect_candidate(ssid: &str, password: &str) -> Result<(), String> {
 fn write_setup_profile(identity: &DeviceIdentity) -> io::Result<()> {
     let uuid = fs::read_to_string("/proc/sys/kernel/random/uuid")?;
     let profile = format!(
-        "[connection]\nid={SETUP_CONNECTION}\nuuid={}\ntype=wifi\ninterface-name={INTERFACE}\nautoconnect=false\n\n[wifi]\nmode=ap\nband=bg\nssid={}\n\n[wifi-security]\nkey-mgmt=wpa-psk\npsk={}\n\n[ipv4]\naddress1=10.42.0.1/24\nmethod=shared\n\n[ipv6]\nmethod=disabled\n",
+        "[connection]\nid={SETUP_CONNECTION}\nuuid={}\ntype=wifi\ninterface-name={INTERFACE}\nautoconnect=false\n\n[wifi]\nmode=ap\nband=bg\npowersave=2\nssid={}\n\n[wifi-security]\nkey-mgmt=wpa-psk\npsk={}\n\n[ipv4]\naddress1=10.42.0.1/24\nmethod=shared\n\n[ipv6]\nmethod=disabled\n",
         uuid.trim(),
         identity.setup_ssid,
         identity.setup_password

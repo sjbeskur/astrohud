@@ -171,6 +171,7 @@ fn handle_request(
                         finished.store(true, Ordering::Release);
                     }
                     Err(error) => {
+                        eprintln!("household Wi-Fi setup failed: {error}");
                         if let Err(display_error) = setup_display::write_retry(
                             &identity,
                             Path::new(setup_display::SETUP_SCREEN_PATH),
@@ -333,7 +334,7 @@ fn setup_page(
                 "<noscript><label for=\"manual-fallback\">Network not listed? Enter its name</label><input id=\"manual-fallback\" name=\"manual_ssid\" maxlength=\"32\" autocomplete=\"off\" autocapitalize=\"none\"></noscript>"
             },
             manual_help = if manual_mode {
-                "No nearby networks were found. Enter your Wi-Fi network name exactly."
+                "The network list is unavailable. Enter your Wi-Fi network name exactly."
             } else {
                 "Enter the exact name of your hidden or unlisted Wi-Fi network."
             },
@@ -358,7 +359,48 @@ fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
     page_shell(
         "Connecting",
         &format!(
-            "<section class=\"message-panel\"><p class=\"signal-label\"><span></span> Network link / Testing</p><h1>Connecting<span class=\"ellipsis\">…</span></h1><p>The frame is testing <strong>{}</strong>. Keep this page open while your phone returns to home Wi-Fi or cellular service.</p><p><strong>Setup will continue automatically.</strong> If it does not, reconnect your phone to the internet and tap below.</p><p><a id=\"continue-setup\" class=\"signal-button\" href=\"{}\">Continue setup <span aria-hidden=\"true\">→</span></a></p><p class=\"status-line pending\"><i></i> Connection test active / About 30 seconds</p></section><script>setTimeout(() => document.querySelector('#continue-setup').click(), 12000);</script>",
+            r#"<section class="message-panel">
+              <p class="signal-label"><span></span> Network link / Testing</p>
+              <h1 id="connection-title">Connecting…</h1>
+              <p>The frame is testing <strong>{}</strong>. This can take about 35 seconds.</p>
+              <p id="connection-result" role="status">Watch your television for the result. Your phone may disconnect from the temporary setup network during this test.</p>
+              <div id="connection-next">
+                <p>When the television shows <strong>Wi-Fi saved</strong> or <strong>Finishing setup</strong>, connect your phone to home Wi-Fi or cellular service, then continue below.</p>
+                <p><a id="continue-setup" class="signal-button" href="{}">Continue setup <span aria-hidden="true">→</span></a></p>
+              </div>
+              <p>If the television shows the setup QR again, rejoin that setup network and return below to check the network name and password.</p>
+              <p><a id="retry-setup" href="http://10.42.0.1/">Return to Wi-Fi setup</a></p>
+            </section>
+            <script>
+              async function checkConnection() {{
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 3000);
+                try {{
+                  const response = await fetch('/api/status', {{cache: 'no-store', signal: controller.signal}});
+                  if (!response.ok) throw new Error('Setup connection unavailable');
+                  const status = await response.json();
+                  if (status.state === 'failed' || status.state === 'ready') {{
+                    document.querySelector('#connection-title').textContent = 'Try connecting again';
+                    document.querySelector('#connection-result').textContent = status.state === 'failed'
+                      ? status.message
+                      : 'The setup network has restarted. Return to Wi-Fi setup to try again.';
+                    document.querySelector('#connection-next').hidden = true;
+                    document.querySelector('#retry-setup').classList.add('signal-button');
+                    return;
+                  }}
+                  if (status.state === 'connected') {{
+                    document.querySelector('#connection-title').textContent = 'Wi-Fi saved';
+                    document.querySelector('#connection-result').textContent = 'Connect your phone to home Wi-Fi or cellular service, then tap Continue setup.';
+                    return;
+                  }}
+                }} catch (_) {{
+                  // Losing the AP is expected during a connection attempt, but
+                  // does not prove success. Keep the TV instructions visible.
+                }} finally {{ clearTimeout(timeout); }}
+                setTimeout(checkConnection, 2000);
+              }}
+              setTimeout(checkConnection, 1500);
+            </script>"#,
             escape_html(ssid),
             escape_html(onboarding_url)
         ),
@@ -446,10 +488,12 @@ mod tests {
             "Grandma's Wi-Fi",
             "https://app.astrohud.com/onboard.html#private-bootstrap-token",
         );
-        assert!(page.contains("Setup will continue automatically."));
+        assert!(page.contains("Watch your television for the result."));
         assert!(page.contains("Continue setup"));
         assert!(page.contains("onboard.html#private-bootstrap-token"));
-        assert!(page.contains("About 30 seconds"));
+        assert!(page.contains("about 35 seconds"));
+        assert!(page.contains("Return to Wi-Fi setup"));
+        assert!(!page.contains(".click()"));
     }
 
     #[test]
@@ -492,5 +536,13 @@ mod tests {
             setup_page(&identity, &networks, &ProvisioningStatus::Ready),
         )
         .expect("write portal preview");
+        std::fs::write(
+            "/tmp/astrohud-connecting-preview.html",
+            connecting_page(
+                "Grandma's Wi-Fi",
+                "https://app.astrohud.com/onboard.html#test-bootstrap",
+            ),
+        )
+        .expect("write connecting preview");
     }
 }
