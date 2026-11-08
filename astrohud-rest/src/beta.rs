@@ -98,6 +98,7 @@ pub struct ClaimedFrame {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OwnerContext {
+    pub photo_routing_version: u8,
     pub household_name: String,
     pub frames: Vec<OwnerFrame>,
     pub invitations: Vec<OwnerInvitation>,
@@ -127,6 +128,8 @@ pub struct CreatedInvitation {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SenderContext {
+    pub photo_routing_version: u8,
+    pub frames: Vec<OwnerFrame>,
     pub place_name: String,
     pub invitation_label: String,
 }
@@ -692,6 +695,7 @@ pub fn owner_context(
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(OwnerContext {
+        photo_routing_version: crate::PHOTO_ROUTING_VERSION,
         household_name: household.1,
         frames,
         invitations,
@@ -797,11 +801,12 @@ pub fn sender_access(
     sender_token: &str,
 ) -> Result<SenderAccess, BetaError> {
     let sender_token_hash = hash_secret(sender_token);
-    connection
+    let mut access = connection
         .query_row(
             "SELECT i.household_id, i.channel_id, f.place_name, i.label
              FROM sender_invitations i
              JOIN frames f ON f.household_id = i.household_id
+             JOIN frame_subscriptions s ON s.frame_id = f.id AND s.channel_id = i.channel_id
              WHERE i.token_hash = ?1
                AND i.revoked_at IS NULL
              ORDER BY f.created_at, f.rowid
@@ -812,6 +817,8 @@ pub fn sender_access(
                     household_id: row.get(0)?,
                     channel_id: row.get(1)?,
                     context: SenderContext {
+                        photo_routing_version: crate::PHOTO_ROUTING_VERSION,
+                        frames: Vec::new(),
                         place_name: row.get(2)?,
                         invitation_label: row.get(3)?,
                     },
@@ -819,7 +826,20 @@ pub fn sender_access(
             },
         )
         .optional()?
-        .ok_or(BetaError::Unauthorized)
+        .ok_or(BetaError::Unauthorized)?;
+    let mut statement = connection.prepare(
+        "SELECT f.id, f.place_name FROM frames f JOIN frame_subscriptions s ON s.frame_id = f.id
+         WHERE f.household_id = ?1 AND s.channel_id = ?2 ORDER BY f.created_at, f.rowid",
+    )?;
+    access.context.frames = statement
+        .query_map(params![access.household_id, access.channel_id], |row| {
+            Ok(OwnerFrame {
+                frame_id: row.get(0)?,
+                place_name: row.get(1)?,
+            })
+        })?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(access)
 }
 
 pub(crate) fn owner_household_id(

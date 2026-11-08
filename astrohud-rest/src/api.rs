@@ -17,7 +17,8 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 8;
+const SCHEMA_VERSION: i64 = 9;
+pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
 pub const DEMO_HOUSEHOLD_ID: &str = "demo-household";
 
@@ -55,6 +56,37 @@ CREATE TABLE IF NOT EXISTS photos (
     location_label TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+-- A plan distinguishes explicitly routed photos from older shared-feed photos.
+-- It remains when a target frame is deleted, preventing accidental broadcast.
+CREATE TABLE IF NOT EXISTS photo_delivery_plans (
+    photo_id TEXT PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS photo_frame_deliveries (
+    photo_id TEXT NOT NULL REFERENCES photo_delivery_plans(photo_id) ON DELETE CASCADE,
+    frame_id TEXT NOT NULL REFERENCES frames(id) ON DELETE CASCADE,
+    PRIMARY KEY (photo_id, frame_id)
+);
+CREATE INDEX IF NOT EXISTS photo_frame_deliveries_frame ON photo_frame_deliveries(frame_id, photo_id);
+CREATE TRIGGER IF NOT EXISTS photo_deliveries_same_household_insert
+BEFORE INSERT ON photo_frame_deliveries
+WHEN NOT EXISTS (
+    SELECT 1 FROM photos p JOIN channels c ON c.id = p.channel_id
+    JOIN frames f ON f.household_id = c.household_id
+    WHERE p.id = NEW.photo_id AND f.id = NEW.frame_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'photo and destination must belong to the same household');
+END;
+CREATE TRIGGER IF NOT EXISTS photo_deliveries_same_household_update
+BEFORE UPDATE OF photo_id, frame_id ON photo_frame_deliveries
+WHEN NOT EXISTS (
+    SELECT 1 FROM photos p JOIN channels c ON c.id = p.channel_id
+    JOIN frames f ON f.household_id = c.household_id
+    WHERE p.id = NEW.photo_id AND f.id = NEW.frame_id
+)
+BEGIN
+    SELECT RAISE(ABORT, 'photo and destination must belong to the same household');
+END;
 CREATE TABLE IF NOT EXISTS owner_access_grants (
     id TEXT PRIMARY KEY,
     household_id TEXT NOT NULL REFERENCES households(id) ON DELETE CASCADE,
@@ -272,10 +304,15 @@ pub struct FrameManifest {
 
 #[derive(Debug, Serialize)]
 pub struct Health {
+    pub photo_routing_version: u8,
     status: &'static str,
 }
 
 pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
+    let version: i64 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
+    if version > SCHEMA_VERSION {
+        return Err(rusqlite::Error::InvalidQuery);
+    }
     connection.execute_batch("PRAGMA foreign_keys = OFF;")?;
     let initialization =
         if table_exists(connection, "channels")? && !table_exists(connection, "households")? {
@@ -299,6 +336,46 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
     ensure_foreign_keys_are_valid(connection)?;
 
     Ok(())
+}
+
+/// Keep a consistent database snapshot before an on-disk schema upgrade.
+/// Media files are unchanged by this additive migration.
+pub fn initialize_database_with_backup(
+    connection: &Connection,
+    database_path: &std::path::Path,
+) -> std::io::Result<Option<std::path::PathBuf>> {
+    let version: i64 = connection
+        .pragma_query_value(None, "user_version", |row| row.get(0))
+        .map_err(std::io::Error::other)?;
+    if version > SCHEMA_VERSION {
+        return Err(std::io::Error::other(
+            "database schema is newer than this server; use a compatible release",
+        ));
+    }
+    let backup = if version < SCHEMA_VERSION
+        && table_exists(connection, "photos").map_err(std::io::Error::other)?
+    {
+        let directory = database_path
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .join("backups");
+        fs::create_dir_all(&directory)?;
+        let path = directory.join(format!(
+            "before-schema-{version}-to-{SCHEMA_VERSION}-{}.sqlite3",
+            Uuid::new_v4()
+        ));
+        let filename = path
+            .to_str()
+            .ok_or_else(|| std::io::Error::other("backup path is not UTF-8"))?;
+        connection
+            .execute("VACUUM main INTO ?1", [filename])
+            .map_err(std::io::Error::other)?;
+        Some(path)
+    } else {
+        None
+    };
+    initialize_database(connection).map_err(std::io::Error::other)?;
+    Ok(backup)
 }
 
 fn table_exists(connection: &Connection, table: &str) -> rusqlite::Result<bool> {
@@ -390,7 +467,10 @@ fn ensure_foreign_keys_are_valid(connection: &Connection) -> rusqlite::Result<()
 }
 
 pub async fn health() -> web::Json<Health> {
-    web::Json(Health { status: "ok" })
+    web::Json(Health {
+        status: "ok",
+        photo_routing_version: PHOTO_ROUTING_VERSION,
+    })
 }
 
 pub async fn list_channels(state: web::Data<AppState>) -> Result<web::Json<Vec<Channel>>> {
@@ -478,20 +558,97 @@ pub async fn upload_photo(
     multipart: Multipart,
 ) -> Result<HttpResponse> {
     let photo =
-        upload_photo_for_household(state, multipart, DEMO_HOUSEHOLD_ID.to_owned(), None).await?;
+        upload_photo_for_household(state, multipart, DEMO_HOUSEHOLD_ID.to_owned(), None, None)
+            .await?;
     Ok(HttpResponse::Created().json(photo))
 }
 
-/// Stores a photo in a server-selected household and channel. Invitation
-/// uploads use this path so a sender cannot redirect a photo by changing a
-/// multipart field in the browser.
-pub async fn upload_invited_photo(
+/// Authority is rechecked when the upload commits, after reading the body.
+pub enum PhotoUploadAuthority {
+    Owner { token: String, frame_id: String },
+    Sender { token: String },
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "mode", rename_all = "snake_case", deny_unknown_fields)]
+enum PhotoDestinations {
+    Frames { frame_ids: Vec<String> },
+    All,
+}
+
+pub async fn upload_routed_photo(
     state: web::Data<AppState>,
     multipart: Multipart,
     household_id: String,
     channel_id: String,
+    authority: PhotoUploadAuthority,
 ) -> Result<Photo> {
-    upload_photo_for_household(state, multipart, household_id, Some(channel_id)).await
+    upload_photo_for_household(
+        state,
+        multipart,
+        household_id,
+        Some(channel_id),
+        Some(authority),
+    )
+    .await
+}
+
+fn resolve_photo_destinations(
+    database: &Connection,
+    authority: &PhotoUploadAuthority,
+    household_id: &str,
+    channel_id: &str,
+    destinations: Option<PhotoDestinations>,
+) -> Result<Vec<String>> {
+    let (default_frame, allowed) = match authority {
+        PhotoUploadAuthority::Owner { token, frame_id } => {
+            let (household, channel) = crate::owner_frame_channel(database, token, frame_id)
+                .map_err(crate::beta_http_error)?;
+            if household != household_id || channel != channel_id {
+                return Err(error::ErrorForbidden("destination access changed"));
+            }
+            let mut statement = database
+                .prepare("SELECT id FROM frames WHERE household_id = ?1 ORDER BY created_at, rowid")
+                .map_err(error::ErrorInternalServerError)?;
+            let frames = statement
+                .query_map([household_id], |row| row.get::<_, String>(0))
+                .map_err(error::ErrorInternalServerError)?
+                .collect::<rusqlite::Result<Vec<_>>>()
+                .map_err(error::ErrorInternalServerError)?;
+            (frame_id.to_owned(), frames)
+        }
+        PhotoUploadAuthority::Sender { token } => {
+            let access = crate::sender_access(database, token).map_err(crate::beta_http_error)?;
+            if access.household_id != household_id || access.channel_id != channel_id {
+                return Err(error::ErrorForbidden("destination access changed"));
+            }
+            let frames = access
+                .context
+                .frames
+                .into_iter()
+                .map(|frame| frame.frame_id)
+                .collect::<Vec<_>>();
+            let default = frames
+                .first()
+                .cloned()
+                .ok_or_else(|| error::ErrorBadRequest("no frames available"))?;
+            (default, frames)
+        }
+    };
+    let mut targets = match destinations {
+        None => vec![default_frame],
+        Some(PhotoDestinations::All) => allowed.clone(),
+        Some(PhotoDestinations::Frames { frame_ids }) => frame_ids,
+    };
+    if targets.is_empty() || targets.len() > 200 {
+        return Err(error::ErrorBadRequest("choose between 1 and 200 frames"));
+    }
+    if targets.iter().any(|id| !allowed.contains(id)) {
+        return Err(error::ErrorForbidden("a selected frame is not available"));
+    }
+    targets.sort();
+    targets.dedup();
+    Ok(targets)
 }
 
 async fn upload_photo_for_household(
@@ -499,10 +656,12 @@ async fn upload_photo_for_household(
     mut multipart: Multipart,
     household_id: String,
     selected_channel_id: Option<String>,
+    authority: Option<PhotoUploadAuthority>,
 ) -> Result<Photo> {
     let mut channel_id = None;
     let mut image = Vec::new();
     let mut include_location = false;
+    let mut destinations = None;
 
     while let Some(field) = multipart.next().await {
         let mut field = field.map_err(error::ErrorBadRequest)?;
@@ -521,6 +680,15 @@ async fn upload_photo_for_household(
                 channel_id = Some(
                     String::from_utf8(bytes)
                         .map_err(|_| error::ErrorBadRequest("invalid channel id"))?,
+                );
+            }
+            "destinations" => {
+                if destinations.is_some() || bytes.len() > 16384 {
+                    return Err(error::ErrorBadRequest("invalid destinations"));
+                }
+                destinations = Some(
+                    serde_json::from_slice::<PhotoDestinations>(&bytes)
+                        .map_err(|_| error::ErrorBadRequest("invalid destinations"))?,
                 );
             }
             "photo" => image = bytes,
@@ -553,48 +721,76 @@ async fn upload_photo_for_household(
     let path = state.media_dir.join(&storage_key);
     fs::write(&path, &image).map_err(error::ErrorInternalServerError)?;
 
-    let database = state
-        .database
-        .lock()
-        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
-    let channel_exists = database
-        .query_row(
-            "SELECT EXISTS(
-                 SELECT 1 FROM channels WHERE id = ?1 AND household_id = ?2
-             )",
-            params![channel_id, household_id],
-            |row| row.get::<_, bool>(0),
-        )
-        .map_err(error::ErrorInternalServerError)?;
-    if !channel_exists {
-        let _ = fs::remove_file(path);
-        return Err(error::ErrorNotFound("channel not found"));
-    }
-
-    if let Err(err) = database.execute(
-        "INSERT INTO photos
-             (id, channel_id, storage_key, mime_type, latitude, longitude, location_label)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
-        params![
-            photo_id,
-            channel_id,
-            storage_key,
-            mime_type,
-            coordinates.map(|value| value.0),
-            coordinates.map(|value| value.1),
-            location_label,
-        ],
-    ) {
-        let _ = fs::remove_file(path);
-        return Err(error::ErrorInternalServerError(err));
-    }
-    let created_at = database
-        .query_row(
-            "SELECT created_at FROM photos WHERE id = ?1",
-            params![photo_id],
-            |row| row.get(0),
-        )
-        .map_err(error::ErrorInternalServerError)?;
+    let saved = (|| -> Result<String> {
+        let mut database = state
+            .database
+            .lock()
+            .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+        let transaction = database
+            .transaction()
+            .map_err(error::ErrorInternalServerError)?;
+        let targets = authority
+            .as_ref()
+            .map(|authority| {
+                resolve_photo_destinations(
+                    &transaction,
+                    authority,
+                    &household_id,
+                    &channel_id,
+                    destinations,
+                )
+            })
+            .transpose()?;
+        let channel_exists: bool = transaction
+            .query_row(
+                "SELECT EXISTS(SELECT 1 FROM channels WHERE id = ?1 AND household_id = ?2)",
+                params![channel_id, household_id],
+                |row| row.get(0),
+            )
+            .map_err(error::ErrorInternalServerError)?;
+        if !channel_exists {
+            return Err(error::ErrorNotFound("channel not found"));
+        }
+        transaction.execute(
+            "INSERT INTO photos (id, channel_id, storage_key, mime_type, latitude, longitude, location_label)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            params![photo_id, channel_id, storage_key, mime_type, coordinates.map(|v| v.0), coordinates.map(|v| v.1), location_label],
+        ).map_err(error::ErrorInternalServerError)?;
+        if let Some(targets) = targets {
+            transaction
+                .execute(
+                    "INSERT INTO photo_delivery_plans (photo_id) VALUES (?1)",
+                    [&photo_id],
+                )
+                .map_err(error::ErrorInternalServerError)?;
+            for frame in targets {
+                transaction
+                    .execute(
+                        "INSERT INTO photo_frame_deliveries (photo_id, frame_id) VALUES (?1, ?2)",
+                        params![photo_id, frame],
+                    )
+                    .map_err(error::ErrorInternalServerError)?;
+            }
+        }
+        let created_at = transaction
+            .query_row(
+                "SELECT created_at FROM photos WHERE id = ?1",
+                [&photo_id],
+                |row| row.get(0),
+            )
+            .map_err(error::ErrorInternalServerError)?;
+        transaction
+            .commit()
+            .map_err(error::ErrorInternalServerError)?;
+        Ok(created_at)
+    })();
+    let created_at = match saved {
+        Ok(created_at) => created_at,
+        Err(err) => {
+            let _ = fs::remove_file(&path);
+            return Err(err);
+        }
+    };
 
     Ok(Photo {
         id: photo_id,
@@ -694,13 +890,18 @@ fn manifest_for_household_with_protected_media(
                     p.location_label
              FROM photos p
              JOIN channels c ON c.id = p.channel_id
-             JOIN frame_subscriptions s ON s.channel_id = p.channel_id
-             JOIN frames f ON f.id = s.frame_id
-             WHERE s.frame_id = ?1
+             JOIN frames f ON f.id = ?1
+             WHERE f.id = ?1
+               AND (
+                 (EXISTS (SELECT 1 FROM photo_delivery_plans d WHERE d.photo_id = p.id)
+                  AND EXISTS (SELECT 1 FROM photo_frame_deliveries d WHERE d.photo_id = p.id AND d.frame_id = f.id))
+                 OR (NOT EXISTS (SELECT 1 FROM photo_delivery_plans d WHERE d.photo_id = p.id)
+                     AND EXISTS (SELECT 1 FROM frame_subscriptions s WHERE s.frame_id = f.id AND s.channel_id = p.channel_id))
+               )
                AND f.household_id = ?2
                AND c.household_id = ?2
                AND NOT EXISTS (SELECT 1 FROM frame_photo_removals r
-                               WHERE r.frame_id = s.frame_id AND r.photo_id = p.id)
+                               WHERE r.frame_id = f.id AND r.photo_id = p.id)
              ORDER BY CASE WHEN p.id = ?3 THEN 0 WHEN p.id = ?4 THEN 1 ELSE 2 END,
                       p.created_at DESC, p.rowid DESC
              LIMIT 200",
@@ -751,14 +952,18 @@ pub(crate) fn protected_media_storage_key(
             "SELECT p.storage_key
              FROM photos p
              JOIN channels c ON c.id = p.channel_id
-             JOIN frame_subscriptions s ON s.channel_id = p.channel_id
-             JOIN frames f ON f.id = s.frame_id
+             JOIN frames f ON f.id = ?2
              WHERE p.id = ?1
-               AND s.frame_id = ?2
+               AND (
+                 (EXISTS (SELECT 1 FROM photo_delivery_plans d WHERE d.photo_id = p.id)
+                  AND EXISTS (SELECT 1 FROM photo_frame_deliveries d WHERE d.photo_id = p.id AND d.frame_id = f.id))
+                 OR (NOT EXISTS (SELECT 1 FROM photo_delivery_plans d WHERE d.photo_id = p.id)
+                     AND EXISTS (SELECT 1 FROM frame_subscriptions s WHERE s.frame_id = f.id AND s.channel_id = p.channel_id))
+               )
                AND c.household_id = ?3
                AND f.household_id = ?3
                AND NOT EXISTS (SELECT 1 FROM frame_photo_removals r
-                               WHERE r.frame_id = s.frame_id AND r.photo_id = p.id)",
+                               WHERE r.frame_id = f.id AND r.photo_id = p.id)",
             params![photo_id, frame_id, household_id],
             |row| row.get(0),
         )
@@ -869,6 +1074,62 @@ mod tests {
         jpeg.extend_from_slice(&tiff);
         jpeg.extend_from_slice(&[0xff, 0xd9]);
         jpeg
+    }
+
+    #[test]
+    fn schema_upgrade_keeps_a_consistent_backup_and_rejects_newer_databases() {
+        let directory = std::env::temp_dir().join(format!("memory-lane-backup-{}", Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("astrohud.sqlite3");
+        let database = Connection::open(&path).unwrap();
+        initialize_database(&database).unwrap();
+        database
+            .execute(
+                "INSERT INTO channels (id,household_id,name) VALUES ('backup-channel',?1,'Backup')",
+                [DEMO_HOUSEHOLD_ID],
+            )
+            .unwrap();
+        database.execute("INSERT INTO photos (id,channel_id,storage_key,mime_type) VALUES ('existing','backup-channel','existing.jpg','image/jpeg')", []).unwrap();
+        database.execute_batch("DROP TABLE photo_frame_deliveries; DROP TABLE photo_delivery_plans; PRAGMA user_version=8;").unwrap();
+        let backup = initialize_database_with_backup(&database, &path)
+            .unwrap()
+            .unwrap();
+        let snapshot = Connection::open(&backup).unwrap();
+        let version: i64 = snapshot
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 8);
+        assert!(!table_exists(&snapshot, "photo_delivery_plans").unwrap());
+        let count: i64 = snapshot
+            .query_row(
+                "SELECT COUNT(*) FROM photos WHERE id='existing'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(count, 1);
+        let integrity: String = snapshot
+            .query_row("PRAGMA integrity_check", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(integrity, "ok");
+        assert!(table_exists(&database, "photo_delivery_plans").unwrap());
+        assert!(
+            initialize_database_with_backup(&database, &path)
+                .unwrap()
+                .is_none()
+        );
+        database
+            .pragma_update(None, "user_version", SCHEMA_VERSION + 1)
+            .unwrap();
+        assert!(initialize_database(&database).is_err());
+        assert!(initialize_database_with_backup(&database, &path).is_err());
+        let newer: i64 = database
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(newer, SCHEMA_VERSION + 1);
+        drop(snapshot);
+        drop(database);
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]

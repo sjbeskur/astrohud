@@ -4,7 +4,7 @@ use crate::{
     create_sender_invitation, device_bootstrap_status, enrollment_status, owner_context,
     owner_household_id, protected_manifest_for_household, protected_media_storage_key,
     register_bootstrap_device, register_device, replace_sender_invitation,
-    revoke_sender_invitation, sender_access, upload_invited_photo,
+    revoke_sender_invitation, sender_access,
 };
 use actix_files::NamedFile;
 use actix_multipart::Multipart;
@@ -370,7 +370,17 @@ async fn upload_owner_photo(
             .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
         crate::owner_frame_channel(&db, &token, &frame).map_err(beta_http_error)?
     };
-    let photo = upload_invited_photo(state, multipart, household, channel).await?;
+    let photo = crate::upload_routed_photo(
+        state,
+        multipart,
+        household,
+        channel,
+        crate::PhotoUploadAuthority::Owner {
+            token,
+            frame_id: frame.into_inner(),
+        },
+    )
+    .await?;
     Ok(HttpResponse::Created().json(serde_json::json!({"status":"received","photo_id":photo.id})))
 }
 
@@ -687,8 +697,14 @@ async fn upload_sender_photo(
             .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
         sender_access(&database, &token).map_err(beta_http_error)?
     };
-    let photo =
-        upload_invited_photo(state, multipart, access.household_id, access.channel_id).await?;
+    let photo = crate::upload_routed_photo(
+        state,
+        multipart,
+        access.household_id,
+        access.channel_id,
+        crate::PhotoUploadAuthority::Sender { token },
+    )
+    .await?;
     Ok(HttpResponse::Created().json(serde_json::json!({
         "status": "received",
         "photo_id": photo.id
@@ -730,7 +746,7 @@ fn bearer_token(request: &HttpRequest) -> Result<String> {
         .ok_or_else(|| error::ErrorUnauthorized("device credential required"))
 }
 
-fn beta_http_error(error_value: BetaError) -> actix_web::Error {
+pub(crate) fn beta_http_error(error_value: BetaError) -> actix_web::Error {
     match error_value {
         BetaError::InvalidInput(message) => error::ErrorBadRequest(message),
         BetaError::NotFound => error::ErrorNotFound("record not found"),
@@ -755,6 +771,244 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn explicit_photo_destinations_are_scoped_atomic_and_not_inherited_by_new_frames() {
+        let mut database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let owner = create_household_owner(&mut database, "Home", "Owner").unwrap();
+        let other = create_household_owner(&mut database, "Other", "Owner").unwrap();
+        for id in ["living", "kitchen", "bedroom"] {
+            database
+                .execute(
+                    "INSERT INTO frames (id,household_id,place_name) VALUES (?1,?2,?1)",
+                    rusqlite::params![id, owner.household_id],
+                )
+                .unwrap();
+            if id != "bedroom" {
+                database
+                    .execute(
+                        "INSERT INTO frame_subscriptions VALUES (?1,?2)",
+                        rusqlite::params![id, owner.default_channel_id],
+                    )
+                    .unwrap();
+            }
+        }
+        database
+            .execute(
+                "INSERT INTO frames (id,household_id,place_name) VALUES ('foreign',?1,'Other')",
+                [&other.household_id],
+            )
+            .unwrap();
+        // Older photos retain shared-feed behavior during the additive migration.
+        database.execute("INSERT INTO photos (id,channel_id,storage_key,mime_type) VALUES ('legacy',?1,'legacy.png','image/png')", [&owner.default_channel_id]).unwrap();
+        let invitation = create_sender_invitation(&database, &owner.owner_token, "Sender").unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("memory-lane-routing-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let state = web::Data::new(AppState::new(database, directory.clone()));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let multipart = |destinations: Option<serde_json::Value>| {
+            let mut body = Vec::new();
+            if let Some(value) = destinations {
+                body.extend(format!("--boundary\r\nContent-Disposition: form-data; name=\"destinations\"\r\n\r\n{value}\r\n").as_bytes());
+            }
+            body.extend(b"--boundary\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"photo.png\"\r\nContent-Type: image/png\r\n\r\n");
+            body.extend(png.get_ref());
+            body.extend(b"\r\n--boundary--\r\n");
+            body
+        };
+        let mut saved = Vec::new();
+        for (destinations, expected) in [
+            (None, vec!["living"]),
+            (
+                Some(
+                    serde_json::json!({"mode":"frames","frame_ids":["living","bedroom","living"]}),
+                ),
+                vec!["living", "bedroom"],
+            ),
+            (
+                Some(serde_json::json!({"mode":"all"})),
+                vec!["living", "kitchen", "bedroom"],
+            ),
+        ] {
+            let upload = test::TestRequest::post()
+                .uri("/api/beta/owner/frames/living/photos")
+                .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+                .insert_header((
+                    header::CONTENT_TYPE,
+                    "multipart/form-data; boundary=boundary",
+                ))
+                .set_payload(multipart(destinations))
+                .to_request();
+            let response = test::call_service(&app, upload).await;
+            assert_eq!(response.status(), StatusCode::CREATED);
+            let body: serde_json::Value = test::read_body_json(response).await;
+            let id = body["photo_id"].as_str().unwrap().to_owned();
+            {
+                let db = state.database.lock().unwrap();
+                for frame in ["living", "kitchen", "bedroom", "foreign"] {
+                    assert_eq!(
+                        protected_media_storage_key(
+                            &db,
+                            if frame == "foreign" {
+                                &other.household_id
+                            } else {
+                                &owner.household_id
+                            },
+                            frame,
+                            &id
+                        )
+                        .unwrap()
+                        .is_some(),
+                        expected.contains(&frame)
+                    );
+                }
+            }
+            saved.push(id);
+        }
+        for destinations in [
+            serde_json::json!({"mode":"frames","frame_ids":["living","foreign"]}),
+            serde_json::json!({"mode":"frames","frame_ids":["missing"]}),
+            serde_json::json!({"mode":"frames","frame_ids":[]}),
+            serde_json::json!({"mode":"unknown"}),
+        ] {
+            let before = std::fs::read_dir(&directory).unwrap().count();
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/api/beta/owner/frames/living/photos")
+                    .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+                    .insert_header((
+                        header::CONTENT_TYPE,
+                        "multipart/form-data; boundary=boundary",
+                    ))
+                    .set_payload(multipart(Some(destinations)))
+                    .to_request(),
+            )
+            .await;
+            assert!(matches!(
+                response.status(),
+                StatusCode::BAD_REQUEST | StatusCode::FORBIDDEN
+            ));
+            assert_eq!(std::fs::read_dir(&directory).unwrap().count(), before);
+        }
+        let blocked = test::TestRequest::get()
+            .uri(&format!(
+                "/api/beta/owner/frames/kitchen/photos/{}",
+                saved[0]
+            ))
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, blocked).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let pin = test::TestRequest::post()
+            .uri("/api/beta/owner/frames/kitchen/playback")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .set_json(serde_json::json!({"action":"pin","photo_id":saved[0],"pin_seconds":300}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, pin).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        // Sender destinations are bounded by their invitation's channel.
+        for (destinations, expected) in [
+            (serde_json::json!({"mode":"all"}), StatusCode::CREATED),
+            (
+                serde_json::json!({"mode":"frames","frame_ids":["bedroom"]}),
+                StatusCode::FORBIDDEN,
+            ),
+            (
+                serde_json::json!({"mode":"frames","frame_ids":["foreign"]}),
+                StatusCode::FORBIDDEN,
+            ),
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::post()
+                    .uri("/api/beta/sender/photos")
+                    .cookie(Cookie::new(SENDER_COOKIE, invitation.token.clone()))
+                    .insert_header((
+                        header::CONTENT_TYPE,
+                        "multipart/form-data; boundary=boundary",
+                    ))
+                    .set_payload(multipart(Some(destinations)))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), expected);
+            if expected == StatusCode::CREATED {
+                let body: serde_json::Value = test::read_body_json(response).await;
+                let db = state.database.lock().unwrap();
+                for frame in ["living", "kitchen", "bedroom"] {
+                    assert_eq!(
+                        protected_media_storage_key(
+                            &db,
+                            &owner.household_id,
+                            frame,
+                            body["photo_id"].as_str().unwrap()
+                        )
+                        .unwrap()
+                        .is_some(),
+                        frame != "bedroom"
+                    );
+                }
+            }
+        }
+        {
+            let db = state.database.lock().unwrap();
+            db.execute(
+                "INSERT INTO frames (id,household_id,place_name) VALUES ('later',?1,'New frame')",
+                [&owner.household_id],
+            )
+            .unwrap();
+            db.execute(
+                "INSERT INTO frame_subscriptions VALUES ('later',?1)",
+                [&owner.default_channel_id],
+            )
+            .unwrap();
+            initialize_database(&db).unwrap();
+            assert!(
+                protected_media_storage_key(&db, &owner.household_id, "later", "legacy")
+                    .unwrap()
+                    .is_some()
+            );
+            for id in &saved {
+                assert!(
+                    protected_media_storage_key(&db, &owner.household_id, "later", id)
+                        .unwrap()
+                        .is_none()
+                );
+            }
+            db.execute("DELETE FROM frames WHERE id='living'", [])
+                .unwrap();
+            assert!(
+                protected_media_storage_key(&db, &owner.household_id, "kitchen", &saved[0])
+                    .unwrap()
+                    .is_none()
+            );
+            let plan: i64 = db
+                .query_row(
+                    "SELECT COUNT(*) FROM photo_delivery_plans WHERE photo_id=?1",
+                    [&saved[0]],
+                    |row| row.get(0),
+                )
+                .unwrap();
+            assert_eq!(plan, 1);
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[actix_web::test]
     async fn owner_upload_uses_the_frames_destination_and_playback_rejects_foreign_owners() {
@@ -1071,6 +1325,12 @@ mod tests {
         let other = create_household_owner(&mut database, "Other", "Owner").unwrap();
         database.execute("INSERT INTO frames (id, household_id, place_name) VALUES ('kitchen', ?1, 'Kitchen')",
             rusqlite::params![owner.household_id]).unwrap();
+        database
+            .execute(
+                "INSERT INTO frame_subscriptions (frame_id, channel_id) VALUES ('kitchen', ?1)",
+                [&owner.default_channel_id],
+            )
+            .unwrap();
         let invitation = create_sender_invitation(&database, &owner.owner_token, "Alice").unwrap();
         let uri = format!(
             "/api/beta/owner/invitations/{}/replace",

@@ -13,9 +13,11 @@ async fn main() -> std::io::Result<()> {
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data"));
     let media_dir = data_dir.join("media");
     fs::create_dir_all(&media_dir)?;
-    let database =
-        Connection::open(data_dir.join("astrohud.sqlite3")).map_err(std::io::Error::other)?;
-    initialize_database(&database).map_err(std::io::Error::other)?;
+    let database_path = data_dir.join("astrohud.sqlite3");
+    let database = Connection::open(&database_path).map_err(std::io::Error::other)?;
+    if let Some(backup) = initialize_database_with_backup(&database, &database_path)? {
+        println!("Saved pre-migration database backup: {}", backup.display());
+    }
     let app_state = web::Data::new(AppState::new(database, media_dir.clone()));
 
     println!("Server starting on http://{}", args.endpoint);
