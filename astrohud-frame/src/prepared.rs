@@ -22,13 +22,9 @@ impl PreparedImage {
             .unwrap_or(image::metadata::Orientation::NoTransforms);
         let mut image = DynamicImage::from_decoder(decoder)?;
         image.apply_orientation(orientation);
-        let mut backdrop = image.thumbnail(320, 320).blur(10.0).into_rgba8();
-        for pixel in backdrop.pixels_mut() {
-            for channel in &mut pixel.0[..3] {
-                *channel = (u16::from(*channel) * 28 / 100) as u8;
-            }
-            pixel.0[3] = 255;
-        }
+        // Keep the photo's natural brightness. A light blur softens the
+        // stretched background without turning the TV's empty space black.
+        let backdrop = image.thumbnail(640, 640).blur(3.0).into_rgba8();
         let foreground = if image.width() > 2048 || image.height() > 2048 {
             image
                 .resize(2048, 2048, image::imageops::FilterType::Triangle)
@@ -110,14 +106,14 @@ impl Prefetcher {
 mod tests {
     use super::*;
     #[test]
-    fn background_is_small_dimmed_and_foreground_retains_its_pixels() {
+    fn background_is_bounded_without_dimming_and_foreground_retains_its_pixels() {
         let path = std::env::temp_dir().join(format!("memory-backdrop-{}.png", std::process::id()));
-        let source = RgbaImage::from_pixel(640, 480, image::Rgba([200, 160, 120, 255]));
+        let source = RgbaImage::from_pixel(1280, 960, image::Rgba([200, 160, 120, 255]));
         source.save(&path).unwrap();
         let prepared = PreparedImage::load(&path).unwrap();
         assert_eq!(prepared.foreground, source);
-        assert!(prepared.backdrop.width() <= 320 && prepared.backdrop.height() <= 320);
-        assert_eq!(prepared.backdrop.get_pixel(0, 0).0, [56, 44, 33, 255]);
+        assert!(prepared.backdrop.width() <= 640 && prepared.backdrop.height() <= 640);
+        assert_eq!(prepared.backdrop.get_pixel(0, 0).0, [200, 160, 120, 255]);
         std::fs::remove_file(path).unwrap();
     }
 }

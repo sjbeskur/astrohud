@@ -115,7 +115,7 @@ Continue setup. A timer does not force navigation or assume a connection
 succeeded. The owner then names the frame through the private device-bound
 setup link. Normal setup needs no copied activation link or typed claim code.
 
-The current viewer supports dimmed photo backgrounds, next-image preparation,
+The current viewer supports stretched, lightly blurred photo backgrounds, next-image preparation,
 owner-selected photos, timed pins, and slideshow intervals. These controls
 require matching REST/web changes; rebuilding the image does not deploy the
 hosted website.

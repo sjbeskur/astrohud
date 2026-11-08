@@ -167,7 +167,7 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 #resume-slideshow { margin-top: 0.75rem; }
 .owner-page #owner-send-panel { scroll-margin-top: 6rem; }
 #owner-preview-shell { margin-block: 1rem; }
-.photo-backdrop { position: absolute; inset: -30px; background-position: center; background-size: cover; filter: blur(28px) brightness(0.28); pointer-events: none; }
+.photo-backdrop { position: absolute; inset: -12px; background-position: center; background-size: 100% 100%; filter: blur(10px); pointer-events: none; }
 .frame-view > .photo-backdrop { position: fixed; }
 .frame-photo, #display-photo { position: relative; z-index: 1; }
 .simulated-display-empty { position: relative; z-index: 2; }

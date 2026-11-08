@@ -399,8 +399,7 @@ fn render_prepared(
     canvas.set_draw_color(Color::RGB(5, 7, 12));
     canvas.clear();
     if blur && chrome_seed.is_some() {
-        let source = cover_source_rect(image.backdrop.width(), image.backdrop.height(), w, h);
-        copy_pixels(canvas, &image.backdrop, Some(source), Rect::new(0, 0, w, h))?;
+        copy_pixels(canvas, &image.backdrop, None, Rect::new(0, 0, w, h))?;
     }
     if let Some(seed) = chrome_seed {
         render_frame_chrome(canvas, destination, seed)?;
@@ -411,13 +410,6 @@ fn render_prepared(
     }
     canvas.present();
     Ok(())
-}
-
-fn cover_source_rect(sw: u32, sh: u32, dw: u32, dh: u32) -> Rect {
-    let scale = (dw as f64 / sw.max(1) as f64).max(dh as f64 / sh.max(1) as f64);
-    let w = ((dw as f64 / scale).round() as u32).clamp(1, sw.max(1));
-    let h = ((dh as f64 / scale).round() as u32).clamp(1, sh.max(1));
-    Rect::new(((sw - w) / 2) as i32, ((sh - h) / 2) as i32, w, h)
 }
 
 fn framed_contain_rect(
@@ -717,6 +709,38 @@ fn other(error: impl std::fmt::Display) -> io::Error {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    #[ignore = "renders a manual photo preview; run with SDL_VIDEODRIVER=dummy"]
+    fn write_background_preview() {
+        let path = env::var_os("ASTROHUD_PREVIEW_PHOTO")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(|| "/tmp/memory-portrait.png".into());
+        let image = PreparedImage::load(&path).unwrap();
+        let sdl = sdl2::init().unwrap();
+        let video = sdl.video().unwrap();
+        let window = video
+            .window("Background preview", 1280, 720)
+            .hidden()
+            .build()
+            .unwrap();
+        let mut canvas = window.into_canvas().software().build().unwrap();
+        render_prepared(&mut canvas, &image, Some("preview"), None, false).unwrap();
+        let without = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
+        render_prepared(&mut canvas, &image, Some("preview"), None, true).unwrap();
+        let with = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
+        let center = (360 * 1280 + 640) * 3;
+        assert_eq!(&with[center..center + 3], &without[center..center + 3]);
+        assert!(with[..3].iter().map(|v| u16::from(*v)).sum::<u16>() > 80);
+        image::save_buffer(
+            "/tmp/memory-lane-background.png",
+            &with,
+            1280,
+            720,
+            image::ColorType::Rgb8,
+        )
+        .unwrap();
+    }
 
     #[test]
     #[ignore = "renders a manual preview; run with SDL_VIDEODRIVER=dummy"]
