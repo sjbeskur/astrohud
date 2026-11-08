@@ -98,6 +98,8 @@ pub struct ClaimedFrame {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OwnerContext {
+    pub co_owner_version: u8,
+    pub co_owners: Vec<crate::CoOwnerInvitation>,
     pub photo_routing_version: u8,
     pub household_name: String,
     pub frames: Vec<OwnerFrame>,
@@ -128,6 +130,7 @@ pub struct CreatedInvitation {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SenderContext {
+    pub sender_photo_actions_version: u8,
     pub photo_history_version: u8,
     pub photo_routing_version: u8,
     pub frames: Vec<OwnerFrame>,
@@ -697,6 +700,8 @@ pub fn owner_context(
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(OwnerContext {
+        co_owner_version: 1,
+        co_owners: crate::co_owner_invitations(connection, owner_token)?,
         photo_routing_version: crate::PHOTO_ROUTING_VERSION,
         household_name: household.1,
         frames,
@@ -815,6 +820,7 @@ pub fn sender_access(
                     household_id: row.get(0)?,
                     channel_id: row.get(1)?,
                     context: SenderContext {
+                        sender_photo_actions_version: 1,
                         photo_history_version: crate::PHOTO_HISTORY_VERSION,
                         photo_routing_version: crate::PHOTO_ROUTING_VERSION,
                         frames: Vec::new(),
@@ -866,7 +872,7 @@ pub(crate) fn owner_household_id(
         .ok_or(BetaError::Unauthorized)
 }
 
-fn bounded_text<'a>(
+pub(crate) fn bounded_text<'a>(
     value: &'a str,
     field_name: &'static str,
     max_characters: usize,

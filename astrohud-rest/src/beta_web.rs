@@ -108,6 +108,15 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             web::post().to(create_owner_session),
         )
         .route("/api/beta/owner", web::get().to(get_owner_context))
+        .route("/api/beta/owner/co-owners", web::post().to(create_co_owner))
+        .route(
+            "/api/beta/owner/co-owners/{id}",
+            web::delete().to(disable_co_owner),
+        )
+        .route(
+            "/api/beta/owner/co-owners/{id}/replace",
+            web::post().to(replace_co_owner),
+        )
         .route("/api/beta/owner/recovery", web::post().to(create_recovery))
         .route(
             "/api/beta/owner/recovery/session",
@@ -191,10 +200,67 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
                 .route(web::post().to(upload_sender_photo))
                 .route(web::get().to(get_sender_history)),
         )
+        .service(
+            web::resource("/api/beta/sender/photos/{photo_id}")
+                .route(web::get().to(get_sender_history_photo))
+                .route(web::delete().to(remove_sender_photo)),
+        )
         .route(
-            "/api/beta/sender/photos/{photo_id}",
-            web::get().to(get_sender_history_photo),
+            "/api/beta/sender/photos/{photo_id}/actions",
+            web::get().to(get_sender_photo_actions),
+        )
+        .route(
+            "/api/beta/sender/photos/{photo_id}/display-next",
+            web::post().to(display_sender_photo_next),
         );
+}
+
+async fn create_co_owner(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    body: web::Json<InvitationRequest>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let invitation =
+        crate::create_co_owner_invitation(&mut db, &token, &body.label).map_err(beta_http_error)?;
+    Ok(HttpResponse::Created()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(invitation))
+}
+async fn replace_co_owner(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let invitation =
+        crate::replace_co_owner_invitation(&mut db, &token, &id).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(invitation))
+}
+async fn disable_co_owner(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    crate::revoke_co_owner_invitation(&mut db, &token, &id).map_err(beta_http_error)?;
+    Ok(HttpResponse::NoContent()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .finish())
 }
 
 async fn create_owner_session(
@@ -780,6 +846,80 @@ async fn get_sender_history_photo(
         header::HeaderValue::from_static("no-store"),
     );
     Ok(response)
+}
+
+async fn remove_sender_photo(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    photo: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = sender_token(&request)?;
+    {
+        let mut db = state
+            .database
+            .lock()
+            .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+        let access = sender_access(&db, &token).map_err(beta_http_error)?;
+        crate::delete_sender_photo(&mut db, &access, &photo).map_err(beta_http_error)?;
+    }
+    crate::purge_deleted_media(&state).map_err(error::ErrorInternalServerError)?;
+    Ok(HttpResponse::NoContent()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .finish())
+}
+
+async fn get_sender_photo_actions(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    photo: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = sender_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let access = sender_access(&db, &token).map_err(beta_http_error)?;
+    let frames = crate::sender_photo_targets(&db, &access, &photo).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(serde_json::json!({"frames":frames})))
+}
+
+#[derive(Deserialize)]
+struct SenderDisplayRequest {
+    frame_id: String,
+}
+
+async fn display_sender_photo_next(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    photo: web::Path<String>,
+    body: web::Json<SenderDisplayRequest>,
+) -> Result<HttpResponse> {
+    let token = sender_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let access = sender_access(&db, &token).map_err(beta_http_error)?;
+    match crate::request_sender_display_next(&mut db, &access, &photo, &body.frame_id)
+        .map_err(beta_http_error)?
+    {
+        crate::GuestRequestResult::Queued => {
+            Ok(HttpResponse::Accepted().json(serde_json::json!({"status":"queued"})))
+        }
+        crate::GuestRequestResult::Disabled => Err(error::ErrorForbidden(
+            "The owner has not enabled guest requests for this frame.",
+        )),
+        crate::GuestRequestResult::Pinned => Err(error::ErrorConflict(
+            "The owner has pinned a photo. Try again after it is unpinned.",
+        )),
+        crate::GuestRequestResult::Wait(seconds) => Ok(HttpResponse::TooManyRequests()
+            .insert_header((header::RETRY_AFTER, seconds.to_string()))
+            .body(
+                "A guest request is already queued or this frame is cooling down. Try again later.",
+            )),
+    }
 }
 
 fn owner_token(request: &HttpRequest) -> Result<String> {

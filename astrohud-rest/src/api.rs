@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 10;
+const SCHEMA_VERSION: i64 = 11;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
@@ -127,6 +127,20 @@ CREATE TABLE IF NOT EXISTS owner_recovery_links (
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     last_used_at TEXT,
     expires_at TEXT
+);
+CREATE TABLE IF NOT EXISTS frame_guest_requests (
+    frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
+    enabled INTEGER NOT NULL DEFAULT 0 CHECK (enabled IN (0, 1)),
+    photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
+    revision INTEGER NOT NULL DEFAULT 0,
+    requested_at INTEGER,
+    expires_at INTEGER
+);
+CREATE TABLE IF NOT EXISTS deleted_media_files (
+    storage_key TEXT PRIMARY KEY
+);
+CREATE TABLE IF NOT EXISTS co_owner_invitations (
+    grant_id TEXT PRIMARY KEY REFERENCES owner_access_grants(id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS device_enrollments (
     id TEXT PRIMARY KEY,
@@ -317,6 +331,9 @@ pub struct FrameManifest {
 #[derive(Debug, Serialize)]
 pub struct Health {
     version: &'static str,
+    database_schema: i64,
+    sender_photo_actions_version: u8,
+    co_owner_version: u8,
     pub photo_history_version: u8,
     pub photo_routing_version: u8,
     status: &'static str,
@@ -483,6 +500,9 @@ fn ensure_foreign_keys_are_valid(connection: &Connection) -> rusqlite::Result<()
 pub async fn health() -> web::Json<Health> {
     web::Json(Health {
         version: env!("CARGO_PKG_VERSION"),
+        database_schema: SCHEMA_VERSION,
+        sender_photo_actions_version: 1,
+        co_owner_version: 1,
         status: "ok",
         photo_history_version: PHOTO_HISTORY_VERSION,
         photo_routing_version: PHOTO_ROUTING_VERSION,
@@ -937,7 +957,7 @@ fn manifest_for_household_with_protected_media(
                AND c.household_id = ?2
                AND NOT EXISTS (SELECT 1 FROM frame_photo_removals r
                                WHERE r.frame_id = f.id AND r.photo_id = p.id)
-             ORDER BY CASE WHEN p.id = ?3 THEN 0 WHEN p.id = ?4 THEN 1 ELSE 2 END,
+             ORDER BY CASE WHEN p.id = ?3 THEN 0 WHEN p.id = ?4 THEN 1 WHEN p.id = ?5 THEN 2 ELSE 3 END,
                       p.created_at DESC, p.rowid DESC
              LIMIT 200",
     )?;
@@ -947,7 +967,8 @@ fn manifest_for_household_with_protected_media(
                 frame_id,
                 household_id,
                 playback.pinned_photo_id,
-                playback.selected_photo_id
+                playback.selected_photo_id,
+                playback.next_photo_id
             ],
             |row| {
                 let photo_id: String = row.get(0)?;

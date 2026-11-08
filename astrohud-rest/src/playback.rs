@@ -5,6 +5,10 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct Playback {
+    pub guest_display_next: bool,
+    pub next_photo_id: Option<String>,
+    pub next_revision: u64,
+    pub next_expires_at: Option<u64>,
     pub slide_seconds: u64,
     pub blur_background: bool,
     pub selected_photo_id: Option<String>,
@@ -16,6 +20,10 @@ pub struct Playback {
 impl Default for Playback {
     fn default() -> Self {
         Self {
+            guest_display_next: false,
+            next_photo_id: None,
+            next_revision: 0,
+            next_expires_at: None,
             slide_seconds: 12,
             blur_background: true,
             selected_photo_id: None,
@@ -28,6 +36,7 @@ impl Default for Playback {
 
 #[derive(Deserialize)]
 pub struct PlaybackRequest {
+    pub guest_display_next: Option<bool>,
     pub action: Option<String>,
     pub photo_id: Option<String>,
     pub pin_seconds: Option<u64>,
@@ -56,11 +65,26 @@ pub(crate) fn frame_playback(db: &Connection, frame: &str) -> rusqlite::Result<P
                     selection_revision: row.get(3)?,
                     pinned_photo_id: row.get(4)?,
                     pinned_until: row.get(5)?,
+                    ..Playback::default()
                 })
             },
         )
         .optional()?
         .unwrap_or_default();
+    if let Some((enabled, photo, revision, expires)) = db.query_row(
+        "SELECT enabled,photo_id,revision,expires_at FROM frame_guest_requests WHERE frame_id=?1",
+        [frame], |r| Ok((r.get::<_, bool>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, u64>(2)?, r.get::<_, Option<u64>>(3)?))
+    ).optional()? {
+        playback.guest_display_next = enabled;
+        playback.next_revision = revision;
+        playback.next_expires_at = expires;
+        if enabled && expires.is_some_and(|end| end > unix_now()) && let Some(photo) = photo {
+            let household: Option<String> = db.query_row("SELECT household_id FROM frames WHERE id=?1",[frame],|r|r.get(0)).optional()?;
+            if let Some(household) = household && protected_media_storage_key(db, &household, frame, &photo)?.is_some() {
+                playback.next_photo_id = Some(photo);
+            }
+        }
+    }
     if playback.pinned_until.is_some_and(|end| end <= unix_now()) {
         playback.pinned_photo_id = None;
         playback.pinned_until = None;
@@ -120,6 +144,14 @@ pub fn update_playback(
     if let Some(blur) = request.blur_background {
         playback.blur_background = blur;
     }
+    if let Some(enabled) = request.guest_display_next {
+        tx.execute(
+            "INSERT INTO frame_guest_requests(frame_id,enabled) VALUES (?1,?2)
+            ON CONFLICT(frame_id) DO UPDATE SET enabled=excluded.enabled,
+            photo_id=CASE WHEN excluded.enabled=0 THEN NULL ELSE frame_guest_requests.photo_id END",
+            params![frame, enabled],
+        )?;
+    }
     if let Some(action) = request.action.as_deref() {
         match action {
             "show" | "pin" => {
@@ -154,6 +186,11 @@ pub fn update_playback(
             _ => return Err(BetaError::InvalidInput("unknown slideshow action")),
         }
         playback.selection_revision += 1;
+        // Any explicit owner playback command cancels an outstanding guest request.
+        tx.execute(
+            "UPDATE frame_guest_requests SET photo_id=NULL WHERE frame_id=?1",
+            [frame],
+        )?;
     }
     tx.execute("INSERT INTO frame_playback (frame_id,slide_seconds,blur_background,selected_photo_id,selection_revision,pinned_photo_id,pinned_until)
         VALUES (?1,?2,?3,?4,?5,?6,?7) ON CONFLICT(frame_id) DO UPDATE SET slide_seconds=excluded.slide_seconds,
@@ -161,7 +198,7 @@ pub fn update_playback(
         pinned_photo_id=excluded.pinned_photo_id,pinned_until=excluded.pinned_until",
         params![frame,playback.slide_seconds,playback.blur_background,playback.selected_photo_id,playback.selection_revision,playback.pinned_photo_id,playback.pinned_until])?;
     tx.commit()?;
-    Ok(playback)
+    Ok(frame_playback(db, frame)?)
 }
 
 #[cfg(test)]

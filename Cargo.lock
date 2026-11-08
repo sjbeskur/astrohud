@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "astrohud-rest"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "actix",
  "actix-files",

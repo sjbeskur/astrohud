@@ -19,6 +19,7 @@ async fn main() -> std::io::Result<()> {
         println!("Saved pre-migration database backup: {}", backup.display());
     }
     let app_state = web::Data::new(AppState::new(database, media_dir.clone()));
+    purge_deleted_media(&app_state).map_err(std::io::Error::other)?;
 
     println!("Server starting on http://{}", args.endpoint);
     HttpServer::new(move || {
