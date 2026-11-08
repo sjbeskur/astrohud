@@ -110,6 +110,10 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
         .route("/api/beta/owner", web::get().to(get_owner_context))
         .route("/api/beta/owner/co-owners", web::post().to(create_co_owner))
         .route(
+            "/api/beta/owner/invitations/{id}/promote",
+            web::post().to(promote_sender),
+        )
+        .route(
             "/api/beta/owner/co-owners/{id}",
             web::delete().to(disable_co_owner),
         )
@@ -227,6 +231,22 @@ async fn create_co_owner(
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     let invitation =
         crate::create_co_owner_invitation(&mut db, &token, &body.label).map_err(beta_http_error)?;
+    Ok(HttpResponse::Created()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(invitation))
+}
+async fn promote_sender(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let invitation =
+        crate::promote_sender_to_co_owner(&mut db, &token, &id).map_err(beta_http_error)?;
     Ok(HttpResponse::Created()
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .json(invitation))

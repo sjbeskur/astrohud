@@ -98,6 +98,7 @@ pub struct ClaimedFrame {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct OwnerContext {
+    pub owner_promotion_version: u8,
     pub co_owner_version: u8,
     pub co_owners: Vec<crate::CoOwnerInvitation>,
     pub photo_routing_version: u8,
@@ -700,6 +701,7 @@ pub fn owner_context(
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(OwnerContext {
+        owner_promotion_version: 1,
         co_owner_version: 1,
         co_owners: crate::co_owner_invitations(connection, owner_token)?,
         photo_routing_version: crate::PHOTO_ROUTING_VERSION,

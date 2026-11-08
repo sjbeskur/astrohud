@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 11;
+const SCHEMA_VERSION: i64 = 12;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS deleted_media_files (
 );
 CREATE TABLE IF NOT EXISTS co_owner_invitations (
     grant_id TEXT PRIMARY KEY REFERENCES owner_access_grants(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS sender_owner_promotions (
+    sender_invitation_id TEXT PRIMARY KEY REFERENCES sender_invitations(id) ON DELETE CASCADE,
+    grant_id TEXT NOT NULL UNIQUE REFERENCES co_owner_invitations(grant_id) ON DELETE CASCADE
 );
 CREATE TABLE IF NOT EXISTS device_enrollments (
     id TEXT PRIMARY KEY,
@@ -334,6 +338,7 @@ pub struct Health {
     database_schema: i64,
     sender_photo_actions_version: u8,
     co_owner_version: u8,
+    owner_promotion_version: u8,
     pub photo_history_version: u8,
     pub photo_routing_version: u8,
     status: &'static str,
@@ -503,6 +508,7 @@ pub async fn health() -> web::Json<Health> {
         database_schema: SCHEMA_VERSION,
         sender_photo_actions_version: 1,
         co_owner_version: 1,
+        owner_promotion_version: 1,
         status: "ok",
         photo_history_version: PHOTO_HISTORY_VERSION,
         photo_routing_version: PHOTO_ROUTING_VERSION,

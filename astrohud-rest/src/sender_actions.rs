@@ -352,7 +352,7 @@ mod migration_tests {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            11
+            12
         );
         assert!(
             crate::initialize_database_with_backup(&db, &path)

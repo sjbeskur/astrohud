@@ -110,6 +110,9 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
         window_builder.fullscreen_desktop().borderless();
     }
     let window = window_builder.build().map_err(other)?;
+    if !config.windowed {
+        sdl.mouse().show_cursor(false);
+    }
     let mut canvas = window
         .into_canvas()
         .present_vsync()
