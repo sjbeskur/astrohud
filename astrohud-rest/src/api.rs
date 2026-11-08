@@ -316,6 +316,7 @@ pub struct FrameManifest {
 
 #[derive(Debug, Serialize)]
 pub struct Health {
+    version: &'static str,
     pub photo_history_version: u8,
     pub photo_routing_version: u8,
     status: &'static str,
@@ -481,6 +482,7 @@ fn ensure_foreign_keys_are_valid(connection: &Connection) -> rusqlite::Result<()
 
 pub async fn health() -> web::Json<Health> {
     web::Json(Health {
+        version: env!("CARGO_PKG_VERSION"),
         status: "ok",
         photo_history_version: PHOTO_HISTORY_VERSION,
         photo_routing_version: PHOTO_ROUTING_VERSION,

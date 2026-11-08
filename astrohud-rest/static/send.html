@@ -26,18 +26,16 @@
           <fieldset id="sender-destinations" class="send-destinations" hidden></fieldset>
           <div class="field-grid">
             <div>
-              <label for="photo">Choose a photo</label>
-              <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" required>
-              <p class="field-hint">JPEG or PNG / Up to 20 MB</p>
+              <label for="photo">Choose photos</label>
+              <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" multiple required>
+              <p class="field-hint">Select one or more JPEG or PNG photos / Up to 20 MB each</p>
             </div>
-            <figure id="preview-shell" class="photo-preview" hidden>
-              <img id="preview" alt="Selected photograph preview">
-              <figcaption>Ready to send</figcaption>
-            </figure>
+            <div id="preview-shell" class="upload-previews" aria-label="Selected photos" hidden></div>
 
           </div>
-          <button class="signal-button full-width" type="submit">Send photo<span id="button-place" hidden>frame</span></button>
+          <button class="signal-button full-width" type="submit">Send photos</button>
         </form>
+        <progress id="sender-upload-progress" aria-label="Photos processed" hidden></progress>
       </section>
     </div>
     <section id="sender-history-view" hidden aria-labelledby="send-title">
@@ -67,9 +65,9 @@
     const form = document.querySelector('#photo-form');
     const photo = document.querySelector('#photo');
     const previewShell = document.querySelector('#preview-shell');
-    const preview = document.querySelector('#preview');
     const status = document.querySelector('#status');
-    let previewUrl;
+    let uploadQueue = [];
+    let uploading = false;
     let photoRoutingSupported = false;
     let senderContext = null;
     let sentPhotos = [];
@@ -102,56 +100,91 @@
       document.querySelector('#place-label').textContent = context.place_name;
       document.querySelector('#place-name').textContent = context.place_name;
       document.querySelector('#sender-options-frame').textContent = context.place_name;
-      document.querySelector('#button-place').textContent = context.place_name;
       destinations.configure(context.frames, context.frames[0]?.frame_id || '');
       document.querySelector('#sender-history-tab').disabled = false;
       document.querySelector('#sender-label').textContent = `Shared with ${context.invitation_label}`;
       form.hidden = !context.frames.length;
-      setStatus(context.frames.length ? 'Choose a photo and its destinations.' : 'No frames are connected. You can still view My photos.');
+      setStatus(context.frames.length ? 'Choose photos and their destinations.' : 'No frames are connected. You can still view My photos.');
+      renderUploadQueue();
       renderSenderView();
     }
 
+    function renderUploadQueue() {
+      previewShell.hidden = !uploadQueue.length;
+      previewShell.replaceChildren(...uploadQueue.map(item => {
+        const card = document.createElement('figure');
+        const image = document.createElement('img');
+        image.src = item.url; image.alt = item.file.name; image.loading = 'lazy';
+        const caption = document.createElement('figcaption'); caption.textContent = item.error || item.file.name;
+        if (item.error) card.className = 'upload-error';
+        card.append(image, caption); return card;
+      }));
+      const pending = uploadQueue.filter(item => !item.invalid).length;
+      const button = form.querySelector('button[type="submit"]');
+      button.textContent = pending ? `Send ${pending} ${pending === 1 ? 'photo' : 'photos'}` : 'Send photos';
+      button.disabled = uploading || !photoRoutingSupported || !pending;
+    }
+
     photo.addEventListener('change', () => {
-      if (previewUrl) URL.revokeObjectURL(previewUrl);
-      const file = photo.files[0];
-      if (!file) {
-        previewShell.hidden = true;
-        return;
-      }
-      previewUrl = URL.createObjectURL(file);
-      preview.src = previewUrl;
-      previewShell.hidden = false;
-      setStatus('Preview ready / Review the photo, then send when ready.');
+      uploadQueue.forEach(item => URL.revokeObjectURL(item.url));
+      uploadQueue = [...photo.files].map(file => {
+        const error = file.size > 20 * 1024 * 1024 ? 'Over 20 MB — choose a smaller photo.'
+          : !['image/jpeg', 'image/png'].includes(file.type) ? 'Choose a JPEG or PNG photo.' : '';
+        return {file, url: URL.createObjectURL(file), error, invalid: Boolean(error)};
+      });
+      document.querySelector('#sender-upload-progress').hidden = true;
+      renderUploadQueue();
+      setStatus(uploadQueue.length ? 'Review your photos, then send when ready.' : 'Choose photos and their destinations.');
     });
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
+      if (uploading) return;
       if (!photoRoutingSupported) { setStatus('Photo sending is temporarily unavailable. Please refresh later.', 'error'); return; }
-      const button = form.querySelector('button[type="submit"]');
       if (!destinations.recipients.length) { setStatus('Choose at least one frame.', 'error'); return; }
+      const pending = uploadQueue.filter(item => !item.invalid);
+      if (!pending.length) return;
       const destinationLabel = destinations.summary;
-      const body = new FormData(form); body.append('destinations', JSON.stringify(destinations.selection));
-      document.querySelector('#sender-destinations').disabled = true;
-      button.disabled = true;
-      setStatus('Sending / Preparing the photo for the frame…', 'sending');
+      const selection = JSON.stringify(destinations.selection);
+      const includeLocation = document.querySelector('#include-location').checked;
+      const controls = [...form.elements, document.querySelector('#sender-photo-options'), document.querySelector('#sender-history-tab')];
+      const previousDisabled = controls.map(control => control.disabled);
+      uploading = true;
+      controls.forEach(control => control.disabled = true);
+      const progress = document.querySelector('#sender-upload-progress');
+      progress.max = pending.length; progress.value = 0; progress.hidden = false;
+      let sent = 0;
       try {
-        const response = await fetch('/api/beta/sender/photos', {
-          method: 'POST',
-          body
-        });
-        if (response.status === 401) throw new Error('This invitation has been disabled. Ask the frame owner for a new link.');
-        if (!response.ok) throw new Error(await response.text());
-        form.reset(); destinations.render();
-        previewShell.hidden = true;
-        if (previewUrl) URL.revokeObjectURL(previewUrl);
-        previewUrl = undefined;
-        setStatus(`Photo received for ${destinationLabel}. Find it in My photos any time.`, 'success');
-      } catch (error) {
-        setStatus(`Send failed / ${error.message}`, 'error');
+        for (const [index, item] of pending.entries()) {
+          setStatus(`Sending photo ${index + 1} of ${pending.length}…`, 'sending');
+          const body = new FormData();
+          body.append('photo', item.file);
+          body.append('destinations', selection);
+          body.append('include_location', String(includeLocation));
+          let accessLost = false;
+          try {
+            const response = await fetch('/api/beta/sender/photos', {method:'POST', body});
+            accessLost = response.status === 401;
+            if (accessLost) throw new Error('Sender access is no longer available. Ask the frame owner for a new link.');
+            if (!response.ok) throw new Error('This photo was not accepted. Try another JPEG or PNG.');
+            uploadQueue = uploadQueue.filter(next => next !== item);
+            URL.revokeObjectURL(item.url); sent++;
+          } catch (error) {
+            item.error = error instanceof TypeError ? 'Upload not confirmed. Check My photos before retrying.' : error.message;
+          }
+          progress.value = index + 1;
+          if (accessLost) break;
+        }
       } finally {
-        button.disabled = false;
-        document.querySelector('#sender-destinations').disabled = false;
+        uploading = false;
+        controls.forEach((control, index) => control.disabled = previousDisabled[index]);
+        renderUploadQueue();
       }
+      const remaining = uploadQueue.length;
+      if (!remaining) { form.reset(); destinations.render(); }
+      setStatus(`${sent} ${sent === 1 ? 'photo' : 'photos'} received for ${destinationLabel}. ${remaining
+        ? `${remaining} ${remaining === 1 ? 'photo needs' : 'photos need'} attention below the file picker. Successfully sent photos will not be sent again.`
+        : 'Find them in My photos any time.'}`, remaining ? 'error' : 'success');
     });
 
     function updateSenderContext() {

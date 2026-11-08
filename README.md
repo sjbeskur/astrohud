@@ -1,5 +1,8 @@
 # Memory Lane
 
+Current hosted release: **v0.3.0**. The server reports its package version at
+`/api/health`; Pi software is versioned independently.
+
 Memory Lane (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
 Actix WebSocket service and displaying it in a browser through WebAssembly.
 
@@ -173,6 +176,11 @@ read-only previews and Previous/Next navigation. It remains available when
 an owner removes a photo from a frame or resets the last frame. A current,
 active invitation is still required; replacement links retain the invitation
 identity and history, while old or disabled links cannot access it.
+
+Senders can select multiple JPEG or PNG photos (up to 20 MB each), review
+square previews, and send the batch to their chosen frames. Progress tracks
+each photo. Failed photos remain available to retry; confirmed successful
+uploads are removed from the queue so retries do not resend them.
 
 New owner and invited-sender uploads record their author atomically with the
 photo and delivery plan. Owners see named groups and sender filters for the

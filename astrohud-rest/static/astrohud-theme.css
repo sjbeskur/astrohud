@@ -327,7 +327,7 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .upload-previews img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
 .upload-previews figcaption { margin-top: 0.35rem; color: var(--hud-muted); font-size: 0.75rem; overflow-wrap: anywhere; line-height: 1.5; }
 .upload-previews .upload-error figcaption { color: var(--hud-danger); }
-#upload-progress { width: 100%; height: 10px; margin-top: 1.25rem; accent-color: var(--hud-lavender); }
+#upload-progress, #sender-upload-progress { width: 100%; height: 10px; margin-top: 1.25rem; accent-color: var(--hud-lavender); }
 body:has(dialog[open]) { overflow: hidden; }
 .photo-dialog button:disabled { opacity: 0.5; cursor: default; }
 
