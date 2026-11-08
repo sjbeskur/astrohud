@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=6088f52be418">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=c62bdbf5170d">
 </head>
 <body class="owner-page">
   <main class="hud-shell owner-shell">
@@ -47,7 +47,7 @@
         <p id="household-name" class="owner-subtitle">Your photos. Your people.</p>
         <nav id="owner-actions" class="owner-actions" aria-label="Main actions">
           <a href="#invite-panel"><strong>Invite</strong><span>Let friends and family send photos</span><i aria-hidden="true">→</i></a>
-          <a href="#owner-send-panel"><strong>Send photos</strong><span>Choose a photo from your phone</span><i aria-hidden="true">→</i></a>
+          <a href="#owner-send-panel"><strong>Send photos</strong><span>Choose photos from your phone</span><i aria-hidden="true">→</i></a>
           <a href="#claim-panel"><strong>Add a device</strong><span>Connect another screen</span><i aria-hidden="true">+</i></a>
         </nav>
         <nav class="owner-secondary" aria-label="More actions">
@@ -60,7 +60,7 @@
 
       <section id="owner-send-panel" class="instrument-panel" hidden aria-labelledby="owner-send-title">
         <h1 id="owner-send-title">Send photos</h1>
-        <p class="instrument-copy">Choose a photo, then send it to your screen.</p>
+        <p class="instrument-copy">Choose one or more photos, then send them to your screen.</p>
         <form id="owner-photo-form">
           <div id="upload-frame-field" class="owner-field">
             <label for="upload-frame">Send to which frame?</label>
@@ -68,17 +68,19 @@
           </div>
           <p id="upload-destination" class="owner-destination" hidden>Sending to <strong></strong></p>
           <div class="owner-field">
-            <label for="owner-photo">Choose a photo</label>
-            <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" required>
-            <p class="field-help">JPEG or PNG, up to 20 MB.</p>
+            <label for="owner-photo">Choose photos</label>
+            <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" multiple required>
+            <p class="field-help">JPEG or PNG, up to 20 MB each.</p>
           </div>
-          <figure id="owner-preview-shell" class="photo-preview" hidden><img id="owner-preview" alt="Photo ready to send"><figcaption>Ready to send</figcaption></figure>
+          <div id="owner-preview-shell" class="upload-previews" aria-label="Selected photos" hidden></div>
           <details class="owner-help"><summary>Photo options</summary>
           <label class="privacy-option" for="owner-location"><input id="owner-location" type="checkbox" name="include_location" value="true"><span><strong>Show approximate location</strong><small>Optional, if this photo contains GPS information.</small></span></label>
           </details>
-          <button class="signal-button full-width" type="submit">Send photo</button>
+          <button class="signal-button full-width" type="submit">Send photos</button>
         </form>
+        <progress id="upload-progress" aria-label="Photos processed" hidden></progress>
         <p id="owner-send-status" role="status"></p>
+        <a class="owner-back" href="#photos-panel">View photos →</a>
       </section>
 
       <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
@@ -135,40 +137,53 @@
       <section id="photos-panel" class="instrument-panel" hidden aria-labelledby="photos-title">
         <div class="owner-photo-heading">
           <h1 id="photos-title">Photos</h1>
-          <button id="refresh-photos" class="signal-button secondary" type="button">Refresh photos</button>
+          <button id="add-photos" class="signal-button" type="button">+ Add photos</button>
         </div>
-        <p class="instrument-copy">Show a photo now, pin a favorite, or remove it from this frame.</p>
         <div id="photo-frame-field" class="owner-field">
-          <label for="photo-frame">Manage photos on</label>
+          <label for="photo-frame">Photos on</label>
           <select id="photo-frame"></select>
         </div>
-        <p id="photo-destination" class="owner-destination" hidden>Photos for <strong></strong></p>
-        <div class="owner-playback-controls">
-          <form id="display-form" class="display-controls" aria-labelledby="display-title">
-            <h2 id="display-title">Slideshow settings</h2>
-            <div class="owner-field">
-              <label for="slide-seconds">Change photo every</label>
-              <select id="slide-seconds" aria-describedby="slide-help"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select>
-              <p id="slide-help" class="field-help">How long each photo stays on screen.</p>
-            </div>
-            <label class="privacy-option" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a stretched, lightly blurred copy of the photo.</small></span></label>
-            <button class="quiet-button" type="submit">Save slideshow settings</button>
-          </form>
-          <div class="pin-controls" aria-labelledby="pin-title">
-            <h2 id="pin-title">Pin a favorite</h2>
-            <div class="owner-field">
-              <label for="pin-seconds">Keep a pinned photo on screen for</label>
-              <select id="pin-seconds" aria-describedby="pin-help"><option value="900">15 minutes</option><option value="1800" selected>30 minutes</option><option value="3600">1 hour</option><option value="10800">3 hours</option><option value="0">Until I resume</option></select>
-              <p id="pin-help" class="field-help">Choose a duration, then tap Pin photo on a photo below.</p>
-            </div>
-            <button id="resume-slideshow" class="quiet-button" type="button" hidden>Resume slideshow</button>
-          </div>
+        <p id="photo-destination" class="gallery-destination" hidden><strong></strong></p>
+        <div class="gallery-toolbar">
+          <button id="open-slideshow" class="quiet-button" type="button">⚙ Slideshow settings</button>
+          <button id="refresh-photos" class="quiet-button" type="button">Refresh</button>
         </div>
-        <p id="playback-status" role="status"></p>
+        <div class="gallery-playback"><p id="playback-status" role="status"></p><button id="resume-slideshow" class="quiet-button" type="button" hidden>Resume slideshow</button></div>
         <p id="photo-status" role="status"></p>
+        <p class="field-help">Tap a photo to view it or choose an action.</p>
         <div id="frame-photos" class="owner-photo-grid"></div>
       </section>
     </div>
+
+    <dialog id="slideshow-dialog" class="photo-dialog" aria-labelledby="display-title">
+      <div class="dialog-heading"><h2 id="display-title">Slideshow settings</h2><button class="quiet-button" type="button" data-close-dialog>Done</button></div>
+      <p id="slideshow-destination" class="instrument-copy"></p>
+      <form id="display-form" class="display-controls">
+        <div class="owner-field">
+          <label for="slide-seconds">Change photo every</label>
+          <select id="slide-seconds"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select>
+        </div>
+        <label class="privacy-option" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a stretched, lightly blurred copy.</small></span></label>
+        <button class="signal-button" type="submit">Save settings</button>
+      </form>
+      <p id="slideshow-feedback" role="status"></p>
+    </dialog>
+
+    <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-detail-title">
+      <div class="dialog-heading"><h2 id="photo-detail-title">Photo</h2><button class="quiet-button" type="button" data-close-dialog>Close</button></div>
+      <img id="photo-detail-image" alt="Selected photo">
+      <div class="photo-navigation"><button id="previous-photo" class="quiet-button" type="button" aria-label="Previous photo">← Previous</button><p id="photo-detail-position"></p><button id="next-photo" class="quiet-button" type="button" aria-label="Next photo">Next →</button></div>
+      <p id="photo-detail-date" class="field-help"></p>
+      <p id="photo-detail-state" role="status"></p>
+      <div class="photo-detail-actions">
+        <button id="show-photo" class="signal-button" type="button">Show now</button>
+        <label for="pin-seconds">Pin this photo for</label>
+        <select id="pin-seconds"><option value="900">15 minutes</option><option value="1800" selected>30 minutes</option><option value="3600">1 hour</option><option value="10800">3 hours</option><option value="0">Until I resume</option></select>
+        <button id="pin-photo" class="quiet-button" type="button">Pin photo</button>
+        <button id="remove-photo" class="quiet-button danger" type="button">Remove from this frame</button>
+      </div>
+      <p id="photo-action-status" role="status"></p>
+    </dialog>
     <p id="status" class="owner-status" role="status">Loading Memory Lane…</p>
   </main>
 
@@ -183,7 +198,16 @@
     let photoRequest = 0;
     let resetTimer;
     let recoveryExists = false;
-    let ownerPreviewUrl;
+    let uploadQueue = [];
+    let uploading = false;
+    let galleryPhotos = [];
+    let galleryPlayback = {};
+    let galleryFrameId = '';
+    let selectedPhotoId = null;
+    let photoActionBusy = false;
+    let galleryLoading = false;
+    const photoDialog = document.querySelector('#photo-dialog');
+    const slideshowDialog = document.querySelector('#slideshow-dialog');
     const invitations = document.querySelector('#invitations');
     const invitationCount = document.querySelector('#invitation-count');
     const newInvitation = document.querySelector('#new-invitation');
@@ -486,31 +510,68 @@
       }
     }
 
+    function renderUploadQueue() {
+      const preview = document.querySelector('#owner-preview-shell');
+      preview.hidden = !uploadQueue.length;
+      preview.replaceChildren(...uploadQueue.map(item => {
+        const card = document.createElement('figure');
+        const image = document.createElement('img'); image.src = item.url; image.alt = item.file.name; image.loading = 'lazy';
+        const caption = document.createElement('figcaption'); caption.textContent = item.error || item.file.name;
+        if (item.error) card.className = 'upload-error';
+        card.append(image, caption); return card;
+      }));
+      const pending = uploadQueue.filter(item => !item.invalid).length;
+      const button = document.querySelector('#owner-photo-form button');
+      button.textContent = pending ? `Send ${pending} ${pending === 1 ? 'photo' : 'photos'}` : 'Send photos';
+      button.disabled = uploadQueue.length > 0 && !pending;
+    }
     document.querySelector('#owner-photo').addEventListener('change', event => {
-      if (ownerPreviewUrl) URL.revokeObjectURL(ownerPreviewUrl);
-      const file = event.target.files[0];
-      document.querySelector('#owner-preview-shell').hidden = !file;
-      if (file) { ownerPreviewUrl = URL.createObjectURL(file); document.querySelector('#owner-preview').src = ownerPreviewUrl; }
+      uploadQueue.forEach(item => URL.revokeObjectURL(item.url));
+      uploadQueue = [...event.target.files].map(file => {
+        const error = file.size > 20 * 1024 * 1024 ? 'Over 20 MB — choose a smaller photo.'
+          : !['image/jpeg', 'image/png'].includes(file.type) ? 'Choose a JPEG or PNG photo.' : '';
+        return {file, url: URL.createObjectURL(file), error, invalid: Boolean(error)};
+      });
+      document.querySelector('#owner-send-status').textContent = '';
+      document.querySelector('#upload-progress').hidden = true;
+      renderUploadQueue();
     });
     document.querySelector('#owner-photo-form').addEventListener('submit', async event => {
       event.preventDefault();
-      const button = event.target.querySelector('button');
-      const status = document.querySelector('#owner-send-status');
+      const form = event.target;
+      const feedback = document.querySelector('#owner-send-status');
       const frameId = document.querySelector('#upload-frame').value;
-      const file = document.querySelector('#owner-photo').files[0];
-      if (!file || file.size > 20 * 1024 * 1024) { status.textContent = 'Choose a JPEG or PNG up to 20 MB.'; return; }
-      button.disabled = true; status.textContent = 'Sending your photo…';
-      try {
-        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos`, {method:'POST', body:new FormData(event.target)});
-        if (!response.ok) throw new Error(await response.text());
-        event.target.reset();
-        document.querySelector('#upload-frame').value = frameId;
-        document.querySelector('#owner-preview-shell').hidden = true;
-        URL.revokeObjectURL(ownerPreviewUrl); ownerPreviewUrl = undefined;
-        photoFrame.value = frameId; await loadPhotos();
-        status.textContent = 'Photo received. Your frame will download it when connected.';
-      } catch (error) { status.textContent = `Could not send photo / ${error.message}`; }
-      finally { button.disabled = false; }
+      const includeLocation = document.querySelector('#owner-location').checked;
+      const pending = uploadQueue.filter(item => !item.invalid);
+      if (uploading || !pending.length || !frameId) return;
+      uploading = true;
+      photoFrame.value = frameId;
+      const controls = [...form.querySelectorAll('button, input, select')];
+      controls.forEach(control => control.disabled = true);
+      const progress = document.querySelector('#upload-progress');
+      progress.max = pending.length; progress.value = 0; progress.hidden = false;
+      let sent = 0;
+      for (const [index, item] of pending.entries()) {
+        feedback.textContent = `Sending photo ${index + 1} of ${pending.length}…`;
+        const body = new FormData(); body.append('photo', item.file);
+        body.append('include_location', String(includeLocation));
+        try {
+          const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos`, {method:'POST', body});
+          if (!response.ok) throw new Error('This photo was not accepted. Try another JPEG or PNG.');
+          uploadQueue = uploadQueue.filter(next => next !== item);
+          URL.revokeObjectURL(item.url); sent++;
+        } catch (error) {
+          item.error = error instanceof TypeError ? 'Upload not confirmed. Check the gallery before retrying.' : error.message;
+        }
+        progress.value = index + 1;
+      }
+      uploading = false;
+      controls.forEach(control => control.disabled = false);
+      renderUploadQueue();
+      const remaining = uploadQueue.length;
+      feedback.textContent = `${sent} ${sent === 1 ? 'photo' : 'photos'} received.${remaining ? ` ${remaining} ${remaining === 1 ? 'photo needs' : 'photos need'} attention below the file picker. Successfully sent photos will not be sent again.` : ' Your frame will download them when connected.'}`;
+      if (!remaining) { form.reset(); document.querySelector('#upload-frame').value = frameId; }
+      if (photoFrame.value === frameId) await loadPhotos();
     });
     async function changePlayback(payload) {
       const frameId = photoFrame.value;
@@ -524,8 +585,11 @@
     document.querySelector('#display-form').addEventListener('submit', async event => {
       event.preventDefault();
       const button = event.target.querySelector('button'); button.disabled = true;
-      try { await changePlayback({slide_seconds:Number(document.querySelector('#slide-seconds').value), blur_background:document.querySelector('#blur-background').checked}); }
-      catch (error) { document.querySelector('#playback-status').textContent = error.message; }
+      try {
+        await changePlayback({slide_seconds:Number(document.querySelector('#slide-seconds').value), blur_background:document.querySelector('#blur-background').checked});
+        document.querySelector('#slideshow-feedback').textContent = 'Settings saved. Your frame will apply them on its next sync.';
+      }
+      catch (error) { document.querySelector('#slideshow-feedback').textContent = error.message; }
       finally { button.disabled = false; }
     });
     document.querySelector('#resume-slideshow').addEventListener('click', async () => {
@@ -535,6 +599,8 @@
 
     async function loadPhotos() {
       const request = ++photoRequest;
+      galleryLoading = true;
+      document.querySelector('#open-slideshow').disabled = true;
       const frameId = photoFrame.value;
       framePhotos.replaceChildren();
       photoStatus.textContent = 'Loading photos…';
@@ -543,6 +609,8 @@
         if (!response.ok) throw new Error(await response.text());
         const manifest = await response.json();
         if (request !== photoRequest) return;
+        galleryLoading = false;
+        document.querySelector('#open-slideshow').disabled = false;
         const playback = manifest.playback || {};
         const interval = document.querySelector('#slide-seconds');
         const seconds = playback.slide_seconds || 12;
@@ -555,59 +623,109 @@
           ? (playback.pinned_until ? `Photo pinned until ${new Date(playback.pinned_until * 1000).toLocaleTimeString()}.` : 'Photo pinned until you resume the slideshow.')
           : `Slideshow / ${seconds} seconds per photo.`;
         photoStatus.textContent = manifest.photos.length ? `${manifest.photos.length} photos available` : 'No photos on this frame yet.';
-        framePhotos.replaceChildren(...manifest.photos.map(photo => {
-          const card = document.createElement('figure');
-          card.className = 'photo-preview';
-          const image = document.createElement('img');
-          image.src = photo.url;
-          image.alt = `Photo sent ${photo.created_at} UTC`;
-          image.loading = 'lazy';
-          const caption = document.createElement('figcaption');
-          const date = document.createElement('span');
-          date.textContent = `Sent ${photo.created_at} UTC`;
-          const remove = document.createElement('button');
-          remove.type = 'button';
-          remove.className = 'quiet-button danger';
-          remove.textContent = 'Remove from this frame';
-          remove.addEventListener('click', async () => {
-            if (!confirm(`Remove this photo from ${manifest.place_name}? It will disappear when the frame next syncs.`)) return;
-            remove.disabled = true;
-            try {
-              const result = await fetch(photo.url, {method: 'DELETE'});
-              if (!result.ok) throw new Error(await result.text());
-              if (photoFrame.value === frameId) await loadPhotos();
-              setStatus('Photo removed / The frame will update on its next sync.', 'success');
-            } catch (error) {
-              setStatus(`Photo removal failed / ${error.message}`, 'error');
-            } finally {
-              remove.disabled = false;
-            }
-          });
-          const actions = document.createElement('div'); actions.className = 'photo-actions';
-          for (const [label, action] of [['Show now','show'],['Pin photo','pin']]) {
-            const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet-button';
-            button.textContent = action === 'pin' && playback.pinned_photo_id === photo.id ? 'Pinned' : label;
-            button.addEventListener('click', async () => {
-              button.disabled = true;
-              try { await changePlayback({action,photo_id:photo.id,pin_seconds:Number(document.querySelector('#pin-seconds').value)}); }
-              catch (error) { document.querySelector('#playback-status').textContent = error.message; button.disabled = false; }
-            });
-            actions.append(button);
-          }
-          actions.append(remove);
-          caption.append(date, actions);
-          card.append(image, caption);
-          return card;
-        }));
+        const previousIndex = galleryPhotos.findIndex(photo => photo.id === selectedPhotoId);
+        galleryPhotos = manifest.photos;
+        galleryPlayback = playback;
+        galleryFrameId = frameId;
+        document.querySelector('#slideshow-destination').textContent = manifest.place_name;
+        renderGallery();
+        if (photoDialog.open) {
+          if (!galleryPhotos.some(photo => photo.id === selectedPhotoId)) selectedPhotoId = galleryPhotos[Math.min(Math.max(previousIndex, 0), galleryPhotos.length - 1)]?.id;
+          if (selectedPhotoId) renderPhotoDetail(); else photoDialog.close();
+        }
       } catch (error) {
         if (request === photoRequest) photoStatus.textContent = `Could not load photos / ${error.message}`;
       }
     }
 
-    photoFrame.addEventListener('change', loadPhotos);
+    function renderGallery() {
+      framePhotos.replaceChildren(...galleryPhotos.map((photo, index) => {
+        const button = document.createElement('button');
+        button.className = 'gallery-tile'; button.type = 'button'; button.dataset.photoId = photo.id;
+        button.setAttribute('aria-label', `Open photo ${index + 1}${galleryPlayback.pinned_photo_id === photo.id ? ', pinned' : ''}`);
+        const image = document.createElement('img'); image.src = photo.url; image.alt = ''; image.loading = index < 9 ? 'eager' : 'lazy'; image.decoding = 'async';
+        button.append(image);
+        if (galleryPlayback.pinned_photo_id === photo.id) {
+          const badge = document.createElement('span'); badge.className = 'photo-badge'; badge.textContent = 'Pinned'; button.append(badge);
+        }
+        button.addEventListener('click', () => {
+          selectedPhotoId = photo.id; renderPhotoDetail(); photoDialog.showModal();
+        });
+        return button;
+      }));
+    }
+    function renderPhotoDetail() {
+      const index = galleryPhotos.findIndex(photo => photo.id === selectedPhotoId);
+      const photo = galleryPhotos[index]; if (!photo) return;
+      const pinned = galleryPlayback.pinned_photo_id === photo.id;
+      document.querySelector('#photo-detail-image').src = photo.url;
+      document.querySelector('#photo-detail-position').textContent = `${index + 1} of ${galleryPhotos.length}`;
+      document.querySelector('#photo-detail-date').textContent = `Sent ${photo.created_at} UTC`;
+      document.querySelector('#photo-detail-state').textContent = pinned ? 'Pinned on this frame'
+        : galleryPlayback.pinned_photo_id ? 'Another photo is pinned. Show now or Pin photo will replace it.' : '';
+      document.querySelector('#show-photo').disabled = pinned || photoActionBusy;
+      document.querySelector('#pin-photo').textContent = pinned ? 'Unpin photo' : 'Pin photo';
+      document.querySelector('#pin-seconds').hidden = pinned;
+      document.querySelector('label[for="pin-seconds"]').hidden = pinned;
+      for (const id of ['pin-photo', 'remove-photo', 'pin-seconds', 'previous-photo', 'next-photo']) document.getElementById(id).disabled = photoActionBusy;
+      document.querySelector('#previous-photo').disabled ||= index === 0;
+      document.querySelector('#next-photo').disabled ||= index === galleryPhotos.length - 1;
+      document.querySelector('#photo-action-status').textContent = '';
+    }
+    for (const button of document.querySelectorAll('[data-close-dialog]')) button.addEventListener('click', () => button.closest('dialog').close());
+    document.querySelector('#add-photos').addEventListener('click', () => {
+      document.querySelector('#upload-frame').value = photoFrame.value;
+      location.hash = 'owner-send-panel';
+    });
+    document.querySelector('#open-slideshow').addEventListener('click', () => {
+      document.querySelector('#slideshow-feedback').textContent = '';
+      slideshowDialog.showModal();
+    });
+    function stepPhoto(direction) {
+      if (photoActionBusy) return;
+      const index = galleryPhotos.findIndex(photo => photo.id === selectedPhotoId);
+      const next = galleryPhotos[index + direction];
+      if (next) { selectedPhotoId = next.id; renderPhotoDetail(); }
+    }
+    document.querySelector('#previous-photo').addEventListener('click', () => stepPhoto(-1));
+    document.querySelector('#next-photo').addEventListener('click', () => stepPhoto(1));
+    photoDialog.addEventListener('keydown', event => {
+      if (event.target.tagName === 'SELECT') return;
+      if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); stepPhoto(event.key === 'ArrowLeft' ? -1 : 1); }
+    });
+    for (const [id, action] of [['show-photo','show'], ['pin-photo','pin'], ['remove-photo','remove']]) {
+      document.getElementById(id).addEventListener('click', async () => {
+        const photo = galleryPhotos.find(photo => photo.id === selectedPhotoId);
+        if (!photo || galleryLoading || photoActionBusy || galleryFrameId !== photoFrame.value) return;
+        const frameId = galleryFrameId;
+        if (action === 'remove' && !confirm('Remove this photo from this frame? Other devices keep their copy.')) return;
+        photoActionBusy = true; renderPhotoDetail();
+        try {
+          if (action === 'remove') {
+            const response = await fetch(photo.url, {method:'DELETE'});
+            if (!response.ok) throw new Error('Could not remove this photo. Please try again.');
+            if (photoFrame.value === frameId) await loadPhotos();
+          } else {
+            await changePlayback({action: action === 'pin' && galleryPlayback.pinned_photo_id === photo.id ? 'resume' : action, photo_id:photo.id, pin_seconds:Number(document.querySelector('#pin-seconds').value)});
+          }
+          if (selectedPhotoId === photo.id && photoDialog.open) document.querySelector('#photo-action-status').textContent = 'Saved. Your frame will update on its next sync.';
+        } catch (error) { document.querySelector('#photo-action-status').textContent = error.message; }
+        finally {
+          const message = document.querySelector('#photo-action-status').textContent;
+          photoActionBusy = false; renderPhotoDetail();
+          document.querySelector('#photo-action-status').textContent = message;
+        }
+      });
+    }
+    photoDialog.addEventListener('close', () => {
+      const tile = [...framePhotos.children].find(tile => tile.dataset.photoId === selectedPhotoId);
+      if (!photosPanel.hidden) (tile || document.querySelector('#add-photos')).focus({preventScroll:true});
+    });
+    window.addEventListener('hashchange', () => { photoDialog.close(); slideshowDialog.close(); });
+    photoFrame.addEventListener('change', () => { photoDialog.close(); slideshowDialog.close(); loadPhotos(); });
     document.querySelector('#refresh-photos').addEventListener('click', loadPhotos);
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && !photosPanel.hidden && photoFrame.value) loadPhotos();
+      if (!document.hidden && !photosPanel.hidden && !photoDialog.open && !slideshowDialog.open && photoFrame.value) loadPhotos();
     });
 
     claimCodeInput.addEventListener('input', event => {

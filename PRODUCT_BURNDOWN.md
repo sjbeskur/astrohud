@@ -1,4 +1,4 @@
-# AstroHUD product burndown
+# Memory Lane product burndown
 
 This is the living product backlog for turning the current proof of concept
 into a household-ready product. It separates work into three tracks so the Pi
@@ -105,6 +105,9 @@ risk and effort than an `S` display refinement.
 | `C-113` | P1 | M | Waiting | Recruit and operate a small family beta with consent, support expectations, feedback interviews, incident handling, and a documented exit decision. | Remote family alpha gate |
 | `C-114` | P1 | M | Ready | Add place/channel management and remote frame status to the owner web experience. Preserve the simple send-first interface for publishers. | `C-103`, `C-104`, `C-111` |
 | `C-115` | P1 | S | Implemented | Owner recovery links restore the existing household after cookies are cleared and work across mobile/desktop browsers. Setup reminds owners to create and save a link; Device settings can replace it without revoking active sessions. Secrets are hashed, and each recovery creates a separate expiring session. Passkeys/verified email remain deferred. | `C-102`, `C-104` |
+| `C-116` | P1 | M | Done | Owner upload supports multiple JPEG/PNG selections, per-file previews and validation, sequential progress, and partial-failure retry without resending known successes. Verified with a 12-photo browser batch and a simulated rejected upload; physical-phone picker validation remains. | Existing owner upload API |
+| `C-117` | P1 | M | Done | Photos opens as a three-column square-thumbnail gallery. Selecting a photo opens a full preview with Previous/Next, Show now, contextual Pin/Unpin, and confirmed frame-specific removal. Verified at 320/390/1280px with keyboard and automated accessibility checks. | Existing gallery/playback API |
+| `C-118` | P1 | S | Done | Slideshow timing and background controls move to a settings dialog above the gallery; pin duration lives with the selected photo. Gallery remains visible first. Verified settings persist through the existing API. | `C-117` |
 | `C-201` | P2 | M | Later | Add carefully controlled delivery or new-photo notifications after measuring whether they help families rather than creating notification pressure. | `C-112`, mobile push support |
 | `C-202` | P2 | M | Later | Reverse-geocode opted-in GPS into a city-and-region tab. Round coordinates before the provider request, cache responses, attribute the provider, and retain rounded coordinates as fallback. | Configurable geocoder/provider review |
 | `C-203` | P2 | L | Later | Add plans, billing, and entitlement enforcement only after household retention and hardware economics justify them. | Product validation |
@@ -131,21 +134,56 @@ authorization, invitations, and the upload contract are stable. Native work
 should begin as a thin client for the proven journey, not as a second product
 specification.
 
+### Planned direction — November 8, 2026
+
+Mobile implementation is deferred while we work through further usability
+enhancements to the current website and device experience. Tauri 2 is the
+proposed framework, subject to a practical iPhone and Android feasibility test.
+No mobile application has been scaffolded or built yet.
+
+- Build one Memory Lane app for owners and invited senders. Preserve the
+  simple **Invite**, **Send photos**, and **Add a device** home, with Photos
+  and Settings as secondary actions. Senders only see actions they can use.
+- Reuse the hosted service and its authorization rules. Bundle the app UI
+  locally and share frontend components where practical; native integrations
+  may require Swift on iOS and Kotlin on Android.
+- Keep web invitations and the browser Wi-Fi wizard available, including for
+  people who do not install the app.
+- The developer currently has no Mac. Plan Android development on the Linux
+  workstation, hosted macOS/Xcode builds for iOS, and real-iPhone testing
+  through TestFlight. Apple developer membership, signing credentials, and
+  physical test phones are prerequisites for the private beta. Access to a
+  Mac may still be needed for interactive iOS debugging.
+
+| Phase | Scope | Exit evidence |
+| --- | --- | --- |
+| 1. Validate Tauri on phones | Prototype photo selection, iPhone HEIC/HEIF conversion, invitation links, protected credential storage, and receiving photos from the system Share menu. Test iOS share-extension and Android share-intent behavior early. | A real iPhone and Android phone can activate an invitation and send a photo to a test frame; record native integration gaps before committing to the framework. |
+| 2. Establish app access | Add revocable app sessions with credentials protected through iOS Keychain and Android Keystore. Define transfer from an existing owner browser, recovery, logout, expiry, and invitation replacement. Browser cookies alone are not the app authentication design. | Access survives app restart, revoked access fails, and reinstalling or changing phones has an explicit recovery path. |
+| 3. Build everyday flows | Implement invitations, sending with preview/destination/progress, gallery, Show now, pin/resume, slideshow controls, recovery, and reset progress. Normalize photos to server-supported formats; retain opt-in location controls. Define safe retries and background-upload limits. | Owners and senders complete their authorized tasks without assistance; retries cannot duplicate publications or silently lose media. |
+| 4. Improve setup handoff | Integrate the Pi's existing Wi-Fi setup with app navigation, QR/link handling, permission prompts, temporary-network changes, and confirmed cloud pairing. Retain browser fallback. | Wrong passwords, denied permissions, interrupted setup, and returning to the home network all have clear recovery steps. |
+| 5. Run a private beta | Establish signed builds, separate test/production configuration, TestFlight and Google Play testing, accessibility checks, privacy disclosures, diagnostics, and release procedures. | Testers on both platforms exercise large photos, limited photo access, weak connections, multiple devices, upgrades, and recovery successfully. |
+
+The first milestone is invitation activation and one photo sent on both
+platforms, including entry through the system Share menu. Full owner controls
+follow that proof. Notifications, billing, and a general photo-library manager
+remain outside the initial scope. A schedule should follow the feasibility
+results rather than assume all required mobile integrations are ready-made.
+
 ### Active burn
 
 | ID | Priority | Size | Status | Outcome / acceptance evidence | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| `M-101` | P0 | S | Waiting | Choose native iOS/Android or a shared framework using a short technical spike. Record camera/photo-library, background upload, share extension, accessibility, and maintenance tradeoffs. | Draft hosted API contract |
+| `M-101` | P0 | S | Later; Tauri 2 proposed | Run the phone feasibility milestone above before committing to Tauri. Record photo-library/HEIC, secure storage, deep-link, background-upload, share-extension, accessibility, and maintenance tradeoffs. | Draft hosted API contract; iPhone/Android test devices; hosted macOS build access |
 | `M-102` | P0 | M | Waiting | Publish and version the authentication, invitation, channel, upload, delivery, and error contracts; generate or share typed client models where useful. | `C-102` through `C-107` |
-| `M-103` | P0 | M | Waiting | Establish iOS and Android builds, CI, signing, environments, secure configuration, crash reporting, and a minimal navigation shell. | `M-101` |
+| `M-103` | P0 | M | Waiting | Establish iOS and Android builds, CI, signing, environments, secure configuration, crash reporting, and a minimal navigation shell. Use hosted macOS/Xcode builds for iOS while no development Mac is available. | `M-101`; signing accounts and credentials |
 | `M-104` | P0 | M | Waiting | Implement sign-in, account recovery, invite acceptance, and safe credential storage with a complete logout/revocation path. | `C-102`, `C-107`, `M-103` |
 | `M-105` | P0 | L | Waiting | Select one or more photos, choose a human-readable destination/channel, upload with visible progress, and receive an honest success or failure state. | `C-105`, `M-102`, `M-104` |
 | `M-106` | P0 | S | Waiting | Show a clear per-send metadata control. Location remains off unless selected, and the user previews whether approximate location will appear. | `M-105`, location API contract |
 | `M-107` | P0 | M | Waiting | Retry interrupted uploads safely without duplicates; define background execution behavior for both platforms. | `M-105` |
 | `M-108` | P0 | M | Waiting | Meet keyboard/screen-reader, dynamic text, contrast, reduced-motion, touch-target, and error-recovery requirements for the core journey. | `M-103` through `M-107` |
 | `M-109` | P0 | M | Waiting | Distribute signed builds through TestFlight and an Android testing track with privacy disclosures, tester consent, crash visibility, and rollback. | Core mobile journey |
-| `M-201` | P1 | M | Later | Add a system share extension so a photo can be sent to AstroHUD directly from the platform photo viewer. | `M-105`, `M-107` |
-| `M-202` | P1 | M | Later | Support invitation and pairing deep links with safe expired-link and wrong-account recovery. | `C-103`, `C-107` |
+| `M-201` | P1 | M | Later | Complete system sharing so a photo can be sent to Memory Lane directly from the platform photo viewer. Validate the platform integration during `M-101` before completing the production flow. | `M-101`, `M-105`, `M-107` |
+| `M-202` | P0 | M | Later | Support invitation and pairing deep links with safe expired-link and wrong-account recovery. Invitation-link handling is part of the first mobile milestone. | `M-101`, `C-103`, `C-107` |
 | `M-203` | P1 | M | Later | Show recent sends, delivery state, and authorized removal without becoming a general photo-library manager. | `C-106`, `C-111` |
 | `M-204` | P1 | M | Later | Add an offline send queue with explicit storage limits and user-controlled cancellation. | `M-107` |
 | `M-205` | P1 | M | Later | Add opt-in push notifications only for validated engagement or operational needs. | `C-201` |
@@ -169,8 +207,10 @@ specification.
 3. **Measure the web journey:** `C-109` through `C-113`. Use actual household
    behavior to refine the channel, invitation, and delivery model.
 4. **Build the thin mobile client:** start `M-101` only when the hosted identity
-   and media contracts are unlikely to churn. Ship the core send journey before
-   share extensions, push notifications, captions, or billing.
+   and media contracts are unlikely to churn and the current usability pass is
+   complete. Validate system sharing and invitation links in the feasibility
+   spike, then ship the core send journey before push notifications, captions,
+   or billing.
 
 ## Burndown maintenance
 

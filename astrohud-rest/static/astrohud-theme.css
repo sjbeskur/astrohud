@@ -285,3 +285,38 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .simple-page input, .simple-page .privacy-option { border-radius: 12px; }
 .simple-page input, .simple-page label { font-size: 1rem; }
 .simple-page .privacy-option small { font-family: inherit; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 0.8rem; }
+
+/* Photo browsing keeps controls out of the thumbnail grid. */
+.gallery-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin: 0.75rem 0; }
+.gallery-toolbar .quiet-button { padding-inline: 0.75rem; font-size: 0.85rem; }
+.gallery-destination { margin: 0; color: var(--hud-muted); font-size: 0.95rem; overflow-wrap: anywhere; }
+.gallery-destination strong { font-weight: 400; }
+.gallery-playback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; color: var(--hud-muted); font-size: 0.85rem; line-height: 1.5; }
+.gallery-playback p { flex: 1; margin: 0; }
+.gallery-playback #resume-slideshow { margin: 0; font-size: 0.8rem; }
+#photo-status { color: var(--hud-muted); font-size: 0.85rem; }
+.owner-photo-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+.gallery-tile { position: relative; display: block; aspect-ratio: 1; width: 100%; min-width: 0; padding: 0; border: 0; border-radius: 8px; background: var(--hud-surface); }
+.owner-photo-grid .gallery-tile img { display: block; width: 100%; height: 100%; aspect-ratio: 1; object-fit: cover; border-radius: inherit; }
+.photo-badge { position: absolute; bottom: 5px; left: 5px; padding: 3px 6px; border-radius: 5px; background: #070910e8; color: var(--hud-text); font-size: 0.7rem; }
+.photo-dialog { width: min(540px, calc(100% - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 1.25rem; border: 1px solid var(--hud-line); border-radius: 20px; color: var(--hud-text); background: var(--hud-surface); overflow-y: auto; overscroll-behavior: contain; }
+.photo-dialog::backdrop { background: #000b; }
+.dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 1rem; }
+.owner-page .dialog-heading h2 { margin: 0; font-size: 1.15rem; }
+.dialog-heading .quiet-button { flex-shrink: 0; }
+#photo-detail-image { display: block; width: 100%; height: min(36dvh, 320px); object-fit: contain; border-radius: 8px; background: var(--hud-void); }
+.photo-navigation { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; }
+.photo-navigation .quiet-button { padding-inline: 0.6rem; font-size: 0.8rem; }
+#photo-detail-position { margin: 0; color: var(--hud-muted); font-size: 0.8rem; white-space: nowrap; }
+.photo-detail-actions { display: grid; gap: 0.75rem; }
+.photo-detail-actions label { margin: 0.25rem 0 -0.4rem; }
+.photo-dialog [role="status"] { font-size: 0.9rem; line-height: 1.5; }
+.photo-dialog .display-controls { padding: 0; border: 0; background: none; }
+.upload-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
+.upload-previews figure { min-width: 0; margin: 0; }
+.upload-previews img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 8px; }
+.upload-previews figcaption { margin-top: 0.35rem; color: var(--hud-muted); font-size: 0.75rem; overflow-wrap: anywhere; line-height: 1.5; }
+.upload-previews .upload-error figcaption { color: var(--hud-danger); }
+#upload-progress { width: 100%; height: 10px; margin-top: 1.25rem; accent-color: var(--hud-lavender); }
+body:has(dialog[open]) { overflow: hidden; }
+.photo-dialog button:disabled { opacity: 0.5; cursor: default; }

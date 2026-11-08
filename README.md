@@ -102,9 +102,13 @@ cargo run --package astrohud-rest --bin astrohud-admin -- \
 The optional recovery PNG and its activation URL are private credentials.
 Protect them like a password until delivered to the owner.
 
-Once the frame is connected, owners can use **Send a photo** directly on the
-owner page. No invitation to themselves is required. To let someone else send
-photos, create a sender link from the owner page. Open
+Once the frame is connected, owners can use **Send photos** directly on the
+owner page, or **Add photos** from the gallery. Select several JPEG or PNG
+photos at once; each can be up to 20 MB. Uploads run sequentially with progress
+and individual failure feedback. Successfully received photos leave the queue,
+so retrying the remaining selection does not resend those successes. No
+invitation to themselves is required. To let someone else send photos, create
+a sender link from the owner page. Open
 that link in a private browser window to exercise the recipient experience:
 the destination is fixed by the invitation, the sender previews a JPEG or PNG,
 and the server derives the household and channel rather than trusting form
@@ -118,9 +122,12 @@ recipient and destination, and immediately disables their previous link and
 browser sessions. Disabled invitations cannot be replaced; create a new
 invitation to restore their access.
 
-The owner page also shows photo previews for each frame. Choose **Remove from
-this frame** to remove a photo from that frame's manifest and protected media
-access. The native frame deletes its cached copy at its next successful sync;
+The Photos page shows three columns of square thumbnails for the selected
+frame. Tap a thumbnail for a full preview, Previous/Next navigation, and
+**Show now**, **Pin photo** / **Unpin photo**, or **Remove from this frame**.
+Slideshow timing and the soft background are behind **Slideshow settings**
+above the gallery. Choose **Remove from this frame** to remove a photo from
+that frame's manifest and protected media access. The native frame deletes its cached copy at its next successful sync;
 an offline frame applies the change when it reconnects. Removal is specific to
 the selected frame: other subscribed frames and the server's original photo
 remain available. The gallery shows up to 200 photos, keeping a selected or
