@@ -1,7 +1,6 @@
 [Unit]
-Description=AstroHUD native picture frame
-Wants=network-online.target
-After=network-online.target
+Description=Memory Lane native picture frame
+After=systemd-user-sessions.service
 ConditionPathExists=!/var/lib/astrohud/reset-in-progress
 Conflicts=getty@tty1.service
 

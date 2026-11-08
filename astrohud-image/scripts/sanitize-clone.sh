@@ -77,7 +77,6 @@ if ! [[ "$server_url" =~ ^https?://[^[:space:]\|]+$ ]]; then
 fi
 
 install -d -m 0755 "$(dirname "$output_image")"
-chmod 0600 "$source_image"
 cp --reflink=auto --sparse=always "$source_image" "$output_image"
 chmod 0600 "$output_image"
 
@@ -122,6 +121,7 @@ root_mounted=true
 install -d -m 0755 "$mount_dir/boot/firmware"
 mount "$boot_partition" "$mount_dir/boot/firmware"
 boot_mounted=true
+python3 "$script_dir/configure-boot.py" "$mount_dir"
 
 for required in \
     etc/os-release \
@@ -154,6 +154,25 @@ fi
 sed -i "s|^Environment=ASTROHUD_SERVER_URL=.*|Environment=ASTROHUD_SERVER_URL=$server_url|" \
     "$mount_dir/etc/systemd/system/astrohud-frame.service" \
     "$mount_dir/etc/systemd/system/astrohud-provisioner.service"
+install -D -o root -g root -m 0644 \
+    "$image_dir/../astrohud-provisioner/deploy/astrohud-captive-dns.conf" \
+    "$mount_dir/etc/NetworkManager/dnsmasq-shared.d/astrohud-captive.conf"
+# Cached photos and setup screens must not wait for Internet access at boot.
+rm -f "$mount_dir/etc/systemd/system/network-online.target.wants/NetworkManager-wait-online.service"
+{
+    printf 'Memory Lane beta image\n'
+    printf 'source_commit=%s\n' "$(git -C "$image_dir/.." rev-parse HEAD)"
+    if [ -n "$(git -C "$image_dir/.." status --porcelain)" ]; then
+        printf 'source_dirty=true\n'
+    else
+        printf 'source_dirty=false\n'
+    fi
+    printf 'built_at=%s\n' "$(date -u +%FT%TZ)"
+    printf 'server_url=%s\n' "$server_url"
+    printf 'frame_sha256=%s\n' "$(sha256sum "$mount_dir/usr/local/bin/astrohud-frame" | cut -d ' ' -f 1)"
+    printf 'provisioner_sha256=%s\n' "$(sha256sum "$mount_dir/usr/local/sbin/astrohud-provisioner" | cut -d ' ' -f 1)"
+} > "$mount_dir/etc/astrohud/image-release"
+chmod 0644 "$mount_dir/etc/astrohud/image-release"
 
 if ! grep -q "^${old_user}:" "$mount_dir/etc/passwd"; then
     echo "Expected maintenance account was not found in the clone." >&2

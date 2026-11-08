@@ -2,6 +2,10 @@
 set -eu
 
 rootfs="$1"
+script_dir="$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)"
+boot_config="$script_dir/configure-boot.py"
+if [ ! -f "$boot_config" ]; then boot_config="$script_dir/scripts/configure-boot.py"; fi
+python3 "$boot_config" "$rootfs"
 
 require_file() {
     if [ ! -f "$rootfs/$1" ]; then

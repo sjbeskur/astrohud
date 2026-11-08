@@ -1,4 +1,4 @@
-# AstroHUD appliance image
+# Memory Lane appliance image
 
 This definition builds a sealed ARM64 image for Raspberry Pi Zero 2 W with
 official `rpi-image-gen` v2.6.0. It installs the native frame, Wi-Fi
@@ -12,6 +12,49 @@ to use passwordless `sudo` for attended appliance support. Replace this
 maintenance policy before a broader release.
 
 ## Build
+
+### Just recipes
+
+Install `just` and Docker, then run these commands from the repository:
+
+```sh
+just                       # List recipes; no build or write
+just image-check           # Application and boot-configuration tests
+just pi-build              # Cross-compile the Pi applications only
+just image-build           # Compile and create target/astrohud-images/memory-lane-beta.img
+just image-devices         # Identify your removable SD card
+just image-verify          # Verify the default image checksum
+just image-flash /dev/sdg   # ERASES this card, writes the default image, verifies readback
+```
+
+The beta build uses the saved `astrohud-original-2026-08-30.img` master and
+defaults to `~/.ssh/id_ed25519.pub` for the operator public key. Override these
+with `ASTROHUD_MASTER_IMAGE` and `ASTROHUD_OPERATOR_PUBKEY`; use
+`ASTROHUD_SERVER_URL` to change the server. Output files are never overwritten.
+To use a different output filename:
+
+```sh
+just image-build target/astrohud-images/my-beta.img
+just image-verify target/astrohud-images/my-beta.img
+just image-flash /dev/sdg target/astrohud-images/my-beta.img
+```
+
+For the already built November 7 image:
+
+```sh
+just image-flash /dev/sdg target/astrohud-images/memory-lane-beta-2026-11-07.img
+```
+
+Recheck the disk name with `just image-devices` each time. Flashing requires an
+explicit removable whole disk and does not build an image automatically. If
+unmounting reports a busy card, close file manager windows and terminals using
+the card and retry. No image data is written until unmounting succeeds.
+
+`just image-build-clean` builds the separate clean minbase image using the
+`RPI_IMAGE_GEN_DIR` setup below. That generator produces its own output;
+`image-flash` expects an uncompressed `.img` with a matching `.img.sha256` file.
+
+### Direct scripts
 
 First cross-compile the application binaries:
 
@@ -35,6 +78,25 @@ input so attended LAN tests can override it with a local server.
 The post-build check fails if any appliance runtime state or reusable host
 identity leaks into the root filesystem. Do not use an assigned Pi as an image
 source and do not "seal" an assigned appliance in place.
+
+## Current test build (2026-11-07)
+
+The current native applications include a dimmed, blurred full-screen photo
+background, preparation of the next image during playback, and support for
+owner-selected photos, timed pins, and slideshow intervals. The new owner
+controls and direct owner uploads also require the matching REST service and
+web files; rebuilding the SD image alone does not update the hosted website.
+
+Both build paths apply quiet boot configuration: hide the firmware splash,
+reduce boot messages, move the kernel console off the viewer's terminal, and
+mask the tty1 login prompt. Diagnostic logs remain available over SSH. The
+viewer starts without waiting for Internet access. Verify the complete boot
+sequence on a spare Pi before distributing the image.
+
+The clone path below refreshes the existing beta OS; it does not produce the
+smaller clean minbase image. That separate build requires the pinned image
+generator and its host dependencies. The application updater is planned but
+is not included in either image yet.
 
 ## Friendly-beta clone path
 

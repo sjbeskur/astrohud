@@ -148,6 +148,7 @@ impl CacheStore {
         Ok(Playlist {
             place_name: manifest.place_name.clone(),
             photos,
+            playback: manifest.playback.clone(),
         })
     }
 
@@ -155,8 +156,9 @@ impl CacheStore {
         match self.load_manifest()? {
             Some(manifest) => self.reconcile(&manifest),
             None => Ok(Playlist {
-                place_name: "M3mory L4ne".to_owned(),
+                place_name: "Memory Lane".to_owned(),
                 photos: Vec::new(),
+                playback: Default::default(),
             }),
         }
     }
@@ -262,6 +264,7 @@ mod tests {
             .install(&photo, Cursor::new(png_bytes(2, 2)))
             .expect("install image");
         let manifest = FrameManifest {
+            playback: Default::default(),
             frame_id: "demo-frame".to_owned(),
             place_name: "Kitchen".to_owned(),
             photos: vec![photo],
@@ -286,6 +289,7 @@ mod tests {
             .install(&second, Cursor::new(png_bytes(2, 2)))
             .unwrap();
         let mut manifest = FrameManifest {
+            playback: Default::default(),
             frame_id: "demo-frame".to_owned(),
             place_name: "Kitchen".to_owned(),
             photos: vec![second.clone()],
@@ -324,6 +328,7 @@ mod tests {
             .install(&older, Cursor::new(png_bytes(2, 2)))
             .expect("install older");
         let manifest = FrameManifest {
+            playback: Default::default(),
             frame_id: "demo-frame".to_owned(),
             place_name: "Kitchen".to_owned(),
             photos: vec![newest, older],

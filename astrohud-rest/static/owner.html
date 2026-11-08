@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
-  <title>Set up your M3mory L4ne</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=10560af579c6">
+  <title>Set up your Memory Lane</title>
+  <link rel="stylesheet" href="/astrohud-theme.css?v=84d4a66263db">
 </head>
 <body class="owner-page">
   <header class="hud-nav">
     <div class="hud-shell hud-nav-row">
-      <div class="hud-brand"><span class="hud-mark">ML</span> M3mory L4ne</div>
+      <div class="hud-brand"><span class="hud-mark">ML</span> Memory Lane</div>
       <div class="hud-link-state"><i class="status-light"></i> Owner link / Private</div>
     </div>
   </header>
@@ -23,8 +23,9 @@
     </header>
 
     <nav id="owner-actions" class="owner-actions" aria-label="Owner actions" hidden>
-      <a class="signal-button" href="#invite-panel">Invite someone →</a>
-      <a class="signal-button secondary" href="#photos-panel">Manage photos</a>
+      <a class="signal-button" href="#owner-send-panel">Send a photo</a>
+      <a class="signal-button secondary" href="#invite-panel">Invite</a>
+      <a class="signal-button secondary" href="#photos-panel">Photos</a>
     </nav>
 
     <div class="instrument-stack">
@@ -34,7 +35,7 @@
           <p class="instrument-label">This browser</p>
         </div>
         <h2 id="owner-access-title">Owner access is missing</h2>
-        <p class="instrument-copy">Open your saved private recovery link to restore owner access on this phone or another device. If another browser still has access, create a recovery link in its Device settings. If you have neither, contact M3mory L4ne support for recovery.</p>
+        <p class="instrument-copy">Open your saved private recovery link to restore owner access on this phone or another device. If another browser still has access, create a recovery link in its Device settings. If you have neither, contact Memory Lane support for recovery.</p>
       </section>
 
       <section id="claim-panel" class="instrument-panel" aria-labelledby="claim-title">
@@ -70,6 +71,22 @@
         <div id="frames" class="connection-summary"></div>
         <button id="open-device-settings" class="quiet-button" type="button"><span aria-hidden="true" style="margin-right: 0.4rem;">&#9881;&#65038;</span>Device settings</button>
         <p id="recovery-reminder" class="instrument-copy" hidden>Keep owner access if you change phones or clear browser data. <button id="save-recovery-shortcut" class="quiet-button" type="button">Save a recovery link</button></p>
+      </section>
+
+      <section id="owner-send-panel" class="instrument-panel" hidden aria-labelledby="owner-send-title">
+        <h2 id="owner-send-title">Send a photo</h2>
+        <p class="instrument-copy">Send straight to your frame from here.</p>
+        <form id="owner-photo-form">
+          <label for="upload-frame">Send to</label>
+          <select id="upload-frame" required></select>
+          <label for="owner-photo">Choose a photo</label>
+          <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" required>
+          <p class="field-hint">JPEG or PNG / Up to 20 MB</p>
+          <figure id="owner-preview-shell" class="photo-preview" hidden><img id="owner-preview" alt="Photo ready to send"><figcaption>Preview / Nothing sent yet</figcaption></figure>
+          <label class="privacy-option" for="owner-location"><input id="owner-location" type="checkbox" name="include_location" value="true"><span><strong>Show approximate location</strong><small>Optional, if this photo contains GPS information.</small></span></label>
+          <button class="signal-button full-width" type="submit">Send photo →</button>
+        </form>
+        <p id="owner-send-status" role="status"></p>
       </section>
 
       <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
@@ -137,6 +154,17 @@
         <p class="instrument-copy">Remove a photo from the selected frame. Other frames keep their copy. An offline frame removes it when it reconnects.</p>
         <label for="photo-frame">Frame</label>
         <select id="photo-frame"></select>
+        <form id="display-form" class="display-controls">
+          <div class="field-row">
+            <div><label for="slide-seconds">Time per photo</label><select id="slide-seconds"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></div>
+            <button class="quiet-button" type="submit">Save display settings</button>
+          </div>
+          <label class="privacy-option" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a dimmed, blurred version of the photo.</small></span></label>
+        </form>
+        <label for="pin-seconds">When you pin a photo, hold it for</label>
+        <select id="pin-seconds"><option value="900">15 minutes</option><option value="1800" selected>30 minutes</option><option value="3600">1 hour</option><option value="10800">3 hours</option><option value="0">Until I resume the slideshow</option></select>
+        <button id="resume-slideshow" class="quiet-button" type="button">Resume slideshow</button>
+        <p id="playback-status" role="status"></p>
         <p id="photo-status" role="status"></p>
         <div id="frame-photos" class="owner-photo-grid"></div>
       </section>
@@ -159,6 +187,7 @@
     let photoRequest = 0;
     let resetTimer;
     let recoveryExists = false;
+    let ownerPreviewUrl;
     const invitations = document.querySelector('#invitations');
     const invitationCount = document.querySelector('#invitation-count');
     const newInvitation = document.querySelector('#new-invitation');
@@ -191,6 +220,13 @@
       invitePanel.hidden = !connected;
       ownerActions.hidden = !connected;
       photosPanel.hidden = !connected;
+      document.querySelector('#owner-send-panel').hidden = !connected;
+      const uploadFrame = document.querySelector('#upload-frame');
+      const selectedUpload = uploadFrame.value;
+      uploadFrame.replaceChildren(...context.frames.map(frame => {
+        const option = document.createElement('option'); option.value = frame.frame_id; option.textContent = frame.place_name; return option;
+      }));
+      if (context.frames.some(frame => frame.frame_id === selectedUpload)) uploadFrame.value = selectedUpload;
       const selectedFrame = photoFrame.value;
       photoFrame.replaceChildren(...context.frames.map(frame => {
         const option = document.createElement('option');
@@ -254,6 +290,7 @@
         invitePanel.hidden = true;
         ownerActions.hidden = true;
         photosPanel.hidden = true;
+        document.querySelector('#owner-send-panel').hidden = true;
         document.querySelector('#device-settings').hidden = true;
         clearTimeout(resetTimer);
         ownerAccessHelp.hidden = false;
@@ -322,7 +359,7 @@
     if (navigator.share) shareRecovery.hidden = false;
     shareRecovery.addEventListener('click', async () => {
       try {
-        await navigator.share({title: 'Private M3mory L4ne owner recovery', url: document.querySelector('#recovery-url').value});
+        await navigator.share({title: 'Private Memory Lane owner recovery', url: document.querySelector('#recovery-url').value});
         document.querySelector('#recovery-feedback').textContent = 'Keep this recovery link somewhere private that you can access from your other devices.';
       } catch (error) {
         if (error.name !== 'AbortError') document.querySelector('#recovery-feedback').textContent = 'Use Copy link to save the complete recovery link.';
@@ -439,6 +476,53 @@
       }
     }
 
+    document.querySelector('#owner-photo').addEventListener('change', event => {
+      if (ownerPreviewUrl) URL.revokeObjectURL(ownerPreviewUrl);
+      const file = event.target.files[0];
+      document.querySelector('#owner-preview-shell').hidden = !file;
+      if (file) { ownerPreviewUrl = URL.createObjectURL(file); document.querySelector('#owner-preview').src = ownerPreviewUrl; }
+    });
+    document.querySelector('#owner-photo-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.target.querySelector('button');
+      const status = document.querySelector('#owner-send-status');
+      const frameId = document.querySelector('#upload-frame').value;
+      const file = document.querySelector('#owner-photo').files[0];
+      if (!file || file.size > 20 * 1024 * 1024) { status.textContent = 'Choose a JPEG or PNG up to 20 MB.'; return; }
+      button.disabled = true; status.textContent = 'Sending your photo…';
+      try {
+        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos`, {method:'POST', body:new FormData(event.target)});
+        if (!response.ok) throw new Error(await response.text());
+        event.target.reset();
+        document.querySelector('#upload-frame').value = frameId;
+        document.querySelector('#owner-preview-shell').hidden = true;
+        URL.revokeObjectURL(ownerPreviewUrl); ownerPreviewUrl = undefined;
+        photoFrame.value = frameId; await loadPhotos();
+        status.textContent = 'Photo received. Your frame will download it when connected.';
+      } catch (error) { status.textContent = `Could not send photo / ${error.message}`; }
+      finally { button.disabled = false; }
+    });
+    async function changePlayback(payload) {
+      const frameId = photoFrame.value;
+      const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/playback`, {
+        method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(payload)
+      });
+      if (!response.ok) throw new Error(await response.text());
+      if (photoFrame.value === frameId) await loadPhotos();
+      document.querySelector('#playback-status').textContent += ' Change saved; the frame will apply it on its next sync.';
+    }
+    document.querySelector('#display-form').addEventListener('submit', async event => {
+      event.preventDefault();
+      const button = event.target.querySelector('button'); button.disabled = true;
+      try { await changePlayback({slide_seconds:Number(document.querySelector('#slide-seconds').value), blur_background:document.querySelector('#blur-background').checked}); }
+      catch (error) { document.querySelector('#playback-status').textContent = error.message; }
+      finally { button.disabled = false; }
+    });
+    document.querySelector('#resume-slideshow').addEventListener('click', async () => {
+      try { await changePlayback({action:'resume'}); }
+      catch (error) { document.querySelector('#playback-status').textContent = error.message; }
+    });
+
     async function loadPhotos() {
       const request = ++photoRequest;
       const frameId = photoFrame.value;
@@ -449,7 +533,17 @@
         if (!response.ok) throw new Error(await response.text());
         const manifest = await response.json();
         if (request !== photoRequest) return;
-        photoStatus.textContent = manifest.photos.length ? `${manifest.photos.length} photos (newest first)` : 'No photos on this frame yet.';
+        const playback = manifest.playback || {};
+        const interval = document.querySelector('#slide-seconds');
+        const seconds = playback.slide_seconds || 12;
+        if (![...interval.options].some(option => Number(option.value) === seconds)) interval.add(new Option(`${seconds} seconds`, String(seconds)));
+        interval.value = String(seconds);
+        document.querySelector('#blur-background').checked = playback.blur_background !== false;
+        document.querySelector('#resume-slideshow').disabled = !playback.pinned_photo_id;
+        document.querySelector('#playback-status').textContent = playback.pinned_photo_id
+          ? (playback.pinned_until ? `Photo pinned until ${new Date(playback.pinned_until * 1000).toLocaleTimeString()}.` : 'Photo pinned until you resume the slideshow.')
+          : `Slideshow / ${seconds} seconds per photo.`;
+        photoStatus.textContent = manifest.photos.length ? `${manifest.photos.length} photos available` : 'No photos on this frame yet.';
         framePhotos.replaceChildren(...manifest.photos.map(photo => {
           const card = document.createElement('figure');
           card.className = 'photo-preview';
@@ -478,7 +572,19 @@
               remove.disabled = false;
             }
           });
-          caption.append(date, remove);
+          const actions = document.createElement('div'); actions.className = 'photo-actions';
+          for (const [label, action] of [['Show now','show'],['Pin photo','pin']]) {
+            const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet-button';
+            button.textContent = action === 'pin' && playback.pinned_photo_id === photo.id ? 'Pinned' : label;
+            button.addEventListener('click', async () => {
+              button.disabled = true;
+              try { await changePlayback({action,photo_id:photo.id,pin_seconds:Number(document.querySelector('#pin-seconds').value)}); }
+              catch (error) { document.querySelector('#playback-status').textContent = error.message; button.disabled = false; }
+            });
+            actions.append(button);
+          }
+          actions.append(remove);
+          caption.append(date, actions);
           card.append(image, caption);
           return card;
         }));
@@ -574,7 +680,7 @@
     shareLink.addEventListener('click', async () => {
       try {
         await navigator.share({
-          title: 'Send a photo to my M3mory L4ne',
+          title: 'Send a photo to my Memory Lane',
           text: 'Open this private link in Safari or Chrome to send a photo.',
           url: invitationUrl.value
         });

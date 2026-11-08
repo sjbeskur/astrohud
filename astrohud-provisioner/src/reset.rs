@@ -166,11 +166,11 @@ pub fn resume(server: &str) -> Result<bool, String> {
         identity::atomic_write_json(Path::new(JOURNAL), &plan).map_err(|e| e.to_string())?;
     }
     // The renderer restarts with fresh credentials and only the setup card.
-    setup_display::write(
-        &plan.next_identity,
-        Path::new(setup_display::SETUP_SCREEN_PATH),
-    )
-    .map_err(|e| e.to_string())?;
+    if ProvisioningPaths::default().provisioning_required() {
+        setup_display::write_preparing(Path::new(setup_display::SETUP_SCREEN_PATH))?;
+    } else {
+        setup_display::write_waiting(Path::new(setup_display::SETUP_SCREEN_PATH))?;
+    }
     remove_if_exists(&paths.state.join(BLOCK)).map_err(|e| e.to_string())?;
     systemctl(&[
         "start",

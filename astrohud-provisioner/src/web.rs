@@ -22,13 +22,17 @@ enum ProvisioningStatus {
     Connected,
 }
 
+pub fn bind() -> Result<Server, String> {
+    Server::http("0.0.0.0:80").map_err(|error| error.to_string())
+}
+
 pub fn serve(
+    server: Server,
     identity: DeviceIdentity,
     manager: NetworkManager,
     networks: Vec<WifiNetwork>,
     server_url: &str,
 ) -> Result<(), String> {
-    let server = Server::http("0.0.0.0:80").map_err(|error| error.to_string())?;
     let status = Arc::new(Mutex::new(ProvisioningStatus::Ready));
     let finished = Arc::new(AtomicBool::new(false));
 
@@ -167,7 +171,7 @@ fn handle_request(
                         finished.store(true, Ordering::Release);
                     }
                     Err(error) => {
-                        if let Err(display_error) = setup_display::write(
+                        if let Err(display_error) = setup_display::write_retry(
                             &identity,
                             Path::new(setup_display::SETUP_SCREEN_PATH),
                         ) {
@@ -178,12 +182,23 @@ fn handle_request(
                 }
             });
         }
-        _ => respond(
+        (&Method::Get, "/") | (&Method::Get, "/index.html") => respond(
             request,
             200,
             "text/html; charset=utf-8",
             setup_page(identity, networks, &status.lock().expect("status lock")),
         ),
+        _ => {
+            // HTTP connectivity probes should lead straight to the portal.
+            let response = Response::empty(StatusCode(302))
+                .with_header(
+                    Header::from_bytes("Location", "http://10.42.0.1/").expect("static header"),
+                )
+                .with_header(
+                    Header::from_bytes("Cache-Control", "no-store").expect("static header"),
+                );
+            let _ = request.respond(response);
+        }
     }
 }
 
@@ -251,13 +266,13 @@ fn setup_page(
         "<option value=\"\" disabled selected>Choose your Wi-Fi network</option>"
     };
     page_shell(
-        "Connect your M3mory L4ne",
+        "Connect your Memory Lane",
         &format!(
             r#"
             <section class="intro">
               <p class="signal-label"><span></span> Setup / {device_code}</p>
               <h1>Bring your frame <em>online.</em></h1>
-              <p>Choose the Wi-Fi network this frame should use. Your phone will leave the temporary M3mory L4ne link while the frame tests it.</p>
+              <p>Choose the Wi-Fi network this frame should use. Your phone will leave the temporary Memory Lane link while the frame tests it.</p>
             </section>
             {status_message}
             <section class="instrument-panel">
@@ -305,7 +320,7 @@ fn setup_page(
               updateNetwork();
             </script>
             <p class="status-line"><i></i> Setup link active / {ssid}</p>
-            <p class="fine">If the connection fails, reconnect to this M3mory L4ne setup link and try again.</p>
+            <p class="fine">If the connection fails, reconnect to this Memory Lane setup link and try again.</p>
             "#,
             ssid = escape_html(&identity.setup_ssid),
             device_code = escape_html(&identity.device_code),
@@ -329,10 +344,10 @@ fn setup_page(
 fn onboarding_url(server_url: &str, bootstrap_token: &str) -> Result<String, String> {
     let mut url = Url::parse(server_url).map_err(|error| error.to_string())?;
     if !matches!(url.scheme(), "http" | "https") {
-        return Err("M3mory L4ne server URL must use HTTP or HTTPS".to_owned());
+        return Err("Memory Lane server URL must use HTTP or HTTPS".to_owned());
     }
     url.path_segments_mut()
-        .map_err(|_| "M3mory L4ne server URL cannot be a base URL".to_owned())?
+        .map_err(|_| "Memory Lane server URL cannot be a base URL".to_owned())?
         .clear()
         .extend(["onboard.html"]);
     url.set_fragment(Some(bootstrap_token));
@@ -393,7 +408,7 @@ select,input {{ border:1px solid #465269; background:#0b0f18; }} button,.signal-
 .message-panel {{ margin-top:0; }} .message-panel .signal-button {{ margin-top:2rem; }} strong {{ color:var(--text); }}
 @media(max-width:520px) {{ .nav-row,main {{ width:min(100% - 1.5rem,42rem); }} .brand {{ margin-left:-.75rem;padding-left:.75rem; }} .nav-state {{ letter-spacing:.04em; }} .instrument-heading {{ flex-direction:column; }} }}
 @media(prefers-reduced-motion:reduce) {{ *,*::before,*::after {{ transition-duration:.01ms!important; }} }}
-</style></head><body><header class="nav"><div class="nav-row"><div class="brand"><span class="mark">ML</span> M3mory L4ne</div><div class="nav-state"><i></i> Setup link / Active</div></div></header><main>{}</main></body></html>"##,
+</style></head><body><header class="nav"><div class="nav-row"><div class="brand"><span class="mark">ML</span> Memory Lane</div><div class="nav-state"><i></i> Setup link / Active</div></div></header><main>{}</main></body></html>"##,
         escape_html(title),
         content
     )
@@ -454,7 +469,7 @@ mod tests {
     fn write_portal_preview() {
         let identity = DeviceIdentity {
             device_code: "AB23CD".to_owned(),
-            setup_ssid: "M3mory L4ne-AB23CD".to_owned(),
+            setup_ssid: "Memory Lane-AB23CD".to_owned(),
             setup_password: "23456789ABCDEFGH".to_owned(),
             device_id: "00000000-0000-4000-8000-000000000000".to_owned(),
             device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".to_owned(),

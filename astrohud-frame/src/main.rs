@@ -2,9 +2,9 @@ use astrohud_frame::BoxError;
 use astrohud_frame::cache::CacheStore;
 use astrohud_frame::config::{Config, usage};
 use astrohud_frame::model::Playlist;
-use astrohud_frame::sync::{ServerClient, sync_once};
+use astrohud_frame::prepared::{Prefetcher, PreparedImage};
+use astrohud_frame::sync::{ServerClient, sync_once_with_updates};
 use font8x8::{BASIC_FONTS, UnicodeFonts};
-use image::{DynamicImage, ImageDecoder, ImageReader};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
 use sdl2::pixels::{Color, PixelFormatEnum};
@@ -19,7 +19,7 @@ use std::sync::mpsc::{self, Receiver, TryRecvError};
 use std::thread;
 use std::time::{Duration, Instant, SystemTime};
 
-const FRAME_MARGIN: u32 = 24;
+const FRAME_MARGIN: u32 = 8;
 const FRAME_GAP: i32 = 8;
 const FRAME_RAIL: u32 = 5;
 const HUD_LINE: Color = Color::RGB(48, 58, 75);
@@ -72,7 +72,9 @@ fn spawn_sync(config: Config) -> Receiver<Playlist> {
         };
 
         loop {
-            match sync_once(&client, &cache) {
+            match sync_once_with_updates(&client, &cache, |playlist| {
+                let _ = sender.try_send(playlist);
+            }) {
                 Ok(result) => {
                     for warning in result.warnings {
                         eprintln!("frame sync warning: {warning}");
@@ -108,7 +110,7 @@ fn run_viewer(
     let video = sdl.video().map_err(other)?;
     sdl2::hint::set("SDL_RENDER_SCALE_QUALITY", "best");
 
-    let mut window_builder = video.window("M3mory L4ne", 960, 540);
+    let mut window_builder = video.window("Memory Lane", 960, 540);
     if config.windowed {
         window_builder.position_centered().resizable();
     } else {
@@ -126,6 +128,9 @@ fn run_viewer(
 
     let mut events = sdl.event_pump().map_err(other)?;
     let mut current = None;
+    let mut seen_revision = 0;
+    let mut redraw = false;
+    let mut prefetch = Prefetcher::new();
     let mut next_slide = Instant::now();
     let mut next_setup_check = Instant::now();
     let mut setup_revision = None;
@@ -149,19 +154,23 @@ fn run_viewer(
         loop {
             match updates.try_recv() {
                 Ok(update) => {
-                    if !playlist
-                        .photos
-                        .iter()
-                        .map(|photo| &photo.id)
-                        .eq(update.photos.iter().map(|photo| &photo.id))
-                    {
-                        current = None;
-                        next_slide = Instant::now();
+                    let current_id = current
+                        .and_then(|i: usize| playlist.photos.get(i))
+                        .map(|p| p.id.clone());
+                    redraw |= playlist.playback.blur_background != update.playback.blur_background;
+                    if playlist.playback.slide_seconds != update.playback.slide_seconds {
+                        next_slide = Instant::now()
+                            + Duration::from_secs(update.playback.slide_seconds.clamp(5, 3600));
                     }
                     playlist = update;
+                    current =
+                        current_id.and_then(|id| playlist.photos.iter().position(|p| p.id == id));
+                    if current.is_none() {
+                        next_slide = Instant::now();
+                    }
                     let _ = canvas
                         .window_mut()
-                        .set_title(&format!("M3mory L4ne — {}", playlist.place_name));
+                        .set_title(&format!("Memory Lane — {}", playlist.place_name));
                 }
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => break,
@@ -194,16 +203,68 @@ fn run_viewer(
             next_setup_check = now + Duration::from_millis(500);
         }
 
-        if !setup_active && now >= next_slide {
-            if playlist.photos.is_empty() {
-                canvas.set_draw_color(Color::RGB(5, 7, 12));
-                canvas.clear();
-                canvas.present();
-                current = None;
+        prefetch.poll();
+        if !setup_active {
+            let epoch = SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap_or_default()
+                .as_secs();
+            let pinned = playlist
+                .playback
+                .pinned_at(epoch)
+                .and_then(|id| playlist.photos.iter().position(|p| p.id == id));
+            let changed = playlist.playback.selection_revision != seen_revision;
+            let selected = if changed {
+                playlist
+                    .playback
+                    .selected_photo_id
+                    .as_ref()
+                    .and_then(|id| playlist.photos.iter().position(|p| &p.id == id))
             } else {
-                current = show_next(&mut canvas, &playlist, current);
+                None
+            };
+            if changed && (selected.is_some() || playlist.playback.selected_photo_id.is_none()) {
+                seen_revision = playlist.playback.selection_revision;
+                next_slide = now;
             }
-            next_slide = now + config.slide_interval;
+            let forced = pinned.or(selected);
+            if forced.is_some_and(|i| Some(i) != current)
+                || redraw
+                || (now >= next_slide && pinned.is_none())
+            {
+                if playlist.photos.is_empty() {
+                    render_waiting(&mut canvas)?;
+                    current = None;
+                } else {
+                    let target = forced.unwrap_or_else(|| {
+                        if redraw {
+                            current.unwrap_or(0)
+                        } else {
+                            current
+                                .map(|i| (i + 1) % playlist.photos.len())
+                                .unwrap_or(0)
+                        }
+                    });
+                    if Some(target) != current || redraw {
+                        current = show_photo(&mut canvas, &playlist, target, &mut prefetch);
+                    }
+                }
+                redraw = false;
+                let seconds = playlist.playback.slide_seconds;
+                next_slide = now
+                    + if seconds == 0 {
+                        config.slide_interval
+                    } else {
+                        Duration::from_secs(seconds.clamp(5, 3600))
+                    };
+            }
+            if let Some(i) = current
+                && playlist.photos.len() > 1
+                && pinned.is_none()
+            {
+                let next = (i + 1) % playlist.photos.len();
+                prefetch.request(&playlist.photos[next].path);
+            }
         }
 
         thread::sleep(Duration::from_millis(20));
@@ -233,28 +294,59 @@ fn setup_screen_revision(path: &Path) -> Option<SetupScreenRevision> {
     })
 }
 
-fn show_next(
+fn show_photo(
     canvas: &mut Canvas<Window>,
     playlist: &Playlist,
-    current: Option<usize>,
+    target: usize,
+    prefetch: &mut Prefetcher,
 ) -> Option<usize> {
-    for offset in 1..=playlist.photos.len() {
-        let index = (current.unwrap_or(playlist.photos.len() - 1) + offset) % playlist.photos.len();
+    for offset in 0..playlist.photos.len() {
+        let index = (target + offset) % playlist.photos.len();
         let photo = &playlist.photos[index];
-        match render_image(
-            canvas,
-            &photo.path,
-            Some(&photo.id),
-            photo.location_label.as_deref(),
-        ) {
+        let prepared = prefetch
+            .take(&photo.path)
+            .map(Ok)
+            .unwrap_or_else(|| PreparedImage::load(&photo.path));
+        match prepared.and_then(|image| {
+            render_prepared(
+                canvas,
+                &image,
+                Some(&photo.id),
+                photo.location_label.as_deref(),
+                playlist.playback.blur_background,
+            )
+        }) {
             Ok(()) => return Some(index),
-            Err(error) => eprintln!(
-                "could not display {}: {error}",
-                playlist.photos[index].path.display()
-            ),
+            Err(error) => eprintln!("could not display photo: {error}"),
         }
     }
     None
+}
+
+fn render_waiting(canvas: &mut Canvas<Window>) -> Result<(), BoxError> {
+    canvas.set_draw_color(Color::RGB(5, 7, 12));
+    canvas.clear();
+    // A quiet, branded userspace startup/empty state replaces a black screen.
+    let (w, h) = canvas.output_size().map_err(other)?;
+    draw_bitmap_text(
+        canvas,
+        40,
+        (h / 2).saturating_sub(24) as i32,
+        3,
+        "Memory Lane",
+        HUD_TEXT,
+    )?;
+    draw_bitmap_text(
+        canvas,
+        40,
+        (h / 2 + 24) as i32,
+        1,
+        "WAITING FOR PHOTOS / SETUP MAY BE STARTING",
+        HUD_BLUE,
+    )?;
+    let _ = w;
+    canvas.present();
+    Ok(())
 }
 
 fn render_image(
@@ -263,41 +355,62 @@ fn render_image(
     chrome_seed: Option<&str>,
     location_label: Option<&str>,
 ) -> Result<(), BoxError> {
-    let reader = ImageReader::open(path)?.with_guessed_format()?;
-    let mut decoder = reader.into_decoder()?;
-    let orientation = decoder
-        .orientation()
-        .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut image = DynamicImage::from_decoder(decoder)?;
-    image.apply_orientation(orientation);
-    let rgba = image.into_rgba8();
-    let (source_width, source_height) = rgba.dimensions();
+    let image = PreparedImage::load(path)?;
+    render_prepared(canvas, &image, chrome_seed, location_label, false)
+}
 
-    let texture_creator = canvas.texture_creator();
-    let mut texture = texture_creator
-        .create_texture_streaming(PixelFormatEnum::RGBA32, source_width, source_height)
+fn copy_pixels(
+    canvas: &mut Canvas<Window>,
+    pixels: &image::RgbaImage,
+    source: Option<Rect>,
+    destination: Rect,
+) -> Result<(), BoxError> {
+    let creator = canvas.texture_creator();
+    let mut texture = creator
+        .create_texture_streaming(PixelFormatEnum::RGBA32, pixels.width(), pixels.height())
         .map_err(other)?;
     texture
-        .update(None, rgba.as_raw(), source_width as usize * 4)
+        .update(None, pixels.as_raw(), pixels.width() as usize * 4)
         .map_err(other)?;
+    canvas.copy(&texture, source, destination).map_err(other)?;
+    Ok(())
+}
 
-    let (output_width, output_height) = canvas.output_size().map_err(other)?;
+fn render_prepared(
+    canvas: &mut Canvas<Window>,
+    image: &PreparedImage,
+    chrome_seed: Option<&str>,
+    location_label: Option<&str>,
+    blur: bool,
+) -> Result<(), BoxError> {
+    let (w, h) = canvas.output_size().map_err(other)?;
     let destination = if chrome_seed.is_some() {
-        framed_contain_rect(source_width, source_height, output_width, output_height)
+        framed_contain_rect(image.foreground.width(), image.foreground.height(), w, h)
     } else {
-        contain_rect(source_width, source_height, output_width, output_height)
+        contain_rect(image.foreground.width(), image.foreground.height(), w, h)
     };
     canvas.set_draw_color(Color::RGB(5, 7, 12));
     canvas.clear();
+    if blur && chrome_seed.is_some() {
+        let source = cover_source_rect(image.backdrop.width(), image.backdrop.height(), w, h);
+        copy_pixels(canvas, &image.backdrop, Some(source), Rect::new(0, 0, w, h))?;
+    }
     if let Some(seed) = chrome_seed {
         render_frame_chrome(canvas, destination, seed)?;
     }
-    canvas.copy(&texture, None, destination).map_err(other)?;
-    if let (Some(seed), Some(location_label)) = (chrome_seed, location_label) {
-        render_location_tab(canvas, destination, seed, location_label)?;
+    copy_pixels(canvas, &image.foreground, None, destination)?;
+    if let (Some(seed), Some(label)) = (chrome_seed, location_label) {
+        render_location_tab(canvas, destination, seed, label)?;
     }
     canvas.present();
     Ok(())
+}
+
+fn cover_source_rect(sw: u32, sh: u32, dw: u32, dh: u32) -> Rect {
+    let scale = (dw as f64 / sw.max(1) as f64).max(dh as f64 / sh.max(1) as f64);
+    let w = ((dw as f64 / scale).round() as u32).clamp(1, sw.max(1));
+    let h = ((dh as f64 / scale).round() as u32).clamp(1, sh.max(1));
+    Rect::new(((sw - w) / 2) as i32, ((sh - h) / 2) as i32, w, h)
 }
 
 fn framed_contain_rect(
@@ -636,7 +749,7 @@ mod tests {
     fn framed_landscape_leaves_room_for_chrome() {
         assert_eq!(
             framed_contain_rect(1600, 900, 1024, 768),
-            Rect::new(24, 109, 976, 549)
+            Rect::new(8, 100, 1008, 567)
         );
     }
 
@@ -644,7 +757,7 @@ mod tests {
     fn framed_portrait_leaves_room_for_chrome() {
         assert_eq!(
             framed_contain_rect(900, 1600, 1920, 1080),
-            Rect::new(670, 24, 580, 1032)
+            Rect::new(661, 8, 598, 1064)
         );
     }
 

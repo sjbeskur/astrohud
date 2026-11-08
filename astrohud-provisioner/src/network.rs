@@ -107,7 +107,7 @@ impl NetworkManager {
             "ifname",
             INTERFACE,
             "--rescan",
-            "yes",
+            "no",
         ])?;
         if !output.status.success() {
             return Err(command_error(&output));

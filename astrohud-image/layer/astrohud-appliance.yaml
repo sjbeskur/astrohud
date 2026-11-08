@@ -40,8 +40,8 @@ mmdebstrap:
       chroot $1 chown astrohud:astrohud /var/lib/astrohud
     - |-
       set -eu
-      $BDEBSTRAP_HOOKS/disable-units "$1" iwd systemd-networkd
-      $BDEBSTRAP_HOOKS/enable-units "$1" NetworkManager NetworkManager-wait-online
+      $BDEBSTRAP_HOOKS/disable-units "$1" iwd systemd-networkd NetworkManager-wait-online
+      $BDEBSTRAP_HOOKS/enable-units "$1" NetworkManager
       $BDEBSTRAP_HOOKS/enable-units "$1" astrohud-frame astrohud-provisioner astrohud-wifi-guard.timer
     - |-
       set -eu

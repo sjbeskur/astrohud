@@ -47,6 +47,7 @@ trap cleanup EXIT
 cp -a "$image_dir/config" "$staging_dir/config"
 cp -a "$image_dir/layer" "$staging_dir/layer"
 install -m 0755 "$image_dir/post-build.sh" "$staging_dir/post-build.sh"
+install -m 0755 "$image_dir/scripts/configure-boot.py" "$staging_dir/configure-boot.py"
 install -m 0644 "$operator_key" "$staging_dir/operator.pub"
 
 overlay="$staging_dir/rootfs-overlay"

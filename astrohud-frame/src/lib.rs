@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod config;
 pub mod model;
+pub mod prepared;
 pub mod sync;
 
 use std::error::Error;

@@ -1,6 +1,6 @@
-# M3mory L4ne
+# Memory Lane
 
-M3mory L4ne (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
+Memory Lane (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
 Actix WebSocket service and displaying it in a browser through WebAssembly.
 
 The project is being rehabilitated as the foundation for a channel-based
@@ -22,10 +22,10 @@ The current delivery target is the three-household friendly beta described in
 The original WebSocket path remains a transport demonstration. The friendly
 beta path now isolates households, claims first-boot devices, and gives owners
 revocable private sender links. Images are persisted locally and the native
-frame caches them offline. Device-authenticated media sync and hosted storage
-are not yet implemented.
+frame caches them offline. Manifest and media requests use device credentials;
+photos and household data persist in the server's configured data directory.
 
-M3mory L4ne's shared visual tokens and interface rules are documented in
+Memory Lane's shared visual tokens and interface rules are documented in
 [`UI_THEME.md`](UI_THEME.md). They adapt the operational design language from
 the Advanced Data Machines company homepage while keeping photographs primary.
 
@@ -36,6 +36,10 @@ the Advanced Data Machines company homepage while keeping photographs primary.
   the browser module
 
 ## Build
+
+Pi image builds and SD card flashing are available through `just`; run `just`
+to list recipes. See [the image workflow](astrohud-image/README.md#just-recipes)
+for build inputs and flashing commands.
 
 Check the Rust workspace:
 
@@ -97,12 +101,14 @@ cargo run --package astrohud-rest --bin astrohud-admin -- \
 The optional recovery PNG and its activation URL are private credentials.
 Protect them like a password until delivered to the owner.
 
-Once the frame is connected, create a sender link from the owner page. Open
+Once the frame is connected, owners can use **Send a photo** directly on the
+owner page. No invitation to themselves is required. To let someone else send
+photos, create a sender link from the owner page. Open
 that link in a private browser window to exercise the recipient experience:
 the destination is fixed by the invitation, the sender previews a JPEG or PNG,
 and the server derives the household and channel rather than trusting form
 fields. The claimed device simulator then downloads and displays the newest
-photo using its own credential. Disabling the sender link on the owner page
+photos using its own credential. Disabling the sender link on the owner page
 takes effect immediately.
 
 To resend access later, choose **Replace link** beside the person's name.
@@ -116,7 +122,15 @@ this frame** to remove a photo from that frame's manifest and protected media
 access. The native frame deletes its cached copy at its next successful sync;
 an offline frame applies the change when it reconnects. Removal is specific to
 the selected frame: other subscribed frames and the server's original photo
-remain available. The gallery shows the current manifest's newest 200 photos.
+remain available. The gallery shows up to 200 photos, keeping a selected or
+pinned photo available even when newer uploads would otherwise push it out.
+
+The gallery also offers **Show now**, **Pin photo**, and **Resume slideshow**.
+Owners can choose the time per photo and a soft, blurred background that fills
+the screen while preserving the complete foreground photo. Commands apply on
+the frame's next successful sync. These controls require the updated native
+viewer; the matching browser simulator supports them as well. Pin expiry also
+works offline, and the viewer prepares the next image during the interval.
 
 Under **Device settings → Owner recovery**, create a private recovery link and
 save the complete URL in a password manager or secure notes. It works in regular
@@ -224,7 +238,7 @@ configuration, cache semantics, and the physical-Pi validation checklist.
 ## Device provisioning MVP
 
 `astrohud-provisioner` supplies the no-mobile-app first-boot path. An
-unprovisioned frame broadcasts a protected, per-device `M3mory-L4ne-XXXXXX`
+unprovisioned frame broadcasts a protected, per-device `Memory-Lane-XXXXXX`
 network (existing appliances retain their `AstroHUD-XXXXXX` setup name),
 displays a scannable Wi-Fi QR setup card, and serves a local Wi-Fi
 selection page. It tests candidate credentials before atomically replacing the

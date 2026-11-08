@@ -43,6 +43,7 @@ fn run() -> Result<(), String> {
         if paths.provisioning_required() {
             paths.request_provisioning().map_err(|e| e.to_string())?;
             let manager = NetworkManager::new(paths);
+            let portal = web::bind()?;
             let networks = manager.start_setup_ap(&identity)?;
             setup_display::write(&identity, Path::new(setup_display::SETUP_SCREEN_PATH))
                 .map_err(|e| e.to_string())?;
@@ -50,7 +51,10 @@ fn run() -> Result<(), String> {
                 "provisioning access point {} is ready at http://10.42.0.1/",
                 identity.setup_ssid
             );
-            web::serve(identity.clone(), manager, networks, &server_url)?;
+            web::serve(portal, identity.clone(), manager, networks, &server_url)?;
+            setup_display::write_waiting(Path::new(setup_display::SETUP_SCREEN_PATH))?;
+        } else if Path::new(setup_display::SETUP_SCREEN_PATH).exists() {
+            setup_display::write_waiting(Path::new(setup_display::SETUP_SCREEN_PATH))?;
         }
         // A Wi-Fi wipe disconnects the device. Confirm only after all cleanup
         // has succeeded and a network is available again, before enrolling.

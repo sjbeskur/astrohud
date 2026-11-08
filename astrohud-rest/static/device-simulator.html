@@ -4,13 +4,13 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
-  <title>M3mory L4ne Device Simulator</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=10560af579c6">
+  <title>Memory Lane Device Simulator</title>
+  <link rel="stylesheet" href="/astrohud-theme.css?v=84d4a66263db">
 </head>
 <body>
   <header class="hud-nav">
     <div class="hud-shell hud-nav-row">
-      <div class="hud-brand"><span class="hud-mark">ML</span> M3mory L4ne</div>
+      <div class="hud-brand"><span class="hud-mark">ML</span> Memory Lane</div>
       <div class="hud-link-state"><i class="status-light"></i> Local device simulator</div>
     </div>
   </header>
@@ -31,10 +31,11 @@
             <p class="signal-label">Frame / Authenticated</p>
             <h1 id="place-name">Frame connected</h1>
           </div>
-          <p class="instrument-label">Newest photo</p>
+          <p class="instrument-label">Photo rotation</p>
         </div>
         <div class="simulated-display">
-          <img id="display-photo" hidden alt="Newest photograph delivered to this simulated frame">
+          <div id="display-backdrop" class="photo-backdrop" aria-hidden="true"></div>
+          <img id="display-photo" hidden alt="Photo rotationgraph delivered to this simulated frame">
           <div id="display-empty" class="simulated-display-empty">
             <strong>Waiting for the first photo</strong>
             <span>Create a sender invitation, then send a photograph.</span>
@@ -45,6 +46,7 @@
     </section>
   </main>
 
+  <script src="/display.js?v=b37015213137"></script>
   <script>
     const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     const claimCode = document.querySelector('#claim-code');
@@ -58,8 +60,7 @@
     const status = document.querySelector('#status');
     let pollTimer;
     let manifestTimer;
-    let currentPhotoId;
-    let displayUrl;
+    const slideshow = new MemoryLaneSlideshow(displayPhoto, document.querySelector('#display-backdrop'), displayEmpty);
     let syncStarted = false;
 
     function randomDeviceCode() {
@@ -140,27 +141,8 @@
         if (!response.ok) throw new Error(await response.text());
         const manifest = await response.json();
         placeName.textContent = manifest.place_name;
-        const newest = manifest.photos[0];
-        if (!newest) {
-          displayPhoto.hidden = true;
-          displayEmpty.hidden = false;
-          status.textContent = `Connected / ${manifest.place_name} is waiting for its first photo.`;
-          status.dataset.state = 'ready';
-          currentPhotoId = undefined;
-          return;
-        }
-        if (newest.id !== currentPhotoId) {
-          const mediaResponse = await fetch(newest.url, {headers});
-          if (!mediaResponse.ok) throw new Error(await mediaResponse.text());
-          const nextUrl = URL.createObjectURL(await mediaResponse.blob());
-          if (displayUrl) URL.revokeObjectURL(displayUrl);
-          displayUrl = nextUrl;
-          displayPhoto.src = displayUrl;
-          displayPhoto.hidden = false;
-          displayEmpty.hidden = true;
-          currentPhotoId = newest.id;
-        }
-        status.textContent = `Delivered / Showing the newest photo on ${manifest.place_name}.`;
+        await slideshow.update(manifest, headers);
+        status.textContent = manifest.photos.length ? `Connected / Playing photos on ${manifest.place_name}.` : `Connected / ${manifest.place_name} is waiting for a photo.`;
         status.dataset.state = 'success';
       } catch (error) {
         status.textContent = `Secure sync unavailable / ${error.message}`;
@@ -213,11 +195,7 @@
         plan.accepted = true;
         sessionStorage.setItem('astrohud-simulated-reset', JSON.stringify(plan));
       }
-      displayPhoto.hidden = true;
-      displayPhoto.removeAttribute('src');
-      if (displayUrl) URL.revokeObjectURL(displayUrl);
-      displayUrl = undefined;
-      currentPhotoId = undefined;
+      slideshow.clear();
       sessionStorage.setItem('astrohud-simulated-device', JSON.stringify(plan.next));
       status.textContent = 'Resetting / Clearing simulated device access and photos…';
       const completed = await fetch(`/api/beta/device/resets/${plan.reset_id}/complete`, {

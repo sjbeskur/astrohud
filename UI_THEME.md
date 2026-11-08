@@ -1,11 +1,11 @@
-# M3mory L4ne interface language
+# Memory Lane interface language
 
-M3mory L4ne uses the same retro-futurist operational language as the Advanced
+Memory Lane uses the same retro-futurist operational language as the Advanced
 Data Machines company homepage. It should feel like part of the same product
 family without turning a picture frame into a busy control panel.
 
 The related company website is in the sibling `../adm-website` directory.
-M3mory L4ne retains its warmer consumer palette and sans-serif typography rather
+Memory Lane retains its warmer consumer palette and sans-serif typography rather
 than adopting the company website's terminal styling.
 
 ## Principles
@@ -76,7 +76,7 @@ must work without internet access or external font and stylesheet requests.
 - `astrohud-provisioner/src/web.rs`: offline, self-contained captive portal
 - `astrohud-provisioner/src/setup_display.rs`: 1280×720 native QR setup card
 
-When adding a new M3mory L4ne UI, begin with these tokens and interaction rules.
+When adding a new Memory Lane UI, begin with these tokens and interaction rules.
 Do not copy the large company homepage stylesheet into the product.
 
 Web pages include a content hash in the stylesheet URL to prevent an older

@@ -87,9 +87,21 @@ impl ServerClient {
 }
 
 pub fn sync_once(client: &ServerClient, cache: &CacheStore) -> Result<SyncResult, BoxError> {
+    sync_once_with_updates(client, cache, |_| {})
+}
+
+pub fn sync_once_with_updates(
+    client: &ServerClient,
+    cache: &CacheStore,
+    mut publish: impl FnMut(Playlist),
+) -> Result<SyncResult, BoxError> {
     let manifest = client.fetch_manifest()?;
     let mut warnings = Vec::new();
     let previous = cache.load_manifest()?;
+    // Apply settings/removals immediately, then publish each image as it arrives
+    // instead of waiting for the entire download backlog before updating the TV.
+    publish(cache.reconcile(&manifest)?);
+    cache.save_manifest(&manifest)?;
     let manifest_is_unchanged = previous
         .as_ref()
         .is_some_and(|previous| previous.photos == manifest.photos);
@@ -121,7 +133,7 @@ pub fn sync_once(client: &ServerClient, cache: &CacheStore) -> Result<SyncResult
         }
         // Reconcile after each download so a new image can replace the oldest
         // cached image without allowing the cache to grow without bound.
-        cache.reconcile(&manifest)?;
+        publish(cache.reconcile(&manifest)?);
         if !cache.contains(photo) {
             break;
         }

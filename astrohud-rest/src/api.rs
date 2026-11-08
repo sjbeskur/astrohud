@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 7;
+const SCHEMA_VERSION: i64 = 8;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
 pub const DEMO_HOUSEHOLD_ID: &str = "demo-household";
 
@@ -69,6 +69,15 @@ CREATE TABLE IF NOT EXISTS frame_photo_removals (
     photo_id TEXT NOT NULL REFERENCES photos(id) ON DELETE CASCADE,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (frame_id, photo_id)
+);
+CREATE TABLE IF NOT EXISTS frame_playback (
+    frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
+    slide_seconds INTEGER NOT NULL DEFAULT 12 CHECK (slide_seconds BETWEEN 5 AND 3600),
+    blur_background INTEGER NOT NULL DEFAULT 1 CHECK (blur_background IN (0, 1)),
+    selected_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
+    selection_revision INTEGER NOT NULL DEFAULT 0,
+    pinned_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
+    pinned_until INTEGER
 );
 CREATE TABLE IF NOT EXISTS owner_recovery_links (
     household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
@@ -258,6 +267,7 @@ pub struct FrameManifest {
     frame_id: String,
     place_name: String,
     pub(crate) photos: Vec<Photo>,
+    pub(crate) playback: crate::Playback,
 }
 
 #[derive(Debug, Serialize)]
@@ -678,6 +688,7 @@ fn manifest_for_household_with_protected_media(
     let Some(place_name) = place_name else {
         return Ok(None);
     };
+    let playback = crate::frame_playback(database, frame_id)?;
     let mut statement = database.prepare(
         "SELECT p.id, p.channel_id, p.storage_key, p.mime_type, p.created_at,
                     p.location_label
@@ -690,32 +701,42 @@ fn manifest_for_household_with_protected_media(
                AND c.household_id = ?2
                AND NOT EXISTS (SELECT 1 FROM frame_photo_removals r
                                WHERE r.frame_id = s.frame_id AND r.photo_id = p.id)
-             ORDER BY p.created_at DESC, p.rowid DESC
+             ORDER BY CASE WHEN p.id = ?3 THEN 0 WHEN p.id = ?4 THEN 1 ELSE 2 END,
+                      p.created_at DESC, p.rowid DESC
              LIMIT 200",
     )?;
     let photos = statement
-        .query_map(params![frame_id, household_id], |row| {
-            let photo_id: String = row.get(0)?;
-            let storage_key: String = row.get(2)?;
-            Ok(Photo {
-                url: if protected_media {
-                    format!("/api/beta/device/media/{photo_id}")
-                } else {
-                    format!("/media/{storage_key}")
-                },
-                id: photo_id,
-                channel_id: row.get(1)?,
-                mime_type: row.get(3)?,
-                created_at: row.get(4)?,
-                location_label: row.get(5)?,
-            })
-        })?
+        .query_map(
+            params![
+                frame_id,
+                household_id,
+                playback.pinned_photo_id,
+                playback.selected_photo_id
+            ],
+            |row| {
+                let photo_id: String = row.get(0)?;
+                let storage_key: String = row.get(2)?;
+                Ok(Photo {
+                    url: if protected_media {
+                        format!("/api/beta/device/media/{photo_id}")
+                    } else {
+                        format!("/media/{storage_key}")
+                    },
+                    id: photo_id,
+                    channel_id: row.get(1)?,
+                    mime_type: row.get(3)?,
+                    created_at: row.get(4)?,
+                    location_label: row.get(5)?,
+                })
+            },
+        )?
         .collect::<rusqlite::Result<Vec<_>>>()?;
 
     Ok(Some(FrameManifest {
         frame_id: frame_id.to_owned(),
         place_name,
         photos,
+        playback,
     }))
 }
 

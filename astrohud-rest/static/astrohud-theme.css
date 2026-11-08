@@ -161,6 +161,16 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .invitation-actions { display: flex; flex-wrap: wrap; gap: 0.65rem; }
 .owner-photo-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 240px), 1fr)); gap: 1rem; margin-top: 1rem; }
 .owner-photo-grid img { height: 200px; }
+.photo-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; width: 100%; }
+.photo-actions button { min-height: 44px; }
+.display-controls { margin: 1rem 0; padding-block: 1rem; border-block: 1px solid var(--hud-line); }
+#resume-slideshow { margin-top: 0.75rem; }
+.owner-page #owner-send-panel { scroll-margin-top: 6rem; }
+#owner-preview-shell { margin-block: 1rem; }
+.photo-backdrop { position: absolute; inset: -30px; background-position: center; background-size: cover; filter: blur(28px) brightness(0.28); pointer-events: none; }
+.frame-view > .photo-backdrop { position: fixed; }
+.frame-photo, #display-photo { position: relative; z-index: 1; }
+.simulated-display-empty { position: relative; z-index: 2; }
 #device-settings summary { min-height: 44px; padding-block: 0.75rem; font-weight: 700; cursor: pointer; }
 #open-device-settings { min-height: 44px; margin-top: 1rem; }
 #device-settings { scroll-margin-top: 6rem; }

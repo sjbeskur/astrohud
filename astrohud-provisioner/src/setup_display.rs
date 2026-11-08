@@ -31,6 +31,49 @@ pub fn write(identity: &DeviceIdentity, path: &Path) -> Result<(), String> {
     atomic_write_ppm(path, &pixels).map_err(|error| error.to_string())
 }
 
+pub fn write_preparing(path: &Path) -> Result<(), String> {
+    write_status(
+        path,
+        "STARTING WI-FI",
+        "SETUP",
+        "PLEASE WAIT / YOUR SETUP NETWORK IS STARTING",
+    )
+}
+
+pub fn write_waiting(path: &Path) -> Result<(), String> {
+    write_status(
+        path,
+        "WI-FI SAVED",
+        "FINISHING SETUP",
+        "KEEP YOUR PHONE ONLINE / WAITING FOR THE SERVICE",
+    )
+}
+
+fn write_status(path: &Path, first: &str, second: &str, detail: &str) -> Result<(), String> {
+    let mut canvas = Canvas::new(WIDTH, HEIGHT, VOID);
+    canvas.text(86, 80, 3, "Memory Lane", AMBER);
+    canvas.text(86, 245, 5, first, TEXT);
+    canvas.text(86, 315, 5, second, LAVENDER);
+    canvas.text(86, 490, 2, detail, MUTED);
+    atomic_write_ppm(path, &canvas.pixels).map_err(|e| e.to_string())
+}
+
+pub fn write_retry(identity: &DeviceIdentity, path: &Path) -> Result<(), String> {
+    let mut canvas = Canvas {
+        width: WIDTH,
+        height: HEIGHT,
+        pixels: render(identity)?,
+    };
+    canvas.text(
+        86,
+        660,
+        1,
+        "COULD NOT CONNECT / CHECK NETWORK AND PASSWORD, THEN TRY AGAIN",
+        SALMON,
+    );
+    atomic_write_ppm(path, &canvas.pixels).map_err(|e| e.to_string())
+}
+
 pub fn write_connecting(
     identity: &DeviceIdentity,
     wifi_ssid: &str,
@@ -67,7 +110,7 @@ fn render(identity: &DeviceIdentity) -> Result<Vec<u8>, String> {
     canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
 
     canvas.fill_rect(40, 30, 455, 62, AMBER);
-    canvas.text(70, 49, 3, "ML / M3mory L4ne", VOID);
+    canvas.text(70, 49, 3, "ML / Memory Lane", VOID);
     canvas.text(900, 52, 2, "SETUP LINK / ACTIVE", GREEN);
 
     canvas.fill_rect(40, 112, 1200, 568, LINE);
@@ -97,13 +140,7 @@ fn render(identity: &DeviceIdentity) -> Result<Vec<u8>, String> {
 
     canvas.qr_code(706, 137, 490, &identity.wifi_qr_payload())?;
     canvas.fill_rect(720, 638, 9, 9, GREEN);
-    canvas.text(
-        744,
-        637,
-        1,
-        "SCAN TO JOIN / PORTAL OPENS AUTOMATICALLY",
-        GREEN,
-    );
+    canvas.text(744, 637, 1, "IF NO PAGE OPENS: HTTP://10.42.0.1", GREEN);
     Ok(canvas.pixels)
 }
 
@@ -115,7 +152,7 @@ fn render_connecting(identity: &DeviceIdentity, wifi_ssid: &str) -> Vec<u8> {
     canvas.fill_rect(0, 345, 9, 187, LAVENDER);
     canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
     canvas.fill_rect(40, 30, 455, 62, BLUE);
-    canvas.text(70, 49, 3, "ML / M3mory L4ne", VOID);
+    canvas.text(70, 49, 3, "ML / Memory Lane", VOID);
     canvas.text(840, 52, 2, "NETWORK LINK / CONNECTING", BLUE);
 
     canvas.fill_rect(40, 112, 1200, 568, LINE);
@@ -162,7 +199,7 @@ fn render_claim(
     canvas.fill_rect(0, 345, 9, 187, LAVENDER);
     canvas.fill_rect(0, 532, 9, HEIGHT - 532, BLUE);
     canvas.fill_rect(40, 30, 455, 62, LAVENDER);
-    canvas.text(70, 49, 3, "ML / M3mory L4ne", VOID);
+    canvas.text(70, 49, 3, "ML / Memory Lane", VOID);
     canvas.text(900, 52, 2, "PAIRING LINK / ACTIVE", GREEN);
 
     canvas.fill_rect(40, 112, 1200, 568, LINE);

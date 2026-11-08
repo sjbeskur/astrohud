@@ -119,9 +119,14 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             "/api/beta/device/resets/{reset_id}/complete",
             web::post().to(complete_reset),
         )
+        .service(
+            web::resource("/api/beta/owner/frames/{frame_id}/photos")
+                .route(web::get().to(get_owner_photos))
+                .route(web::post().to(upload_owner_photo)),
+        )
         .route(
-            "/api/beta/owner/frames/{frame_id}/photos",
-            web::get().to(get_owner_photos),
+            "/api/beta/owner/frames/{frame_id}/playback",
+            web::post().to(set_owner_playback),
         )
         .service(
             web::resource("/api/beta/owner/frames/{frame_id}/photos/{photo_id}")
@@ -344,6 +349,42 @@ async fn complete_reset(
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     crate::complete_device_reset(&mut db, &id, &receipt).map_err(beta_http_error)?;
     Ok(HttpResponse::NoContent().finish())
+}
+
+async fn upload_owner_photo(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    frame: web::Path<String>,
+    multipart: Multipart,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let (household, channel) = {
+        let db = state
+            .database
+            .lock()
+            .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+        crate::owner_frame_channel(&db, &token, &frame).map_err(beta_http_error)?
+    };
+    let photo = upload_invited_photo(state, multipart, household, channel).await?;
+    Ok(HttpResponse::Created().json(serde_json::json!({"status":"received","photo_id":photo.id})))
+}
+
+async fn set_owner_playback(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    frame: web::Path<String>,
+    body: web::Json<crate::PlaybackRequest>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let playback =
+        crate::update_playback(&mut db, &token, &frame, &body).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(playback))
 }
 
 async fn get_owner_photos(
@@ -688,6 +729,124 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn owner_upload_uses_the_frames_destination_and_playback_rejects_foreign_owners() {
+        let mut database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let owner = create_household_owner(&mut database, "Home", "Owner").unwrap();
+        let other = create_household_owner(&mut database, "Other", "Owner").unwrap();
+        database
+            .execute(
+                "INSERT INTO frames (id,household_id,place_name) VALUES ('tv',?1,'TV')",
+                [&owner.household_id],
+            )
+            .unwrap();
+        database
+            .execute(
+                "INSERT INTO frame_subscriptions VALUES ('tv',?1)",
+                [&owner.default_channel_id],
+            )
+            .unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("memory-owner-upload-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let state = web::Data::new(AppState::new(database, directory.clone()));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let settings = "/api/beta/owner/frames/tv/playback";
+        let anonymous = test::TestRequest::post()
+            .uri(settings)
+            .set_json(serde_json::json!({"slide_seconds":30}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, anonymous).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let foreign = test::TestRequest::post()
+            .uri(settings)
+            .cookie(Cookie::new(OWNER_COOKIE, other.owner_token.clone()))
+            .set_json(serde_json::json!({"slide_seconds":30}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, foreign).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let mut body=format!("--boundary\r\nContent-Disposition: form-data; name=\"channel_id\"\r\n\r\n{}\r\n--boundary\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"photo.png\"\r\nContent-Type: image/png\r\n\r\n",other.default_channel_id).into_bytes();
+        body.extend(png.into_inner());
+        body.extend(b"\r\n--boundary--\r\n");
+        for cookie in [
+            None,
+            Some(Cookie::new(SENDER_COOKIE, "sender-token")),
+            Some(Cookie::new(OWNER_COOKIE, other.owner_token)),
+        ] {
+            let mut request = test::TestRequest::post()
+                .uri("/api/beta/owner/frames/tv/photos")
+                .insert_header((
+                    header::CONTENT_TYPE,
+                    "multipart/form-data; boundary=boundary",
+                ))
+                .set_payload(body.clone());
+            let expected = if cookie.as_ref().is_some_and(|c| c.name() == OWNER_COOKIE) {
+                StatusCode::NOT_FOUND
+            } else {
+                StatusCode::UNAUTHORIZED
+            };
+            if let Some(cookie) = cookie {
+                request = request.cookie(cookie);
+            }
+            assert_eq!(
+                test::call_service(&app, request.to_request())
+                    .await
+                    .status(),
+                expected
+            );
+        }
+        let upload = test::TestRequest::post()
+            .uri("/api/beta/owner/frames/tv/photos")
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+            .insert_header((
+                header::CONTENT_TYPE,
+                "multipart/form-data; boundary=boundary",
+            ))
+            .set_payload(body)
+            .to_request();
+        let response = test::call_service(&app, upload).await;
+        assert_eq!(response.status(), StatusCode::CREATED);
+        let result: serde_json::Value = test::read_body_json(response).await;
+        let id = result["photo_id"].as_str().unwrap();
+        let command=test::TestRequest::post().uri(settings).cookie(Cookie::new(OWNER_COOKIE,owner.owner_token.clone()))
+            .set_json(serde_json::json!({"action":"pin","photo_id":id,"pin_seconds":900,"slide_seconds":30})).to_request();
+        assert_eq!(
+            test::call_service(&app, command).await.status(),
+            StatusCode::OK
+        );
+        {
+            let db = state.database.lock().unwrap();
+            let channel: String = db
+                .query_row("SELECT channel_id FROM photos WHERE id=?1", [id], |r| {
+                    r.get(0)
+                })
+                .unwrap();
+            assert_eq!(channel, owner.default_channel_id);
+            assert_eq!(
+                crate::frame_playback(&db, "tv")
+                    .unwrap()
+                    .pinned_photo_id
+                    .as_deref(),
+                Some(id)
+            );
+        }
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[actix_web::test]
     async fn saved_recovery_link_restores_a_fresh_browser_and_replacement_keeps_sessions() {

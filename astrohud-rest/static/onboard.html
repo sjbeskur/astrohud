@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <meta name="referrer" content="no-referrer">
-  <title>Set up your M3mory L4ne</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=10560af579c6">
+  <title>Set up your Memory Lane</title>
+  <link rel="stylesheet" href="/astrohud-theme.css?v=84d4a66263db">
 </head>
 <body>
   <header class="hud-nav">
     <div class="hud-shell hud-nav-row">
-      <div class="hud-brand"><span class="hud-mark">ML</span> M3mory L4ne</div>
+      <div class="hud-brand"><span class="hud-mark">ML</span> Memory Lane</div>
       <div class="hud-link-state"><i class="status-light"></i> Frame setup / Private</div>
     </div>
   </header>
@@ -30,7 +30,7 @@
           <p class="instrument-label">Usually under a minute</p>
         </div>
         <h2 id="waiting-title">Waiting for your frame</h2>
-        <p class="instrument-copy">Keep this page open while your phone returns to home Wi-Fi or cellular service and the frame contacts M3mory L4ne.</p>
+        <p class="instrument-copy">Keep this page open while your phone returns to home Wi-Fi or cellular service and the frame contacts Memory Lane.</p>
       </section>
 
       <section id="place-panel" class="instrument-panel" hidden aria-labelledby="place-title">
@@ -102,7 +102,7 @@
         if (!response.ok) throw new Error(await response.text());
         const result = await response.json();
         if (result.status === 'waiting') {
-          setStatus('Waiting / Your frame is joining M3mory L4ne.', 'sending');
+          setStatus('Waiting / Your frame is joining Memory Lane.', 'sending');
           pollTimer = setTimeout(checkFrame, 2500);
           return;
         }

@@ -1,11 +1,11 @@
-# M3mory L4ne provisioner
+# Memory Lane provisioner
 
-`astrohud-provisioner` is the no-mobile-app onboarding path for a M3mory L4ne
+`astrohud-provisioner` is the no-mobile-app onboarding path for a Memory Lane
 frame. On an unprovisioned device, or after an explicit local reset, it:
 
 1. creates a stable random device code and setup password;
 2. scans nearby Wi-Fi networks;
-3. starts the protected `M3mory-L4ne-XXXXXX` access point (existing appliances
+3. starts the protected `Memory-Lane-XXXXXX` access point (existing appliances
    retain their manufacturing-assigned setup name);
 4. shows a large Wi-Fi QR code on the frame for one-tap joining;
 5. serves a phone-friendly captive portal at `http://10.42.0.1/`;

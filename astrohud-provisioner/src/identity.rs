@@ -91,7 +91,7 @@ pub fn load_or_create(path: &Path, credential_path: &Path) -> io::Result<DeviceI
                 setup_ssid: saved_manufacturing
                     .as_ref()
                     .map(|s| s.setup_ssid.clone())
-                    .unwrap_or_else(|| format!("M3mory-L4ne-{device_code}")),
+                    .unwrap_or_else(|| format!("Memory-Lane-{device_code}")),
                 setup_password: random_human_string(16)?,
                 device_code,
                 device_id: saved_manufacturing
