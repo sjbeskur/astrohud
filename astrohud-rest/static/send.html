@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Send a photo with Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=1452c2afa48e">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=4bb79127b5bf">
 </head>
 <body class="simple-page">
 
@@ -58,6 +58,16 @@
     <div class="dialog-heading"><h2 id="sent-photo-title">Your photo</h2><button id="close-sent-photo" class="quiet-button" type="button">Close</button></div>
     <img id="sent-photo-image" alt="Photo you sent">
     <div class="photo-navigation"><button id="previous-sent-photo" class="quiet-button" type="button">← Previous</button><p id="sent-photo-position"></p><button id="next-sent-photo" class="quiet-button" type="button">Next →</button></div>
+    <div id="sent-photo-actions" class="photo-detail-actions" role="group" aria-label="Your photo actions" hidden>
+      <button id="display-sent-next" class="photo-icon-button" type="button" aria-label="Display next" title="Display next" aria-expanded="false" aria-controls="sent-next-options"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m5 4 12 8-12 8zM19 4v16"/></svg></button>
+      <button id="delete-sent-photo" class="photo-icon-button danger" type="button" aria-label="Delete your photo from all frames" title="Delete your photo from all frames"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 6h18M9 6V3h6v3M5 6l1 15h12l1-15M10 10v7M14 10v7"/></svg></button>
+    </div>
+    <div id="sent-next-options" class="pin-options" hidden>
+      <p>Display next on</p>
+      <div id="sent-next-targets" class="pin-presets"></div>
+      <p class="field-help">Plays after the current photo. One guest request per frame every 10 minutes; owner pins take priority.</p>
+    </div>
+    <p id="sent-action-status" role="status"></p>
     <p id="sent-photo-date" class="field-help"></p>
   </dialog>
   <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
@@ -76,6 +86,8 @@
     let historyLoading = false;
     let historyRequest = 0;
     let selectedSentId = null;
+    let sentActionBusy = false;
+    let sentActionRequest = 0;
     const historyView = document.querySelector('#sender-history-view');
     const sentDialog = document.querySelector('#sent-photo-dialog');
     const destinations = new MemoryLaneDestinations(document.querySelector('#sender-destinations'), () => {
@@ -235,12 +247,77 @@
     function renderSentPhoto() {
       const index = sentPhotos.findIndex(photo => photo.id === selectedSentId); const photo = sentPhotos[index]; if (!photo) return;
       document.querySelector('#sent-photo-image').src = photo.url;
+      document.querySelector('#sent-photo-actions').hidden = senderContext?.sender_photo_actions_version !== 1;
+      document.querySelector('#sent-action-status').textContent = '';
+      document.querySelector('#sent-next-options').hidden = true;
+      document.querySelector('#display-sent-next').setAttribute('aria-expanded', 'false');
+      sentActionRequest++;
       document.querySelector('#sent-photo-position').textContent = `${index + 1} of ${sentPhotos.length}`;
       document.querySelector('#sent-photo-date').textContent = `Sent ${photo.created_at} UTC`;
       document.querySelector('#previous-sent-photo').disabled = index === 0;
       document.querySelector('#next-sent-photo').disabled = index === sentPhotos.length - 1;
     }
-    function stepSentPhoto(direction) { const index = sentPhotos.findIndex(photo => photo.id === selectedSentId); if (sentPhotos[index + direction]) { selectedSentId = sentPhotos[index + direction].id; renderSentPhoto(); } }
+    function lockSentActions(busy) {
+      sentActionBusy = busy;
+      for (const button of sentDialog.querySelectorAll('button')) button.disabled = busy;
+      if (!busy) {
+        const index = sentPhotos.findIndex(photo => photo.id === selectedSentId);
+        document.querySelector('#previous-sent-photo').disabled = index <= 0;
+        document.querySelector('#next-sent-photo').disabled = index >= sentPhotos.length - 1;
+      }
+    }
+    async function loadNextTargets() {
+      const request = ++sentActionRequest;
+      const id = selectedSentId;
+      const container = document.querySelector('#sent-next-targets');
+      container.textContent = 'Checking frames…';
+      try {
+        const response = await fetch(`/api/beta/sender/photos/${encodeURIComponent(id)}/actions`, {cache:'no-store'});
+        if (!response.ok) throw new Error(response.status === 401 ? 'Open your current invitation link to manage your photos.' : 'Could not check frames. Please try again.');
+        const {frames} = await response.json();
+        if (request !== sentActionRequest || selectedSentId !== id) return;
+        container.replaceChildren(...frames.map(frame => {
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet-button';
+          const minutes = Math.max(1, Math.ceil((frame.available_at * 1000 - Date.now()) / 60000));
+          const reason = !frame.enabled ? 'owner has not enabled requests' : frame.pinned ? 'owner has a photo pinned' : frame.available_at * 1000 > Date.now() ? `try in ${minutes} min` : '';
+          button.textContent = reason ? `${frame.place_name} · ${reason}` : frame.place_name;
+          button.disabled = Boolean(reason);
+          button.addEventListener('click', async () => {
+            if (sentActionBusy || selectedSentId !== id) return;
+            lockSentActions(true);
+            try {
+              const response = await fetch(`/api/beta/sender/photos/${encodeURIComponent(id)}/display-next`, {method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({frame_id:frame.frame_id})});
+              if (!response.ok) throw new Error(response.status === 401 ? 'Open your current invitation link to manage your photos.' : await response.text());
+              document.querySelector('#sent-action-status').textContent = `Queued for ${frame.place_name}. It will play after the current photo once the frame syncs.`;
+            } catch(error) { document.querySelector('#sent-action-status').textContent = error.message; }
+            finally { lockSentActions(false); await loadNextTargets(); }
+          });
+          return button;
+        }));
+        if (!frames.length) container.textContent = 'This photo is no longer on any of your available frames.';
+      } catch(error) { if (request === sentActionRequest) container.textContent = error.message; }
+    }
+    document.querySelector('#display-sent-next').addEventListener('click', () => {
+      const panel = document.querySelector('#sent-next-options'); panel.hidden = !panel.hidden;
+      document.querySelector('#display-sent-next').setAttribute('aria-expanded', String(!panel.hidden));
+      if (!panel.hidden) loadNextTargets();
+    });
+    document.querySelector('#delete-sent-photo').addEventListener('click', async () => {
+      if (sentActionBusy || !selectedSentId) return;
+      if (!confirm('Delete this photo from My photos and every frame that received it? This cannot be undone. Offline frames will remove it when they reconnect.')) return;
+      const id = selectedSentId;
+      lockSentActions(true);
+      try {
+        const response = await fetch(`/api/beta/sender/photos/${encodeURIComponent(id)}`, {method:'DELETE'});
+        if (!response.ok) throw new Error(response.status === 401 ? 'Open your current invitation link to delete your photo.' : 'Could not delete this photo. Please try again.');
+        sentDialog.close(); selectedSentId = null;
+        await loadSentPhotos();
+        document.querySelector('#history-status').textContent = 'Photo deleted. Frames will remove it on their next sync.';
+        (document.querySelector('#sent-photos button') || document.querySelector('#sender-history-tab')).focus({preventScroll:true});
+      } catch(error) { document.querySelector('#sent-action-status').textContent = error.message; }
+      finally { lockSentActions(false); }
+    });
+    function stepSentPhoto(direction) { if (sentActionBusy) return; const index = sentPhotos.findIndex(photo => photo.id === selectedSentId); if (sentPhotos[index + direction]) { selectedSentId = sentPhotos[index + direction].id; renderSentPhoto(); } }
     document.querySelector('#previous-sent-photo').addEventListener('click', () => stepSentPhoto(-1));
     document.querySelector('#next-sent-photo').addEventListener('click', () => stepSentPhoto(1));
     sentDialog.addEventListener('keydown', event => { if (event.key === 'ArrowLeft' || event.key === 'ArrowRight') { event.preventDefault(); stepSentPhoto(event.key === 'ArrowLeft' ? -1 : 1); } });

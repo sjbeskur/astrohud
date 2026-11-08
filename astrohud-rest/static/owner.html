@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=1452c2afa48e">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=4bb79127b5bf">
 </head>
 <body class="owner-page">
   <main class="hud-shell owner-shell">
@@ -80,21 +80,26 @@
       <section id="invite-panel" class="instrument-panel" hidden aria-labelledby="invite-title">
         <header class="page-heading"><h1 id="invite-title">Invite</h1></header>
         <p id="invite-destination" class="page-context" hidden><span class="frame-context-label">Frame</span><strong class="context-name"></strong></p>
-        <p class="instrument-copy">Invitations let someone send photos to your household. They are not limited to the selected frame.</p>
+        <p class="instrument-copy">Invite someone to send photos, or give a trusted person full co-owner access to your household.</p>
         <form id="invite-form">
+          <fieldset class="invite-role-options"><legend>Access</legend>
+            <label><input type="radio" name="role" value="sender" checked> Photo sender</label>
+            <label id="co-owner-choice" hidden><input type="radio" name="role" value="co-owner"> Co-owner</label>
+          </fieldset>
+          <p id="invite-role-help" class="field-help">Send photos and manage their own uploads.</p>
           <label for="sender-name">Who is this link for?</label>
           <div class="field-row">
             <input id="sender-name" name="label" maxlength="80" placeholder="Alice" required>
-            <button class="signal-button" type="submit">Create invitation</button>
+            <button class="signal-button invite-icon-button" type="submit" aria-label="Create invitation" title="Create invitation"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M19 8v6M16 11h6"/></svg></button>
           </div>
         </form>
         <div id="new-invitation" class="link-reveal" hidden>
           <strong>Your invitation is ready</strong>
           <p>Copy or share this private link with them.</p>
-          <div class="field-row">
+          <div class="field-row invitation-link-row">
             <input id="invitation-url" readonly aria-label="New private sender link">
-            <button id="copy-link" class="signal-button secondary" type="button">Copy link</button>
-            <button id="share-link" class="signal-button secondary" type="button" hidden>Share link</button>
+            <button id="copy-link" class="signal-button secondary invite-icon-button" type="button" aria-label="Copy invitation link" title="Copy invitation link"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="8" y="8" width="13" height="13" rx="2"/><path d="M16 8V3H3v13h5"/></svg></button>
+            <button id="share-link" class="signal-button secondary invite-icon-button" type="button" aria-label="Share invitation link" title="Share invitation link" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 15V2M7 7l5-5 5 5M5 12H3v9h18v-9h-2"/></svg></button>
           </div>
         </div>
         <div class="invitation-heading">
@@ -161,7 +166,8 @@
           <p id="slide-seconds-help" class="field-help">Choose 5–3,600 seconds (up to 1 hour).</p>
         </div>
       </form>
-      <label class="privacy-option slideshow-background" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a stretched, lightly blurred copy.</small></span></label>
+      <label class="privacy-option slideshow-background" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a centered, softly blurred copy.</small></span></label>
+      <label class="privacy-option" for="guest-display-next"><input id="guest-display-next" type="checkbox"><span><strong>Allow guest “Display next” requests</strong><small>Off by default. Guests can request their own photos, once per frame every 10 minutes. Owner pins take priority. Requires the updated frame viewer.</small></span></label>
       <p id="slideshow-feedback" role="status"></p>
     </dialog>
 
@@ -307,7 +313,9 @@
       document.querySelector('#invite-destination').hidden = !connected;
       document.querySelector('#invite-destination .frame-context-label').textContent = context.frames.length > 1 ? 'Your frames' : 'Frame';
       document.querySelector('#invite-destination strong').textContent = context.frames.map(frame => frame.place_name).join(' · ');
-      const activeInvitations = context.invitations || [];
+      document.querySelector('#co-owner-choice').hidden = context.co_owner_version !== 1;
+      document.querySelector('#co-owner-choice input').disabled = context.co_owner_version !== 1;
+      const activeInvitations = [...(context.invitations || []).map(invitation => ({...invitation, role:'sender'})), ...(context.co_owners || []).map(invitation => ({...invitation, role:'co-owner'}))];
       invitationCount.textContent = `${activeInvitations.length} ${activeInvitations.length === 1 ? 'person' : 'people'}`;
       invitations.replaceChildren(...activeInvitations.map(invitation => {
         const card = document.createElement('div');
@@ -316,20 +324,28 @@
         const name = document.createElement('strong');
         name.textContent = invitation.label;
         const detail = document.createElement('span');
-        detail.textContent = `Created ${invitation.created_at} UTC`;
+        detail.textContent = `${invitation.role === 'co-owner' ? 'Co-owner · Full access' : 'Photo sender'}${invitation.is_you ? ' · You' : ''}`;
+        detail.title = `Invited ${invitation.created_at} UTC`;
         identity.append(name, detail);
         const revoke = document.createElement('button');
-        revoke.className = 'quiet-button danger';
+        revoke.className = 'quiet-button danger invite-icon-button';
         revoke.type = 'button';
-        revoke.textContent = 'Disable';
+        revoke.setAttribute('aria-label', `Disable ${invitation.label}'s access`);
+        revoke.title = invitation.is_you ? 'Ask another owner to change your access' : `Disable ${invitation.label}'s access`;
+        revoke.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/><path d="m6 6 12 12"/></svg>';
         revoke.addEventListener('click', () => revokeInvitation(invitation));
         const replace = document.createElement('button');
-        replace.className = 'quiet-button';
+        replace.className = 'quiet-button invite-icon-button';
         replace.type = 'button';
-        replace.textContent = 'Replace link';
+        replace.setAttribute('aria-label', `Replace ${invitation.label}'s link`);
+        replace.title = invitation.is_you ? 'Ask another owner to change your access' : `Replace ${invitation.label}'s link`;
+        replace.innerHTML = '<svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M20 7v5h-5M4 17v-5h5M5.5 7a8 8 0 0 1 13-1L20 8M4 16l1.5 2a8 8 0 0 0 13-1"/></svg>';
         replace.addEventListener('click', () => replaceInvitation(invitation, replace));
         const actions = document.createElement('div');
         actions.className = 'invitation-actions';
+        actions.setAttribute('role', 'group');
+        actions.setAttribute('aria-label', `Manage ${invitation.label}'s invitation`);
+        replace.disabled = revoke.disabled = invitation.is_you === true;
         actions.append(replace, revoke);
         card.append(identity, actions);
         return card;
@@ -337,7 +353,7 @@
       if (!activeInvitations.length) {
         const empty = document.createElement('p');
         empty.className = 'empty-note';
-        empty.textContent = 'No one has a sender link yet.';
+        empty.textContent = 'No one has been invited yet.';
         invitations.append(empty);
       }
       setStatus('');
@@ -612,11 +628,13 @@
       document.querySelector('#other-slide-duration').setAttribute('aria-expanded', 'false');
       document.querySelector('#custom-slide-duration').hidden = true;
       document.querySelector('#blur-background').checked = playback.blur_background !== false;
+      document.querySelector('#guest-display-next').checked = playback.guest_display_next === true;
+      document.querySelector('#guest-display-next').disabled = !Object.hasOwn(playback, 'guest_display_next');
     }
     async function saveSlideshowSettings(payload) {
       if (slideshowBusy) return;
       slideshowBusy = true;
-      const controls = [...document.querySelectorAll('#display-form button, #display-form input, #blur-background')];
+      const controls = [...document.querySelectorAll('#display-form button, #display-form input, #blur-background, #guest-display-next')];
       controls.forEach(control => control.disabled = true);
       document.querySelector('#slideshow-feedback').textContent = 'Saving…';
       try {
@@ -624,10 +642,12 @@
         document.querySelector('#slideshow-feedback').textContent = 'Saved. Your frame will apply this on its next sync.';
       } catch (error) {
         document.querySelector('#blur-background').checked = galleryPlayback.blur_background !== false;
+        document.querySelector('#guest-display-next').checked = galleryPlayback.guest_display_next === true;
         document.querySelector('#slideshow-feedback').textContent = 'Could not save. Please try again.';
       } finally {
         slideshowBusy = false;
         controls.forEach(control => control.disabled = false);
+        document.querySelector('#guest-display-next').disabled = !Object.hasOwn(galleryPlayback, 'guest_display_next');
       }
     }
     for (const button of document.querySelectorAll('[data-slide-seconds]')) button.addEventListener('click', () => saveSlideshowSettings({slide_seconds:Number(button.dataset.slideSeconds)}));
@@ -643,6 +663,7 @@
       saveSlideshowSettings({slide_seconds:Number(document.querySelector('#slide-seconds').value)});
     });
     document.querySelector('#blur-background').addEventListener('change', event => saveSlideshowSettings({blur_background:event.target.checked}));
+    document.querySelector('#guest-display-next').addEventListener('change', event => saveSlideshowSettings({guest_display_next:event.target.checked}));
     document.querySelector('#resume-slideshow').addEventListener('click', async () => {
       try { await changePlayback({action:'resume'}); }
       catch (error) { document.querySelector('#playback-status').textContent = error.message; }
@@ -721,14 +742,14 @@
       document.querySelector('#slideshow-destination strong').textContent = frameName(photoFrame.value);
       sendDestinations.configure(ownerContext?.frames || [], photoFrame.value);
     }
-    function senderLabel(sender) { return sender?.key === 'owner' ? 'You' : sender?.label || 'Earlier uploads'; }
+    function senderLabel(sender) { return sender?.key === 'owner' ? 'Owner uploads' : sender?.label || 'Earlier uploads'; }
     function renderSenderFilters() {
       const allCount = gallerySenders.reduce((sum, sender) => sum + sender.count, 0);
       const options = [{key:'', label:'All', count:allCount}, ...gallerySenders];
       if (senderFilter && !options.some(option => option.key === senderFilter)) options.push({key:senderFilter,label:'Selected sender',count:0});
       document.querySelector('#sender-filters').replaceChildren(...options.map(option => {
         const button = document.createElement('button'); button.type = 'button'; button.className = 'quiet-button';
-        button.textContent = `${option.key === 'owner' ? 'You' : option.label} · ${option.count}`;
+        button.textContent = `${option.key === 'owner' ? 'Owner uploads' : option.label} · ${option.count}`;
         button.setAttribute('aria-pressed', String(senderFilter === option.key));
         button.addEventListener('click', () => { senderFilter = option.key; selectedPhotoId = null; loadPhotos(); });
         return button;
@@ -914,22 +935,31 @@
       }
     });
 
+    function updateInviteRole() {
+      document.querySelector('#invite-role-help').textContent = document.querySelector('#invite-form input[name="role"]:checked').value === 'co-owner'
+        ? 'Full access to photos, invitations, slideshow settings, devices, factory reset, and household recovery. Only share with someone you trust.'
+        : 'Send photos and manage their own uploads.';
+    }
+    document.querySelectorAll('#invite-form input[name="role"]').forEach(input => input.addEventListener('change', updateInviteRole));
     document.querySelector('#invite-form').addEventListener('submit', async event => {
       event.preventDefault();
       const button = event.target.querySelector('button');
       button.disabled = true;
-      setStatus('Creating private sender access…', 'sending');
+      setStatus('Creating private access…', 'sending');
       try {
         const payload = Object.fromEntries(new FormData(event.target));
-        const response = await fetch('/api/beta/owner/invitations', {
+        if (payload.role === 'co-owner' && ownerContext?.co_owner_version !== 1) throw new Error('Co-owner invitations are temporarily unavailable.');
+        if (payload.role === 'co-owner' && !confirm(`Give ${payload.label} full owner access? They can manage photos and invitations, add or reset devices, and manage household recovery links.`)) return;
+        const response = await fetch(payload.role === 'co-owner' ? '/api/beta/owner/co-owners' : '/api/beta/owner/invitations', {
           method: 'POST',
           headers: {'content-type': 'application/json'},
           body: JSON.stringify(payload)
         });
         if (!response.ok) throw new Error(await response.text());
         const invitation = await response.json();
-        revealInvitation(invitation);
+        revealInvitation({...invitation, role:payload.role});
         event.target.reset();
+        updateInviteRole();
         await loadOwner();
         setStatus(`Private link ready / Copy and send it to ${invitation.label}.`, 'success');
       } catch (error) {
@@ -956,7 +986,7 @@
         } catch (_) {}
       }
       if (copied) {
-        setStatus('Copied / The private sender link is ready to share.', 'success');
+        setStatus('Copied / The private invitation link is ready to share.', 'success');
       } else {
         setStatus('Copy the selected private link.', 'ready');
       }
@@ -967,11 +997,11 @@
     shareLink.addEventListener('click', async () => {
       try {
         await navigator.share({
-          title: 'Send a photo to my Memory Lane',
-          text: 'Open this private link in Safari or Chrome to send a photo.',
+          title: newInvitation.dataset.role === 'co-owner' ? 'Manage Memory Lane with me' : 'Send a photo to my Memory Lane',
+          text: newInvitation.dataset.role === 'co-owner' ? 'This private link gives you full owner access to our Memory Lane frames.' : 'Open this private link in Safari or Chrome to send a photo.',
           url: invitationUrl.value
         });
-        setStatus('Shared / The complete private sender link was sent.', 'success');
+        setStatus('Shared / The complete private invitation link was sent.', 'success');
       } catch (error) {
         if (error.name !== 'AbortError') {
           setStatus('Share unavailable / Copy the private link instead.', 'error');
@@ -980,9 +1010,11 @@
     });
 
     function revealInvitation(invitation) {
-      invitationUrl.value = `${location.origin}/sender-activate.html#${invitation.token}`;
+      newInvitation.dataset.role = invitation.role || 'sender';
+      invitationUrl.value = `${location.origin}/${invitation.role === 'co-owner' ? 'activate' : 'sender-activate'}.html#${invitation.token}`;
+      invitationUrl.setAttribute('aria-label', invitation.role === 'co-owner' ? 'New private co-owner link' : 'New private sender link');
       newInvitation.dataset.invitationId = invitation.invitation_id;
-      newInvitation.querySelector('strong').textContent = `Private link for ${invitation.label}`;
+      newInvitation.querySelector('strong').textContent = `${invitation.role === 'co-owner' ? 'Co-owner' : 'Photo sender'} link for ${invitation.label}`;
       newInvitation.hidden = false;
     }
 
@@ -991,9 +1023,9 @@
       button.disabled = true;
       setStatus(`Replacing ${invitation.label}'s link…`, 'sending');
       try {
-        const response = await fetch(`/api/beta/owner/invitations/${encodeURIComponent(invitation.invitation_id)}/replace`, {method: 'POST'});
+        const response = await fetch(`/api/beta/owner/${invitation.role === 'co-owner' ? 'co-owners' : 'invitations'}/${encodeURIComponent(invitation.invitation_id)}/replace`, {method: 'POST'});
         if (!response.ok) throw new Error(await response.text());
-        revealInvitation(await response.json());
+        revealInvitation({...await response.json(), role:invitation.role});
         newInvitation.scrollIntoView({block: 'nearest'});
         setStatus(`New link ready for ${invitation.label} / Their old link is disabled. Copy or share the new link now.`, 'success');
       } catch (error) {
@@ -1004,10 +1036,10 @@
     }
 
     async function revokeInvitation(invitation) {
-      if (!confirm(`Disable ${invitation.label}'s sender link?`)) return;
+      if (!confirm(`Disable ${invitation.label}'s ${invitation.role === 'co-owner' ? 'co-owner' : 'sender'} access?${invitation.role === 'co-owner' ? ' This stops their invitation link and browser access. Replace any household recovery link you shared with them separately.' : ''}`)) return;
       setStatus(`Disabling ${invitation.label}'s link…`, 'sending');
       try {
-        const response = await fetch(`/api/beta/owner/invitations/${invitation.invitation_id}`, {method: 'DELETE'});
+        const response = await fetch(`/api/beta/owner/${invitation.role === 'co-owner' ? 'co-owners' : 'invitations'}/${encodeURIComponent(invitation.invitation_id)}`, {method: 'DELETE'});
         if (!response.ok) throw new Error(await response.text());
         if (newInvitation.dataset.invitationId === invitation.invitation_id) {
           newInvitation.hidden = true;

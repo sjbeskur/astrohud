@@ -125,6 +125,11 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
     let mut events = sdl.event_pump().map_err(other)?;
     let mut current = None;
     let mut seen_revision = 0;
+    let guest_revision_path = config.cache_dir.join("guest-display-revision");
+    let mut seen_guest_revision = fs::read_to_string(&guest_revision_path)
+        .ok()
+        .and_then(|s| s.trim().parse::<u64>().ok())
+        .unwrap_or(0);
     let mut redraw = false;
     let mut prefetch = Prefetcher::new();
     let mut next_slide = Instant::now();
@@ -224,6 +229,10 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                 next_slide = now;
             }
             let forced = pinned.or(selected);
+            let requested = playlist
+                .playback
+                .requested_next_at(epoch, seen_guest_revision)
+                .and_then(|id| playlist.photos.iter().position(|photo| photo.id == id));
             if forced.is_some_and(|i| Some(i) != current)
                 || redraw
                 || (now >= next_slide && pinned.is_none())
@@ -239,17 +248,37 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                     )?;
                     current = None;
                 } else {
-                    let target = forced.unwrap_or_else(|| {
-                        if redraw {
-                            current.unwrap_or(0)
+                    let target = forced
+                        .or(if now >= next_slide && !redraw {
+                            requested
                         } else {
-                            current
-                                .map(|i| (i + 1) % playlist.photos.len())
-                                .unwrap_or(0)
-                        }
-                    });
+                            None
+                        })
+                        .unwrap_or_else(|| {
+                            if redraw {
+                                current.unwrap_or(0)
+                            } else {
+                                current
+                                    .map(|i| (i + 1) % playlist.photos.len())
+                                    .unwrap_or(0)
+                            }
+                        });
                     if Some(target) != current || redraw {
                         current = show_photo(&mut canvas, &playlist, target, &mut prefetch);
+                    }
+                    if forced.is_none()
+                        && !redraw
+                        && now >= next_slide
+                        && requested == Some(target)
+                        && current == Some(target)
+                    {
+                        seen_guest_revision = playlist.playback.next_revision;
+                        let temporary = guest_revision_path.with_extension("part");
+                        if let Err(error) = fs::write(&temporary, seen_guest_revision.to_string())
+                            .and_then(|()| fs::rename(&temporary, &guest_revision_path))
+                        {
+                            eprintln!("could not save guest display receipt: {error}");
+                        }
                     }
                 }
                 redraw = false;
@@ -265,7 +294,7 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                 && playlist.photos.len() > 1
                 && pinned.is_none()
             {
-                let next = (i + 1) % playlist.photos.len();
+                let next = requested.unwrap_or((i + 1) % playlist.photos.len());
                 prefetch.request(&playlist.photos[next].path);
             }
         }
@@ -399,7 +428,8 @@ fn render_prepared(
     canvas.set_draw_color(Color::RGB(5, 7, 12));
     canvas.clear();
     if blur && chrome_seed.is_some() {
-        copy_pixels(canvas, &image.backdrop, None, Rect::new(0, 0, w, h))?;
+        let source = cover_source_rect(image.backdrop.width(), image.backdrop.height(), w, h);
+        copy_pixels(canvas, &image.backdrop, Some(source), Rect::new(0, 0, w, h))?;
     }
     if let Some(seed) = chrome_seed {
         render_frame_chrome(canvas, destination, seed)?;
@@ -410,6 +440,37 @@ fn render_prepared(
     }
     canvas.present();
     Ok(())
+}
+
+// Crop equally from opposing edges, then scale the remaining image uniformly
+// to fill the output. The foreground continues to use contain_rect instead.
+fn cover_source_rect(
+    source_width: u32,
+    source_height: u32,
+    output_width: u32,
+    output_height: u32,
+) -> Rect {
+    let (width, height) = if u64::from(source_width) * u64::from(output_height)
+        > u64::from(output_width) * u64::from(source_height)
+    {
+        (
+            (u64::from(source_height) * u64::from(output_width) / u64::from(output_height)).max(1)
+                as u32,
+            source_height,
+        )
+    } else {
+        (
+            source_width,
+            (u64::from(source_width) * u64::from(output_height) / u64::from(output_width)).max(1)
+                as u32,
+        )
+    };
+    Rect::new(
+        ((source_width - width) / 2) as i32,
+        ((source_height - height) / 2) as i32,
+        width,
+        height,
+    )
 }
 
 fn framed_contain_rect(
@@ -796,6 +857,26 @@ mod tests {
         assert_eq!(
             contain_rect(900, 1600, 1920, 1080),
             Rect::new(656, 0, 607, 1080)
+        );
+    }
+
+    #[test]
+    fn backdrop_cover_crops_from_center_for_both_orientations() {
+        assert_eq!(
+            cover_source_rect(600, 1000, 1920, 1080),
+            Rect::new(0, 331, 600, 337)
+        );
+        assert_eq!(
+            cover_source_rect(1600, 900, 900, 1600),
+            Rect::new(547, 0, 506, 900)
+        );
+        assert_eq!(
+            cover_source_rect(1600, 900, 1920, 1080),
+            Rect::new(0, 0, 1600, 900)
+        );
+        assert_eq!(
+            cover_source_rect(1, 1000, 1920, 1080),
+            Rect::new(0, 499, 1, 1)
         );
     }
 

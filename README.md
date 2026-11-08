@@ -1,6 +1,6 @@
 # Memory Lane
 
-Current hosted release: **v0.3.0**. The server reports its package version at
+Current hosted release: **v0.4.0**. The server reports its package version at
 `/api/health`; Pi software is versioned independently.
 
 Memory Lane (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
@@ -172,7 +172,7 @@ Device manifests retain their existing 200-photo window and pin priority.
 
 Invited senders have **Send photos** and **My photos** tabs. My photos loads
 all of that invitation's retained uploads through cursor-based pages, with
-read-only previews and Previous/Next navigation. It remains available when
+previews and Previous/Next navigation. It remains available when
 an owner removes a photo from a frame or resets the last frame. A current,
 active invitation is still required; replacement links retain the invitation
 identity and history, while old or disabled links cannot access it.
@@ -184,7 +184,7 @@ uploads are removed from the queue so retries do not resend them.
 
 New owner and invited-sender uploads record their author atomically with the
 photo and delivery plan. Owners see named groups and sender filters for the
-selected frame, including **You** for owner uploads. Older images have no
+selected frame, including **Owner uploads** for photos sent by any owner. Older images have no
 recoverable author information and appear under **Earlier uploads**. Labels
 are presentation data; authorization uses the stable invitation ID.
 
@@ -192,11 +192,12 @@ These galleries reuse the server's existing image files. They do not create
 another image copy. The server retains a display image, not just a thumbnail:
 images larger than 1,600 pixels on their long edge are resized to JPEG;
 smaller images remain as uploaded. Browser thumbnails are previews of those
-same files. Native device manifest fields remain unchanged.
+same files. Existing native manifest fields remain compatible; Display next
+adds optional playback fields for the updated viewer.
 
-Sender history uses schema 10 and a pre-upgrade database snapshot through the
-existing startup guard. Use the schema-compatible API checkpoint below for
-a UI rollback; older schema-9 releases cannot open this database.
+Sender history was introduced in schema 10. The current schema
+is 11, with a pre-upgrade database snapshot through the existing startup guard.
+See the rollback notes below before deploying or reverting this release.
 
 The gallery also offers **Show now**, **Pin photo**, and **Resume slideshow**.
 Owners can choose the time per photo and a soft, blurred background that fills
@@ -273,18 +274,56 @@ sender context also advertise `photo_history_version: 1`. The new
 pages block sending when this capability is absent; old pages can still send
 through the updated API and default to one eligible frame.
 
-Before upgrading an existing database to schema 10, server startup uses
+Before upgrading an existing database to schema 11, server startup uses
 SQLite `VACUUM INTO` to create a consistent snapshot under
-`$ASTROHUD_DATA_DIR/backups/before-schema-9-to-10-<id>.sqlite3` (the filename
+`$ASTROHUD_DATA_DIR/backups/before-schema-10-to-11-<id>.sqlite3` (the filename
 records the actual previous version). If snapshot creation fails, startup
 stops before changing the schema. Existing media files are unchanged.
 
-For a UI rollback, deploy API checkpoint **`6113e15`**: it retains photo
-routing, sender history, attribution, and schema-10 support while serving the
-previous website. The earlier schema-9 checkpoint `db68b1b` is no longer a
-compatible rollback target. Prefer the current checkpoint or a forward fix. Restoring the pre-upgrade snapshot
-would also discard later metadata and is not an ordinary release rollback.
-The server rejects databases from schema versions newer than it supports.
+After a schema-11 upgrade, any rollback must retain schema-11 support.
+API checkpoint **`3e19596`** retains the schema-11 APIs with the previous
+website and can be deployed for a UI rollback.
+Published v0.3.0 and the earlier API checkpoints `6113e15` and `db68b1b`
+cannot open a schema-11 database. Prefer a compatible forward fix. Restoring
+the pre-upgrade snapshot discards later metadata and cannot restore photo
+files deleted since that snapshot. The server rejects newer schemas.
+
+### Guest photo controls and co-owners
+
+In **My photos**, an invited sender can delete a photo they uploaded.
+Deletion removes its server record and stored image, all delivery plans,
+and any pin or queued command referencing it. Frames purge cached copies on
+their next successful sync; an offline frame can continue showing its cached
+copy until then. Failed file cleanup is recorded durably and retried on the
+next deletion or server restart. This action is distinct from an owner's
+frame-local **Remove from this frame**. Another sender's, an owner's, or an
+unattributed older photo cannot be deleted using a sender invitation.
+
+Owners can enable **Allow guest “Display next” requests** per frame in
+Slideshow settings. It defaults off. A sender can request only their own
+photo, on a frame that still receives it. The server enforces a shared
+10-minute cooldown per frame across all guests and links. There is only one
+pending request per frame; repeated clicks cannot replace it. Owner pins
+block requests, and owner Show now, Pin, Resume, or disabling guest requests
+cancels pending requests. Requests expire after at least 10 minutes (or the
+slide interval plus two minutes, if longer), preventing stale requests from
+appearing after a long outage.
+
+The updated Pi viewer and browser simulator display the request at the next
+slide boundary and remember consumed revisions across restarts. Older Pi
+viewers continue their ordinary slideshow but ignore Display next; this
+feature requires the new viewer. Website capabilities hide new sender
+actions and co-owner choices against older servers.
+
+**Invite** offers **Photo sender** or **Co-owner**. Co-owners receive full
+household owner access, including photos, settings, invitations, device
+claim/reset, and recovery. Tokens are stored only as hashes; Replace link
+rotates access and invalidates existing sessions using the old link. Disable
+revokes that invitation's access. You cannot replace or disable your own
+current co-owner grant, and the original owner grant is not exposed as a
+revocable co-owner invitation. Co-owners are trusted administrators: separately
+shared recovery links or additional invitations they created must be managed
+separately when removing a person's access.
 
 Send an image:
 

@@ -22,12 +22,12 @@ impl PreparedImage {
             .unwrap_or(image::metadata::Orientation::NoTransforms);
         let mut image = DynamicImage::from_decoder(decoder)?;
         image.apply_orientation(orientation);
-        // A light blur and modest dimming keep the stretched background
-        // visible while letting the sharp foreground photo stand out.
-        let mut backdrop = image.thumbnail(640, 640).blur(3.0).into_rgba8();
+        // Prepare a small, softened backdrop off the render thread. Rendering
+        // crops it from the center to fill the screen without distortion.
+        let mut backdrop = image.thumbnail(640, 640).blur(8.0).into_rgba8();
         for pixel in backdrop.pixels_mut() {
             for channel in &mut pixel.0[..3] {
-                *channel = (u16::from(*channel) * 85 / 100) as u8;
+                *channel = (u16::from(*channel) * 78 / 100) as u8;
             }
         }
         let foreground = if image.width() > 2048 || image.height() > 2048 {
@@ -118,7 +118,7 @@ mod tests {
         let prepared = PreparedImage::load(&path).unwrap();
         assert_eq!(prepared.foreground, source);
         assert!(prepared.backdrop.width() <= 640 && prepared.backdrop.height() <= 640);
-        assert_eq!(prepared.backdrop.get_pixel(0, 0).0, [170, 136, 102, 255]);
+        assert_eq!(prepared.backdrop.get_pixel(0, 0).0, [156, 124, 93, 255]);
         std::fs::remove_file(path).unwrap();
     }
 }

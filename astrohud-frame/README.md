@@ -16,7 +16,7 @@ continuing to use `astrohud-rest` as the source of the frame manifest and media.
   budget. If one image alone exceeds the cap, it is kept so the frame can still
   display something.
 - Loads the saved manifest and cached images before attempting the network.
-- Applies EXIF orientation and letterboxes each image against a dark background.
+- Applies EXIF orientation and preserves the complete foreground image. With the soft background enabled, a more blurred, slightly darkened copy fills the screen using a centered crop and proportional scaling instead of stretching.
 - Retries network synchronization indefinitely while the cached slideshow
   continues.
 
@@ -184,3 +184,12 @@ logs so the cause of a future outage survives a reboot.
 - Server-created, resolution-aware display variants
 - Cache observability and remote diagnostics
 - Cross-fades or other transitions
+
+### Guest Display next
+
+The owner can opt in per frame. This viewer honors `next_photo_id`,
+`next_revision`, and `next_expires_at` only at the end of the current slide.
+Owner commands and pins take priority. Consumed revisions are saved in
+`guest-display-revision` in the cache directory so polling or restarting
+does not replay a request. Older servers omit these fields and keep normal
+slideshow behavior.

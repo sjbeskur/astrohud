@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Photo background comparison — Memory Lane</title>
+  <link rel="stylesheet" href="/astrohud-theme.css?v=4bb79127b5bf">
+  <style>
+    main { max-width: 1440px; margin: auto; padding: 1rem; }
+    h1 { font-size: 1.65rem; } h2 { font-size: 1rem; }
+    .comparison { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem; }
+    .screen { aspect-ratio: 16 / 9; position: relative; overflow: hidden; background: #05070c; border-radius: 8px; }
+    .backdrop { position: absolute; inset: -32px; background-position: center; background-size: cover; filter: blur(24px) brightness(.78); }
+    #current .backdrop { inset: -12px; background-size: 100% 100%; filter: blur(10px) brightness(.85); }
+    .foreground { position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); object-fit: contain; }
+    .controls { display: flex; flex-wrap: wrap; align-items: end; gap: 1rem; margin: 1rem 0; }
+    .control { flex: 1 1 180px; } .control input { width: 100%; }
+    .note { color: var(--hud-muted); font-size: .9rem; }
+    output { font-variant-numeric: tabular-nums; }
+    #fullscreen { margin-block: 1rem; }
+    .screen:fullscreen { width: 100vw; height: 100vh; border-radius: 0; }
+    @media(max-width: 760px) { .comparison { grid-template-columns: 1fr; } }
+  </style>
+</head>
+<body class="simple-page">
+<main>
+  <a class="quiet-button" href="/local-simulator.html">← Local frame demo</a>
+  <h1>Photo backgrounds</h1>
+  <p>Compare the current stretched background with a centered, proportional crop.</p>
+  <div class="controls">
+    <div class="control"><label for="photo">Try your own photo</label><input id="photo" type="file" accept="image/jpeg,image/png"><small>Previewed on this device; never uploaded.</small></div>
+    <div class="control"><label for="blur">Blur <output id="blur-value" for="blur">24 px</output></label><input id="blur" type="range" min="0" max="48" step="1" value="24"></div>
+    <div class="control"><label for="brightness">Brightness <output id="brightness-value" for="brightness">78%</output></label><input id="brightness" type="range" min="40" max="100" step="1" value="78"></div>
+    <button id="reset" class="quiet-button" type="button">Reset settings</button>
+  </div>
+  <p id="status" class="note" role="status">Showing a sample portrait. Try both portrait and landscape photos.</p>
+  <div class="comparison">
+    <section><h2>Current — stretched</h2><div id="current" class="screen"><div class="backdrop" aria-hidden="true"></div><img class="foreground" alt="Selected photo with the current background"></div></section>
+    <section><h2>Proposed — center crop</h2><div id="proposed" class="screen"><div class="backdrop" aria-hidden="true"></div><img class="foreground" alt="Selected photo with the proposed background"></div></section>
+  </div>
+  <button id="fullscreen" class="quiet-button" type="button">View proposed full screen</button>
+  <p class="note">Browser approximation. The Pi uses the same centered crop, with blur prepared at a smaller resolution. Final tuning should be checked on the TV. These controls only change this preview.</p>
+</main>
+<script>
+  const photo = document.querySelector('#photo');
+  const blur = document.querySelector('#blur');
+  const brightness = document.querySelector('#brightness');
+  let photoUrl;
+  const sample = 'data:image/svg+xml;charset=utf-8,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" width="600" height="1000" viewBox="0 0 600 1000"><rect width="600" height="1000" fill="#945545"/><ellipse cx="300" cy="360" rx="210" ry="240" fill="#eac386"/><path d="M0 1000 300 400 600 1000Z" fill="#3b5c56"/></svg>');
+  function show(url) {
+    document.querySelectorAll('.foreground').forEach(image => image.src = url);
+    document.querySelectorAll('.backdrop').forEach(backdrop => backdrop.style.backgroundImage = `url("${url}")`);
+  }
+  function update() {
+    document.querySelector('#proposed .backdrop').style.filter = `blur(${blur.value}px) brightness(${brightness.value / 100})`;
+    document.querySelector('#blur-value').textContent = `${blur.value} px`;
+    document.querySelector('#brightness-value').textContent = `${brightness.value}%`;
+  }
+  photo.addEventListener('change', () => {
+    const file = photo.files[0];
+    if (!file) return;
+    if (!['image/jpeg', 'image/png'].includes(file.type)) {
+      document.querySelector('#status').textContent = 'Choose a JPEG or PNG photo.'; return;
+    }
+    if (photoUrl) URL.revokeObjectURL(photoUrl);
+    photoUrl = URL.createObjectURL(file); show(photoUrl);
+    document.querySelector('#status').textContent = file.name;
+  });
+  blur.addEventListener('input', update); brightness.addEventListener('input', update);
+  document.querySelector('#reset').addEventListener('click', () => { blur.value = 24; brightness.value = 78; update(); });
+  document.querySelector('#fullscreen').addEventListener('click', async () => {
+    try { await document.querySelector('#proposed').requestFullscreen(); }
+    catch { document.querySelector('#status').textContent = 'Full screen is unavailable in this browser. Try opening this page on a larger screen.'; }
+  });
+  show(sample); update();
+</script>
+</body>
+</html>

@@ -1,5 +1,15 @@
 # Release notes
 
+## v0.4.0 — 2026-11-08
+
+- Center-cropped, more blurred and slightly darker photo backgrounds.
+- Invited senders can delete their own uploads from all receiving frames.
+- Owner-enabled guest Display next, limited to own photos and a shared per-frame 10-minute cooldown, with owner pin priority.
+- Full-access co-owner invitations with private, replaceable and revocable links.
+- Compact invitation rows and create/copy/share/replace/disable icons, preserving the existing colors and mobile touch targets.
+- Pi viewer v0.2.0 supports queued Display next requests and centered photo backgrounds.
+- Schema 11 adds durable media cleanup, guest request state, and co-owner invitation records. Upgrading creates a database snapshot; rollback requires a schema-11-compatible server.
+
 ## v0.3.0 — 2026-11-08
 
 - Compact mobile layouts with clear frame context, invitations, sending, and photo controls.

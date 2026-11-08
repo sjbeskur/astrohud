@@ -4,9 +4,15 @@ class MemoryLaneSlideshow {
     this.image = image; this.backdrop = backdrop; this.empty = empty;
     this.photos = []; this.playback = {}; this.cache = new Map();
     this.currentId = undefined; this.seenRevision = 0; this.nextAt = 0; this.retryAt = 0; this.generation = 0;
+    this.seenNextRevision = 0;
     this.timer = setInterval(() => this.tick().catch(() => {}), 250);
   }
   async update(manifest, headers = {}) {
+    if (this.frameId !== manifest.frame_id) {
+      this.frameId = manifest.frame_id;
+      try { this.seenNextRevision = Number(localStorage.getItem(`memory-lane-guest-display:${this.frameId}`)) || 0; }
+      catch { this.seenNextRevision = 0; }
+    }
     this.generation++; this.headers = headers;
     this.photos = manifest.photos; const previous = this.playback.slide_seconds;
     const available = new Set(this.photos.map(photo => photo.id));
@@ -21,11 +27,21 @@ class MemoryLaneSlideshow {
     }
     this.backdrop.hidden = this.playback.blur_background === false;
     await this.tick();
+    const requested = this.requestedNext();
+    if (requested && !this.pinned()) this.load(requested).catch(() => {});
   }
   interval() { return Math.max(5, Math.min(3600, this.playback.slide_seconds || 12)) * 1000; }
   pinned() {
     return (!this.playback.pinned_until || this.playback.pinned_until * 1000 > Date.now())
       ? this.photos.find(photo => photo.id === this.playback.pinned_photo_id) : undefined;
+  }
+  requestedNext() {
+    return (this.playback.next_revision || 0) > this.seenNextRevision && this.playback.next_expires_at * 1000 > Date.now()
+      ? this.photos.find(photo => photo.id === this.playback.next_photo_id) : undefined;
+  }
+  consumeNext() {
+    this.seenNextRevision = this.playback.next_revision;
+    try { localStorage.setItem(`memory-lane-guest-display:${this.frameId}`, String(this.seenNextRevision)); } catch {}
   }
   load(photo) {
     if (this.cache.has(photo.id)) return this.cache.get(photo.id);
@@ -48,14 +64,17 @@ class MemoryLaneSlideshow {
     const changed = revision !== this.seenRevision;
     const pinned = this.pinned();
     const selected = changed && this.photos.find(photo => photo.id === this.playback.selected_photo_id);
+    let requested;
     if (changed && !this.playback.selected_photo_id) { this.seenRevision = revision; this.nextAt = 0; }
     let target = pinned || selected;
     if (!target) {
       if (this.currentId && Date.now() < this.nextAt) return;
       const index = this.photos.findIndex(photo => photo.id === this.currentId);
-      target = this.photos[(index + 1) % this.photos.length];
+      requested = this.requestedNext();
+      target = requested || this.photos[(index + 1) % this.photos.length];
     }
     if (target.id === this.currentId) {
+      if (requested) { this.consumeNext(); this.nextAt = Date.now() + this.interval(); }
       if (changed) { this.seenRevision = revision; this.nextAt = Date.now() + this.interval(); }
       return;
     }
@@ -66,9 +85,10 @@ class MemoryLaneSlideshow {
       this.image.src = prepared.url; this.image.hidden = false; this.image.classList.add('ready');
       this.backdrop.style.backgroundImage = `url("${prepared.url}")`; this.empty.hidden = true;
       this.currentId = target.id; this.nextAt = Date.now() + this.interval();
+      if (requested) this.consumeNext();
       if (changed && (selected || !this.playback.selected_photo_id)) this.seenRevision = revision;
       const index = this.photos.findIndex(photo => photo.id === this.currentId);
-      const next = this.photos[(index + 1) % this.photos.length];
+      const next = this.requestedNext() || this.photos[(index + 1) % this.photos.length];
       const retain = new Set([this.currentId, next.id, pinned?.id]);
       for (const [id, promise] of this.cache) if (!retain.has(id)) {
         this.cache.delete(id); promise.then(photo => URL.revokeObjectURL(photo.url)).catch(() => {});

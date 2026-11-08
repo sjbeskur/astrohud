@@ -181,7 +181,7 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 #resume-slideshow { margin-top: 0.75rem; }
 .owner-page #owner-send-panel { scroll-margin-top: 6rem; }
 #owner-preview-shell { margin-block: 1rem; }
-.photo-backdrop { position: absolute; inset: -12px; background-position: center; background-size: 100% 100%; filter: blur(10px) brightness(0.85); pointer-events: none; }
+.photo-backdrop { position: absolute; inset: -32px; background-position: center; background-size: cover; filter: blur(24px) brightness(0.78); pointer-events: none; }
 .frame-view > .photo-backdrop { position: fixed; }
 .frame-photo, #display-photo { position: relative; z-index: 1; }
 .simulated-display-empty { position: relative; z-index: 2; }
@@ -465,3 +465,24 @@ body:has(> .site-footer) > .simulator-view { min-height: 0; }
 .site-footer span { display: block; }
 .site-footer a { display: inline-flex; align-items: center; min-height: 44px; color: inherit; text-underline-offset: 3px; }
 .site-footer a:hover { color: var(--hud-text); }
+
+.invite-role-options { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; margin: 0 0 0.5rem; padding: 0; border: 0; }
+.invite-role-options legend { margin-bottom: 0.5rem; }
+.invite-role-options label { display: flex; align-items: center; gap: 0.5rem; min-height: 44px; margin: 0; }
+.invite-role-options input { width: auto; margin: 0; }
+#sent-next-targets { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.5rem; }
+#sent-next-targets button { width: 100%; min-width: 0; padding: 0.75rem; text-align: left; font-size: 0.85rem; line-height: 1.4; }
+
+/* Compact invitation rows retain comfortable touch targets on phones. */
+.owner-page .invite-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 44px; width: 44px; height: 44px; min-height: 44px; padding: 0; border-radius: 10px; }
+.invite-icon-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.owner-page #invite-form .field-row, .owner-page .invitation-link-row { grid-template-columns: minmax(0, 1fr) 44px; gap: 0.5rem; align-items: center; }
+.owner-page .invitation-link-row:has(#share-link:not([hidden])) { grid-template-columns: minmax(0, 1fr) 44px 44px; }
+.owner-page #invite-form .field-row input, .owner-page .invitation-link-row input { min-width: 0; min-height: 44px; padding: 0.6rem 0.75rem; }
+.owner-page #invitations { gap: 0.5rem; }
+.owner-page #invitations .invitation-card { flex-direction: row; flex-wrap: nowrap; align-items: center; gap: 0.65rem; padding: 0.65rem 0.75rem; border-radius: 12px; }
+.owner-page #invitations .invitation-card > div:first-child { min-width: 0; flex: 1; overflow-wrap: anywhere; }
+.owner-page #invitations .invitation-card strong { margin-bottom: 0.1rem; font-size: 0.95rem; line-height: 1.3; }
+.owner-page #invitations .invitation-actions { width: auto; flex: 0 0 auto; flex-wrap: nowrap; gap: 0.4rem; }
+.owner-page #invitations .invitation-actions .invite-icon-button { width: 44px; }
+.owner-page #invite-panel .link-reveal { padding: 0.75rem; }
