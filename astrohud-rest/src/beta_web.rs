@@ -39,6 +39,12 @@ struct BootstrapClaimRequest {
 }
 
 #[derive(Deserialize)]
+struct PhotoPageQuery {
+    before: Option<i64>,
+    sender: Option<String>,
+}
+
+#[derive(Deserialize)]
 struct InvitationRequest {
     label: String,
 }
@@ -180,9 +186,14 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             web::post().to(create_sender_session),
         )
         .route("/api/beta/sender", web::get().to(get_sender_context))
+        .service(
+            web::resource("/api/beta/sender/photos")
+                .route(web::post().to(upload_sender_photo))
+                .route(web::get().to(get_sender_history)),
+        )
         .route(
-            "/api/beta/sender/photos",
-            web::post().to(upload_sender_photo),
+            "/api/beta/sender/photos/{photo_id}",
+            web::get().to(get_sender_history_photo),
         );
 }
 
@@ -406,22 +417,26 @@ async fn get_owner_photos(
     state: web::Data<AppState>,
     request: HttpRequest,
     frame_id: web::Path<String>,
+    query: web::Query<PhotoPageQuery>,
 ) -> Result<HttpResponse> {
     let token = owner_token(&request)?;
     let database = state
         .database
         .lock()
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
-    let household_id = owner_household_id(&database, &token).map_err(beta_http_error)?;
-    let mut manifest = protected_manifest_for_household(&database, &household_id, &frame_id)
-        .map_err(error::ErrorInternalServerError)?
-        .ok_or_else(|| error::ErrorNotFound("frame not found"))?;
-    for photo in &mut manifest.photos {
-        photo.url = format!("/api/beta/owner/frames/{frame_id}/photos/{}", photo.id);
-    }
+    let household = owner_household_id(&database, &token).map_err(beta_http_error)?;
+    let page = crate::owner_gallery_page(
+        &database,
+        &household,
+        &frame_id,
+        query.before,
+        query.sender.as_deref(),
+    )
+    .map_err(error::ErrorInternalServerError)?
+    .ok_or_else(|| error::ErrorNotFound("frame not found"))?;
     Ok(HttpResponse::Ok()
         .insert_header((header::CACHE_CONTROL, "no-store"))
-        .json(manifest))
+        .json(page))
 }
 
 async fn get_owner_photo(
@@ -711,6 +726,62 @@ async fn upload_sender_photo(
     })))
 }
 
+async fn get_sender_history(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    query: web::Query<PhotoPageQuery>,
+) -> Result<HttpResponse> {
+    let token = sender_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let access = sender_access(&db, &token).map_err(beta_http_error)?;
+    let page = crate::sender_history_page(
+        &db,
+        &access.invitation_id,
+        &access.household_id,
+        &access.channel_id,
+        query.before,
+    )
+    .map_err(error::ErrorInternalServerError)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(page))
+}
+async fn get_sender_history_photo(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    photo_id: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = sender_token(&request)?;
+    let key = {
+        let db = state
+            .database
+            .lock()
+            .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+        let access = sender_access(&db, &token).map_err(beta_http_error)?;
+        crate::sender_history_media(
+            &db,
+            &access.invitation_id,
+            &access.household_id,
+            &access.channel_id,
+            &photo_id,
+        )
+        .map_err(error::ErrorInternalServerError)?
+        .ok_or_else(|| error::ErrorNotFound("photo not found"))?
+    };
+    let file = NamedFile::open_async(state.media_dir.join(key))
+        .await
+        .map_err(|_| error::ErrorNotFound("photo not found"))?;
+    let mut response = file.into_response(&request);
+    response.headers_mut().insert(
+        header::CACHE_CONTROL,
+        header::HeaderValue::from_static("no-store"),
+    );
+    Ok(response)
+}
+
 fn owner_token(request: &HttpRequest) -> Result<String> {
     request
         .cookie(OWNER_COOKIE)
@@ -771,6 +842,261 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn sender_history_is_private_paginated_and_survives_link_replacement_and_frame_removal() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize_database(&db).unwrap();
+        let owner = create_household_owner(&mut db, "History home", "Owner").unwrap();
+        let other = create_household_owner(&mut db, "Other home", "Owner").unwrap();
+        db.execute("INSERT INTO frames (id,household_id,place_name) VALUES ('history-frame',?1,'Living room')",[&owner.household_id]).unwrap();
+        db.execute(
+            "INSERT INTO frame_subscriptions VALUES ('history-frame',?1)",
+            [&owner.default_channel_id],
+        )
+        .unwrap();
+        db.execute("INSERT INTO photos (id,channel_id,storage_key,mime_type) VALUES ('earlier',?1,'earlier.png','image/png')",[&owner.default_channel_id]).unwrap();
+        let alice = create_sender_invitation(&db, &owner.owner_token, "Alice").unwrap();
+        let bob = create_sender_invitation(&db, &owner.owner_token, "Bob").unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("memory-lane-history-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let state = web::Data::new(AppState::new(db, directory.clone()));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let mut payload=b"--history\r\nContent-Disposition: form-data; name=\"sender_key\"\r\n\r\nowner\r\n--history\r\nContent-Disposition: form-data; name=\"photo\"; filename=\"test.png\"\r\nContent-Type: image/png\r\n\r\n".to_vec();
+        payload.extend(png.into_inner());
+        payload.extend(b"\r\n--history--\r\n");
+        let mut alice_ids = Vec::new();
+        let mut bob_id = String::new();
+        for (cookie, path, count) in [
+            (
+                Cookie::new(SENDER_COOKIE, alice.token.clone()),
+                "/api/beta/sender/photos",
+                55,
+            ),
+            (
+                Cookie::new(SENDER_COOKIE, bob.token.clone()),
+                "/api/beta/sender/photos",
+                1,
+            ),
+            (
+                Cookie::new(OWNER_COOKIE, owner.owner_token.clone()),
+                "/api/beta/owner/frames/history-frame/photos",
+                1,
+            ),
+        ] {
+            for _ in 0..count {
+                let request = test::TestRequest::post()
+                    .uri(path)
+                    .cookie(cookie.clone())
+                    .insert_header((
+                        header::CONTENT_TYPE,
+                        "multipart/form-data; boundary=history",
+                    ))
+                    .set_payload(payload.clone())
+                    .to_request();
+                let response = test::call_service(&app, request).await;
+                assert_eq!(response.status(), StatusCode::CREATED);
+                let body: serde_json::Value = test::read_body_json(response).await;
+                let id = body["photo_id"].as_str().unwrap().to_owned();
+                if cookie.value() == alice.token {
+                    alice_ids.push(id)
+                } else if cookie.value() == bob.token {
+                    bob_id = id
+                }
+            }
+        }
+        for cookie in [
+            None,
+            Some(Cookie::new(OWNER_COOKIE, owner.owner_token.clone())),
+        ] {
+            let mut request = test::TestRequest::get().uri("/api/beta/sender/photos");
+            if let Some(cookie) = cookie {
+                request = request.cookie(cookie)
+            }
+            assert_eq!(
+                test::call_service(&app, request.to_request())
+                    .await
+                    .status(),
+                StatusCode::UNAUTHORIZED
+            );
+        }
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/beta/sender/photos")
+                .cookie(Cookie::new(SENDER_COOKIE, alice.token.clone()))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let page: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(page["photos"].as_array().unwrap().len(), 50);
+        let cursor = page["next_cursor"].as_i64().unwrap();
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/beta/sender/photos?before={cursor}"))
+                .cookie(Cookie::new(SENDER_COOKIE, alice.token.clone()))
+                .to_request(),
+        )
+        .await;
+        let last: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(last["photos"].as_array().unwrap().len(), 5);
+        assert!(last["next_cursor"].is_null());
+        let ids = page["photos"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .chain(last["photos"].as_array().unwrap())
+            .map(|p| p["id"].as_str().unwrap())
+            .collect::<std::collections::HashSet<_>>();
+        assert_eq!(ids.len(), 55);
+        assert!(alice_ids.iter().all(|id| ids.contains(id.as_str())));
+        for (id, status) in [
+            (&alice_ids[0], StatusCode::OK),
+            (&bob_id, StatusCode::NOT_FOUND),
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri(&format!("/api/beta/sender/photos/{id}"))
+                    .cookie(Cookie::new(SENDER_COOKIE, alice.token.clone()))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), status);
+        }
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/beta/owner/frames/history-frame/photos")
+                .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+                .to_request(),
+        )
+        .await;
+        let gallery: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(gallery["senders"].as_array().unwrap().len(), 4);
+        let category = gallery["senders"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["key"] == alice.invitation_id)
+            .unwrap();
+        assert_eq!(category["count"], 55);
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!(
+                    "/api/beta/owner/frames/history-frame/photos?sender={}",
+                    alice.invitation_id
+                ))
+                .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token.clone()))
+                .to_request(),
+        )
+        .await;
+        let filtered: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(filtered["photos"].as_array().unwrap().len(), 50);
+        assert!(
+            filtered["photos"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .all(|p| p["sender"]["key"] == alice.invitation_id)
+        );
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/beta/owner/frames/history-frame/photos")
+                .cookie(Cookie::new(OWNER_COOKIE, other.owner_token))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::NOT_FOUND);
+        let replaced = {
+            let db = state.database.lock().unwrap();
+            replace_sender_invitation(&db, &owner.owner_token, &alice.invitation_id).unwrap()
+        };
+        for (token, status) in [
+            (&alice.token, StatusCode::UNAUTHORIZED),
+            (&replaced.token, StatusCode::OK),
+        ] {
+            let response = test::call_service(
+                &app,
+                test::TestRequest::get()
+                    .uri("/api/beta/sender/photos")
+                    .cookie(Cookie::new(SENDER_COOKIE, token.clone()))
+                    .to_request(),
+            )
+            .await;
+            assert_eq!(response.status(), status);
+        }
+        {
+            let db = state.database.lock().unwrap();
+            db.execute(
+                "INSERT INTO frame_photo_removals (frame_id,photo_id) VALUES ('history-frame',?1)",
+                [&alice_ids[0]],
+            )
+            .unwrap();
+        }
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/beta/sender/photos/{}", alice_ids[0]))
+                .cookie(Cookie::new(SENDER_COOKIE, replaced.token.clone()))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        {
+            let db = state.database.lock().unwrap();
+            db.execute("DELETE FROM frames WHERE id='history-frame'", [])
+                .unwrap();
+        }
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/beta/sender")
+                .cookie(Cookie::new(SENDER_COOKIE, replaced.token.clone()))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        let context: serde_json::Value = test::read_body_json(response).await;
+        assert!(context["frames"].as_array().unwrap().is_empty());
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri("/api/beta/sender/photos")
+                .cookie(Cookie::new(SENDER_COOKIE, replaced.token.clone()))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::OK);
+        {
+            let db = state.database.lock().unwrap();
+            revoke_sender_invitation(&db, &owner.owner_token, &alice.invitation_id).unwrap();
+        }
+        let response = test::call_service(
+            &app,
+            test::TestRequest::get()
+                .uri(&format!("/api/beta/sender/photos/{}", alice_ids[0]))
+                .cookie(Cookie::new(SENDER_COOKIE, replaced.token))
+                .to_request(),
+        )
+        .await;
+        assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[actix_web::test]
     async fn explicit_photo_destinations_are_scoped_atomic_and_not_inherited_by_new_frames() {

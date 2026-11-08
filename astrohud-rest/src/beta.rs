@@ -128,6 +128,7 @@ pub struct CreatedInvitation {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize)]
 pub struct SenderContext {
+    pub photo_history_version: u8,
     pub photo_routing_version: u8,
     pub frames: Vec<OwnerFrame>,
     pub place_name: String,
@@ -136,6 +137,7 @@ pub struct SenderContext {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct SenderAccess {
+    pub invitation_id: String,
     pub household_id: String,
     pub channel_id: String,
     pub context: SenderContext,
@@ -803,24 +805,21 @@ pub fn sender_access(
     let sender_token_hash = hash_secret(sender_token);
     let mut access = connection
         .query_row(
-            "SELECT i.household_id, i.channel_id, f.place_name, i.label
+            "SELECT i.household_id, i.channel_id, i.label, i.id
              FROM sender_invitations i
-             JOIN frames f ON f.household_id = i.household_id
-             JOIN frame_subscriptions s ON s.frame_id = f.id AND s.channel_id = i.channel_id
-             WHERE i.token_hash = ?1
-               AND i.revoked_at IS NULL
-             ORDER BY f.created_at, f.rowid
-             LIMIT 1",
+             WHERE i.token_hash = ?1 AND i.revoked_at IS NULL",
             params![sender_token_hash.as_slice()],
             |row| {
                 Ok(SenderAccess {
+                    invitation_id: row.get(3)?,
                     household_id: row.get(0)?,
                     channel_id: row.get(1)?,
                     context: SenderContext {
+                        photo_history_version: crate::PHOTO_HISTORY_VERSION,
                         photo_routing_version: crate::PHOTO_ROUTING_VERSION,
                         frames: Vec::new(),
-                        place_name: row.get(2)?,
-                        invitation_label: row.get(3)?,
+                        place_name: String::new(),
+                        invitation_label: row.get(2)?,
                     },
                 })
             },
@@ -839,6 +838,12 @@ pub fn sender_access(
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
+    access.context.place_name = access
+        .context
+        .frames
+        .first()
+        .map(|frame| frame.place_name.clone())
+        .unwrap_or_else(|| "Your frames".to_owned());
     Ok(access)
 }
 

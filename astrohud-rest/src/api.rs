@@ -17,8 +17,9 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 9;
+const SCHEMA_VERSION: i64 = 10;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
+pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
 pub const DEMO_HOUSEHOLD_ID: &str = "demo-household";
 
@@ -56,6 +57,15 @@ CREATE TABLE IF NOT EXISTS photos (
     location_label TEXT,
     created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE TABLE IF NOT EXISTS photo_contributors (
+    photo_id TEXT PRIMARY KEY REFERENCES photos(id) ON DELETE CASCADE,
+    sender_key TEXT NOT NULL,
+    invitation_id TEXT REFERENCES sender_invitations(id) ON DELETE SET NULL,
+    sender_label TEXT NOT NULL,
+    kind TEXT NOT NULL CHECK (kind IN ('owner', 'invited'))
+);
+CREATE INDEX IF NOT EXISTS photo_contributors_invitation ON photo_contributors(invitation_id, photo_id);
+CREATE INDEX IF NOT EXISTS photo_contributors_sender ON photo_contributors(sender_key, photo_id);
 -- A plan distinguishes explicitly routed photos from older shared-feed photos.
 -- It remains when a target frame is deleted, preventing accidental broadcast.
 CREATE TABLE IF NOT EXISTS photo_delivery_plans (
@@ -286,12 +296,14 @@ pub struct CreateChannel {
 
 #[derive(Debug, Serialize)]
 pub struct Photo {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) sender: Option<crate::PhotoSender>,
     pub(crate) id: String,
-    channel_id: String,
+    pub(crate) channel_id: String,
     pub(crate) url: String,
-    mime_type: String,
-    created_at: String,
-    location_label: Option<String>,
+    pub(crate) mime_type: String,
+    pub(crate) created_at: String,
+    pub(crate) location_label: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -304,6 +316,7 @@ pub struct FrameManifest {
 
 #[derive(Debug, Serialize)]
 pub struct Health {
+    pub photo_history_version: u8,
     pub photo_routing_version: u8,
     status: &'static str,
 }
@@ -469,6 +482,7 @@ fn ensure_foreign_keys_are_valid(connection: &Connection) -> rusqlite::Result<()
 pub async fn health() -> web::Json<Health> {
     web::Json(Health {
         status: "ok",
+        photo_history_version: PHOTO_HISTORY_VERSION,
         photo_routing_version: PHOTO_ROUTING_VERSION,
     })
 }
@@ -756,6 +770,24 @@ async fn upload_photo_for_household(
              VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
             params![photo_id, channel_id, storage_key, mime_type, coordinates.map(|v| v.0), coordinates.map(|v| v.1), location_label],
         ).map_err(error::ErrorInternalServerError)?;
+        if let Some(authority) = authority.as_ref() {
+            let (key, invitation, label, kind) = match authority {
+                PhotoUploadAuthority::Owner { .. } => {
+                    ("owner".to_owned(), None, "Owner".to_owned(), "owner")
+                }
+                PhotoUploadAuthority::Sender { token } => {
+                    let access = crate::sender_access(&transaction, token)
+                        .map_err(crate::beta_http_error)?;
+                    (
+                        access.invitation_id.clone(),
+                        Some(access.invitation_id),
+                        access.context.invitation_label,
+                        "invited",
+                    )
+                }
+            };
+            transaction.execute("INSERT INTO photo_contributors (photo_id,sender_key,invitation_id,sender_label,kind) VALUES (?1,?2,?3,?4,?5)", params![photo_id,key,invitation,label,kind]).map_err(error::ErrorInternalServerError)?;
+        }
         if let Some(targets) = targets {
             transaction
                 .execute(
@@ -793,6 +825,7 @@ async fn upload_photo_for_household(
     };
 
     Ok(Photo {
+        sender: None,
         id: photo_id,
         channel_id,
         url: format!("/media/{storage_key}"),
@@ -918,6 +951,7 @@ fn manifest_for_household_with_protected_media(
                 let photo_id: String = row.get(0)?;
                 let storage_key: String = row.get(2)?;
                 Ok(Photo {
+                    sender: None,
                     url: if protected_media {
                         format!("/api/beta/device/media/{photo_id}")
                     } else {
@@ -1074,6 +1108,59 @@ mod tests {
         jpeg.extend_from_slice(&tiff);
         jpeg.extend_from_slice(&[0xff, 0xd9]);
         jpeg
+    }
+
+    #[test]
+    fn history_upgrade_preserves_routing_and_does_not_guess_earlier_senders() {
+        let directory =
+            std::env::temp_dir().join(format!("memory-lane-history-migration-{}", Uuid::new_v4()));
+        fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("astrohud.sqlite3");
+        let db = Connection::open(&path).unwrap();
+        initialize_database(&db).unwrap();
+        db.execute(
+            "INSERT INTO channels (id,household_id,name) VALUES ('history-channel',?1,'History')",
+            [DEMO_HOUSEHOLD_ID],
+        )
+        .unwrap();
+        db.execute("INSERT INTO photos (id,channel_id,storage_key,mime_type) VALUES ('previous','history-channel','previous.jpg','image/jpeg')",[]).unwrap();
+        db.execute("INSERT INTO photo_delivery_plans VALUES ('previous')", [])
+            .unwrap();
+        db.execute(
+            "INSERT INTO photo_frame_deliveries VALUES ('previous',?1)",
+            [DEMO_FRAME_ID],
+        )
+        .unwrap();
+        db.execute_batch("DROP TABLE photo_contributors; PRAGMA user_version=9;")
+            .unwrap();
+        let snapshot = initialize_database_with_backup(&db, &path)
+            .unwrap()
+            .unwrap();
+        let old = Connection::open(snapshot).unwrap();
+        assert!(!table_exists(&old, "photo_contributors").unwrap());
+        let version: i64 = old
+            .pragma_query_value(None, "user_version", |row| row.get(0))
+            .unwrap();
+        assert_eq!(version, 9);
+        assert_eq!(
+            protected_media_storage_key(&db, DEMO_HOUSEHOLD_ID, DEMO_FRAME_ID, "previous")
+                .unwrap()
+                .as_deref(),
+            Some("previous.jpg")
+        );
+        let page = crate::owner_gallery_page(&db, DEMO_HOUSEHOLD_ID, DEMO_FRAME_ID, None, None)
+            .unwrap()
+            .unwrap();
+        assert_eq!(page.photos.len(), 1);
+        assert_eq!(page.photos[0].sender.as_ref().unwrap().key, "earlier");
+        assert!(
+            initialize_database_with_backup(&db, &path)
+                .unwrap()
+                .is_none()
+        );
+        drop(old);
+        drop(db);
+        fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
