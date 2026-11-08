@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Set up your Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=791fc1fdd041">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=cb125ed5ac10">
 </head>
 <body class="owner-page">
   <header class="hud-nav">
@@ -77,11 +77,16 @@
         <h2 id="owner-send-title">Send a photo</h2>
         <p class="instrument-copy">Send straight to your frame from here.</p>
         <form id="owner-photo-form">
-          <label for="upload-frame">Send to</label>
-          <select id="upload-frame" required></select>
-          <label for="owner-photo">Choose a photo</label>
-          <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" required>
-          <p class="field-hint">JPEG or PNG / Up to 20 MB</p>
+          <div id="upload-frame-field" class="owner-field">
+            <label for="upload-frame">Send to which frame?</label>
+            <select id="upload-frame" required></select>
+          </div>
+          <p id="upload-destination" class="owner-destination" hidden>Sending to <strong></strong></p>
+          <div class="owner-field">
+            <label for="owner-photo">Choose a photo</label>
+            <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" required>
+            <p class="field-help">JPEG or PNG, up to 20 MB.</p>
+          </div>
           <figure id="owner-preview-shell" class="photo-preview" hidden><img id="owner-preview" alt="Photo ready to send"><figcaption>Preview / Nothing sent yet</figcaption></figure>
           <label class="privacy-option" for="owner-location"><input id="owner-location" type="checkbox" name="include_location" value="true"><span><strong>Show approximate location</strong><small>Optional, if this photo contains GPS information.</small></span></label>
           <button class="signal-button full-width" type="submit">Send photo →</button>
@@ -148,22 +153,36 @@
 
       <section id="photos-panel" class="instrument-panel" hidden aria-labelledby="photos-title">
         <div class="owner-photo-heading">
-          <h2 id="photos-title">Photos on your frame</h2>
+          <h2 id="photos-title">Your photos</h2>
           <button id="refresh-photos" class="signal-button secondary" type="button">Refresh photos</button>
         </div>
-        <p class="instrument-copy">Remove a photo from the selected frame. Other frames keep their copy. An offline frame removes it when it reconnects.</p>
-        <label for="photo-frame">Frame</label>
-        <select id="photo-frame"></select>
-        <form id="display-form" class="display-controls">
-          <div class="field-row">
-            <div><label for="slide-seconds">Time per photo</label><select id="slide-seconds"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select></div>
-            <button class="quiet-button" type="submit">Save display settings</button>
+        <p class="instrument-copy">Show a photo now, pin a favorite, or remove it from this frame.</p>
+        <div id="photo-frame-field" class="owner-field">
+          <label for="photo-frame">Manage photos on</label>
+          <select id="photo-frame"></select>
+        </div>
+        <p id="photo-destination" class="owner-destination" hidden>Photos for <strong></strong></p>
+        <div class="owner-playback-controls">
+          <form id="display-form" class="display-controls" aria-labelledby="display-title">
+            <h3 id="display-title">Slideshow settings</h3>
+            <div class="owner-field">
+              <label for="slide-seconds">Change photo every</label>
+              <select id="slide-seconds" aria-describedby="slide-help"><option value="5">5 seconds</option><option value="10">10 seconds</option><option value="12">12 seconds</option><option value="15">15 seconds</option><option value="30">30 seconds</option><option value="60">1 minute</option><option value="300">5 minutes</option><option value="900">15 minutes</option><option value="3600">1 hour</option></select>
+              <p id="slide-help" class="field-help">How long each photo stays on screen.</p>
+            </div>
+            <label class="privacy-option" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a stretched, lightly blurred copy of the photo.</small></span></label>
+            <button class="quiet-button" type="submit">Save slideshow settings</button>
+          </form>
+          <div class="pin-controls" aria-labelledby="pin-title">
+            <h3 id="pin-title">Pin a favorite</h3>
+            <div class="owner-field">
+              <label for="pin-seconds">Keep a pinned photo on screen for</label>
+              <select id="pin-seconds" aria-describedby="pin-help"><option value="900">15 minutes</option><option value="1800" selected>30 minutes</option><option value="3600">1 hour</option><option value="10800">3 hours</option><option value="0">Until I resume</option></select>
+              <p id="pin-help" class="field-help">Choose a duration, then tap Pin photo on a photo below.</p>
+            </div>
+            <button id="resume-slideshow" class="quiet-button" type="button" hidden>Resume slideshow</button>
           </div>
-          <label class="privacy-option" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a stretched, lightly blurred copy of the photo.</small></span></label>
-        </form>
-        <label for="pin-seconds">When you pin a photo, hold it for</label>
-        <select id="pin-seconds"><option value="900">15 minutes</option><option value="1800" selected>30 minutes</option><option value="3600">1 hour</option><option value="10800">3 hours</option><option value="0">Until I resume the slideshow</option></select>
-        <button id="resume-slideshow" class="quiet-button" type="button">Resume slideshow</button>
+        </div>
         <p id="playback-status" role="status"></p>
         <p id="photo-status" role="status"></p>
         <div id="frame-photos" class="owner-photo-grid"></div>
@@ -235,6 +254,14 @@
         return option;
       }));
       if (context.frames.some(frame => frame.frame_id === selectedFrame)) photoFrame.value = selectedFrame;
+      const multipleFrames = context.frames.length > 1;
+      document.querySelector('#upload-frame-field').hidden = !multipleFrames;
+      document.querySelector('#photo-frame-field').hidden = !multipleFrames;
+      for (const id of ['upload-destination', 'photo-destination']) {
+        const summary = document.getElementById(id);
+        summary.hidden = multipleFrames || !connected;
+        summary.querySelector('strong').textContent = context.frames[0]?.place_name || '';
+      }
       if (connected) loadPhotos();
       frames.replaceChildren(...context.frames.map(frame => {
         const card = document.createElement('div');
@@ -540,6 +567,7 @@
         interval.value = String(seconds);
         document.querySelector('#blur-background').checked = playback.blur_background !== false;
         document.querySelector('#resume-slideshow').disabled = !playback.pinned_photo_id;
+        document.querySelector('#resume-slideshow').hidden = !playback.pinned_photo_id;
         document.querySelector('#playback-status').textContent = playback.pinned_photo_id
           ? (playback.pinned_until ? `Photo pinned until ${new Date(playback.pinned_until * 1000).toLocaleTimeString()}.` : 'Photo pinned until you resume the slideshow.')
           : `Slideshow / ${seconds} seconds per photo.`;
