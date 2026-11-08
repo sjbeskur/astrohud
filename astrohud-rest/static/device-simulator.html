@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane Device Simulator</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=c62bdbf5170d">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=bae44a29ab21">
 </head>
 <body>
   <header class="hud-nav">
@@ -17,6 +17,7 @@
 
   <main class="simulator-view">
     <section class="simulator-console">
+      <p id="multi-frame-demo-link" hidden><a class="quiet-button" href="/local-simulator.html">Open local multi-frame demo</a></p>
       <p class="signal-label">Setup / Waiting for owner</p>
       <div id="pending">
         <h1>Claim this frame</h1>
@@ -48,6 +49,8 @@
 
   <script src="/display.js?v=b37015213137"></script>
   <script>
+    const localHost = location.hostname.replace(/[\[\]]/g, '');
+    if (localHost === 'localhost' || localHost === '127.0.0.1' || localHost === '::1' || localHost.endsWith('.local') || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(localHost)) document.querySelector('#multi-frame-demo-link').hidden = false;
     const alphabet = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
     const claimCode = document.querySelector('#claim-code');
     const expires = document.querySelector('#expires');

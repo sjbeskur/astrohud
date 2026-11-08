@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#070910">
+  <title>Local frame demo — Memory Lane</title>
+  <link rel="stylesheet" href="/astrohud-theme.css?v=bae44a29ab21">
+</head>
+<body class="owner-page simple-page">
+  <main class="hud-shell sender-main">
+    <header class="page-heading"><h1>Local frame demo</h1></header>
+    <p class="instrument-copy">Try Living room, Kitchen, and Bedroom on this local server. Each sample frame has its own gallery and slideshow timing. This creates a separate demo household.</p>
+    <section id="demo-controls" aria-label="Demo controls" hidden>
+      <div class="local-demo-actions"><button id="create-demo" class="signal-button" type="button">Create three sample frames</button><button id="open-owner" class="quiet-button" type="button" hidden>Open owner controls</button></div>
+      <div id="demo-frames"></div>
+    </section>
+    <p id="demo-status" class="owner-status" role="status">Checking local preview…</p>
+  </main>
+  <script>
+    const host = location.hostname.replace(/[\[\]]/g, '');
+    const local = host === 'localhost' || host === '127.0.0.1' || host === '::1' || host.endsWith('.local') || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(host);
+    const status = document.querySelector('#demo-status');
+    const createButton = document.querySelector('#create-demo');
+    const key = 'memory-lane-local-demo';
+    let demo;
+    function uuid() {
+      const bytes = crypto.getRandomValues(new Uint8Array(16));
+      bytes[6] = (bytes[6] & 15) | 64; bytes[8] = (bytes[8] & 63) | 128;
+      const h = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+      return `${h.slice(0,8)}-${h.slice(8,12)}-${h.slice(12,16)}-${h.slice(16,20)}-${h.slice(20)}`;
+    }
+    async function post(path, body) {
+      const response = await fetch(path, {method:'POST', headers:{'content-type':'application/json'}, body:JSON.stringify(body)});
+      if (!response.ok) throw new Error('The local server could not complete this step.');
+      return response.status === 204 ? null : response.json();
+    }
+    function samplePhoto(index) {
+      const canvas = document.createElement('canvas'); canvas.width = 800; canvas.height = 600;
+      const c = canvas.getContext('2d');
+      const palettes = [['#345e82','#eebd75','#456551'],['#684f77','#e5a88a','#4e7371'],['#9d6853','#f3cc8d','#46604d']];
+      const [sky,sun,hill] = palettes[Math.floor(index / 3)];
+      c.fillStyle=sky; c.fillRect(0,0,800,600); c.fillStyle=sun; c.beginPath(); c.arc(500-index*17,170,90,0,Math.PI*2); c.fill();
+      c.fillStyle=hill; c.beginPath(); c.moveTo(0,600); c.lineTo(280+index*14,240); c.lineTo(800,600); c.fill();
+      c.fillStyle='#fff'; c.font='28px sans-serif'; c.fillText(`Sample photo ${index+1}`,30,550);
+      return new Promise(resolve => canvas.toBlob(resolve,'image/png'));
+    }
+    function renderDemo() {
+      createButton.hidden = true;
+      document.querySelector('#open-owner').hidden = false;
+      document.querySelector('#demo-frames').replaceChildren(...demo.frames.map(frame => {
+        const card=document.createElement('div'); card.className='local-demo-frame';
+        const text=document.createElement('div'); const name=document.createElement('strong'); name.textContent=frame.name;
+        const detail=document.createElement('small'); detail.textContent=`3 sample photos · every ${frame.seconds} seconds`;
+        text.append(name,detail);
+        const button=document.createElement('button'); button.type='button'; button.className='quiet-button'; button.textContent='View frame';
+        button.addEventListener('click',()=>{sessionStorage.setItem('astrohud-simulated-device',JSON.stringify(frame.device));sessionStorage.removeItem('astrohud-simulated-reset');location.href='/device-simulator.html';});
+        card.append(text,button); return card;
+      }));
+      status.textContent='Ready. Open owner controls and choose a frame near the top of the page.';
+    }
+    createButton.addEventListener('click', async()=>{
+      if (!local) return;
+      createButton.disabled=true;
+      try {
+        const frames=[];
+        for (const [index,name] of ['Living room','Kitchen','Bedroom'].entries()) {
+          status.textContent=`Creating ${name}…`;
+          const alphabet='ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+          const device={device_id:uuid(),device_code:[...crypto.getRandomValues(new Uint8Array(6))].map(b=>alphabet[b%alphabet.length]).join(''),credential:uuid()+uuid(),bootstrap_token:uuid()+uuid()};
+          await post('/api/beta/devices/enrollments',device);
+          await post(index===0?'/api/beta/bootstrap/claim':'/api/beta/owner/devices/claim',{token:device.bootstrap_token,place_name:name});
+          frames.push({name,device,seconds:[10,20,30][index]});
+        }
+        const photoIds=[];
+        for (let index=0;index<9;index++) {
+          status.textContent=`Adding sample photo ${index+1} of 9…`;
+          const form=new FormData();form.append('photo',await samplePhoto(index),`sample-${index+1}.png`);form.append('destinations',JSON.stringify({mode:'frames',frame_ids:[frames[Math.floor(index/3)].device.device_id]}));
+          const response=await fetch(`/api/beta/owner/frames/${frames[0].device.device_id}/photos`,{method:'POST',body:form});
+          if(!response.ok)throw new Error('Could not create a sample photo.');
+          photoIds.push((await response.json()).photo_id);
+        }
+        for(const frame of frames) await post(`/api/beta/owner/frames/${frame.device.device_id}/playback`,{slide_seconds:frame.seconds});
+        const recovery=await post('/api/beta/owner/recovery',{});
+        demo={frames,recovery:recovery.token}; sessionStorage.setItem(key,JSON.stringify(demo));
+        localStorage.setItem('memory-lane-selected-frame',frames[0].device.device_id);
+        renderDemo();
+      }catch(error){status.textContent=error.message;createButton.disabled=false;}
+    });
+    document.querySelector('#open-owner').addEventListener('click',async()=>{
+      if(!local || !demo)return;
+      try{await post('/api/beta/owner/recovery/session',{token:demo.recovery});location.href='/owner.html';}
+      catch(error){demo=null;sessionStorage.removeItem(key);createButton.hidden=false;document.querySelector('#open-owner').hidden=true;document.querySelector('#demo-frames').replaceChildren();status.textContent='This demo is no longer available. Create another one to continue.';}
+    });
+    if(local){
+      document.querySelector('#demo-controls').hidden=false;
+      try{demo=JSON.parse(sessionStorage.getItem(key)||'null');}catch(_){}
+      if(demo?.frames?.length===3)renderDemo();else status.textContent='Create the demo, then switch frames from Home, Photos, Send photos, or Settings.';
+    }else status.textContent='This demo is available only on a local development server.';
+  </script>
+</body>
+</html>

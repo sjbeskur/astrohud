@@ -67,7 +67,7 @@ cargo run --package astrohud-rest -- 0.0.0.0:8080
 The server exposes these browser views:
 
 - `http://localhost:8080/` opens the Memory Lane owner home, also available at
-  `/owner.html`, with Invite, Send photos, and Add a device actions.
+  `/owner.html`, with Invite, Send photos, Add a device, and Photos actions.
 - `/sender.html` preserves the legacy channel and publishing demo.
 - `http://localhost:8080/frame.html` displays the persistent manifest for the
   proof-of-concept frame named `Grandma's kitchen`.
@@ -82,6 +82,23 @@ Persistent proof-of-concept data defaults to `astrohud-rest/data`. Set
 ```sh
 ASTROHUD_DATA_DIR=/tmp/astrohud cargo run --package astrohud-rest -- 127.0.0.1:8080
 ```
+
+### Review multiple frames locally
+
+Open `/local-simulator.html` on the local development server and choose
+**Create three sample frames**. This creates a separate demo household with
+Living room, Kitchen, and Bedroom, each with three generated sample images
+and a different slideshow interval. Choose **Open owner controls** to try the
+frame selector near the top of Home, Photos, Send photos, and Settings. The
+selection follows navigation and reloads; a single-frame household shows its
+name without a selector. Settings shows the selected device's controls.
+Invitations and owner recovery remain household-wide.
+
+Choose **View frame** beside a demo device to open its authenticated device
+simulator. The original `/device-simulator.html` also links to this local
+multi-frame demo. Demo setup controls are available only on localhost or a
+local-network hostname; no Pi is required. The sample images are routed explicitly to give each device a distinct
+starting gallery.
 
 ### Try the friendly-beta onboarding flow locally
 
@@ -110,11 +127,25 @@ so retrying the remaining selection does not resend those successes. No
 invitation to themselves is required. To let someone else send photos, create
 a sender link from the owner page. Open
 that link in a private browser window to exercise the recipient experience:
-the destination is fixed by the invitation, the sender previews a JPEG or PNG,
-and the server derives the household and channel rather than trusting form
-fields. The claimed device simulator then downloads and displays the newest
+the invitation limits which frames the sender can use. The sender previews a
+JPEG or PNG and chooses one, several, or all available frames. The server
+derives the household and channel and validates every selected destination. The claimed device simulator then downloads and displays the newest
 photos using its own credential. Disabling the sender link on the owner page
 takes effect immediately.
+
+Sending defaults to the currently selected frame. **Choose frames** selects a
+subset, and **All frames** delivers to the current eligible frames at upload
+commit time. A frame added later does not inherit these new uploads. Each
+photo is stored once with an explicit destination list; manifests, protected
+media access, and playback authorization all enforce that list. Removing a
+photo from one destination leaves the other destinations available.
+
+The additive schema migration preserves older shared-feed photos and their
+existing visibility. Existing clients that omit destinations now default to
+the owner endpoint's frame, or the invitation's first eligible frame. The
+native Pi manifest/media protocol is unchanged; no Pi update is needed for
+routing. The website checks `photo_routing_version` before enabling uploads,
+so it cannot silently use an older server that ignores destinations.
 
 To resend access later, choose **Replace link** beside the person's name.
 After confirmation, copy or share the new link. Replacement preserves the
@@ -199,6 +230,27 @@ ASTROHUD_SECURE_COOKIES=true
 ```
 
 Render supplies `PORT` automatically. Do not set it manually.
+
+#### Photo-routing release and rollback
+
+Deploy the API and website from the same revision. `/api/health`, the owner
+context, and sender context advertise `photo_routing_version: 1`. The new
+pages block sending when this capability is absent; old pages can still send
+through the updated API and default to one eligible frame.
+
+Before upgrading an existing database to schema 9, server startup uses
+SQLite `VACUUM INTO` to create a consistent snapshot under
+`$ASTROHUD_DATA_DIR/backups/before-schema-8-to-9-<id>.sqlite3` (the filename
+records the actual previous version). If snapshot creation fails, startup
+stops before changing the schema. Existing media files are unchanged.
+
+For a UI rollback, deploy API checkpoint **`db68b1b`**: it retains the new
+routing rules and database safeguards while serving the previous website.
+Do not deploy an API older than that checkpoint against a database containing
+new targeted uploads; it would ignore the delivery plans. Prefer this
+compatible checkpoint or a forward fix. Restoring the pre-upgrade snapshot
+would also discard later metadata and is not an ordinary release rollback.
+The server rejects databases from schema versions newer than it supports.
 
 Send an image:
 

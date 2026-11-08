@@ -5,28 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Send a photo with Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=c62bdbf5170d">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=bae44a29ab21">
 </head>
 <body class="simple-page">
 
   <main class="hud-shell sender-main">
     <header class="sender-intro">
-      <p class="simple-destination">Sending to <span id="place-label">Loading</span></p>
-      <h1>Send a photo</h1>
-      <p>Choose a photo for <strong id="place-name">the frame</strong>.</p>
+      <p class="simple-destination" hidden>Sending to <span id="place-label">Loading</span></p>
+      <div class="page-heading"><h1 id="send-title">Send a photo</h1><button id="sender-photo-options" class="photo-icon-button" type="button" aria-label="Photo options" title="Photo options" aria-haspopup="dialog"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9.2 3-.6 2.2-1.5.9-2.2-.5-2.2 3.8 1.6 1.7v1.8l-1.6 1.7 2.2 3.8 2.2-.5 1.5.9.6 2.2h4.4l.6-2.2 1.5-.9 2.2.5 2.2-3.8-1.6-1.7v-1.8l1.6-1.7-2.2-3.8-2.2.5-1.5-.9-.6-2.2z"/><circle cx="11.4" cy="12" r="3"/></svg></button></div>
+      <p class="page-context"><span class="frame-context-label">Sending to</span><strong id="place-name" class="context-name">the frame</strong></p>
     </header>
 
     <div class="instrument-stack">
-      <section class="instrument-panel" aria-labelledby="photo-title">
+      <section class="instrument-panel" aria-labelledby="send-title">
         <div class="instrument-heading">
           <p id="sender-label" class="instrument-label">Private invitation</p>
         </div>
-        <h2 id="photo-title">Choose a photo</h2>
-        <p class="instrument-copy">You will see a preview before anything is sent.</p>
         <form id="photo-form">
+          <fieldset id="sender-destinations" class="send-destinations" hidden></fieldset>
           <div class="field-grid">
             <div>
-              <label for="photo">Photograph</label>
+              <label for="photo">Choose a photo</label>
               <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" required>
               <p class="field-hint">JPEG or PNG / Up to 20 MB</p>
             </div>
@@ -34,18 +33,24 @@
               <img id="preview" alt="Selected photograph preview">
               <figcaption>Ready to send</figcaption>
             </figure>
-            <label class="privacy-option" for="include-location">
-              <input id="include-location" name="include_location" type="checkbox" value="true">
-              <span><strong>Show approximate location</strong><small>Off by default. If the photo contains GPS, only a broad place label appears on the frame.</small></span>
-            </label>
+
           </div>
-          <button class="signal-button secondary full-width" type="submit">Send to <span id="button-place">frame</span> →</button>
+          <button class="signal-button full-width" type="submit">Send photo<span id="button-place" hidden>frame</span></button>
         </form>
       </section>
     </div>
     <p id="status" class="status-line" role="status">Opening your private destination…</p>
   </main>
 
+  <dialog id="sender-options-dialog" class="photo-dialog" aria-labelledby="sender-options-title">
+    <div class="dialog-heading"><h2 id="sender-options-title">Photo options</h2><button id="close-sender-options" class="quiet-button" type="button">Done</button></div>
+    <p class="frame-context"><span>Frame</span><strong id="sender-options-frame"></strong></p>
+            <label class="privacy-option" for="include-location">
+              <input id="include-location" form="photo-form" name="include_location" type="checkbox" value="true">
+              <span><strong>Show approximate location</strong><small>Off by default. If the photo contains GPS, only a broad place label appears on the frame.</small></span>
+            </label>
+  </dialog>
+  <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
   <script>
     const form = document.querySelector('#photo-form');
     const photo = document.querySelector('#photo');
@@ -53,6 +58,13 @@
     const preview = document.querySelector('#preview');
     const status = document.querySelector('#status');
     let previewUrl;
+    let photoRoutingSupported = false;
+    const destinations = new MemoryLaneDestinations(document.querySelector('#sender-destinations'), () => {
+      document.querySelector('#place-name').textContent = destinations.summary || 'Choose frames below';
+      document.querySelector('#sender-options-frame').textContent = destinations.summary;
+    });
+    document.querySelector('#sender-photo-options').addEventListener('click', () => document.querySelector('#sender-options-dialog').showModal());
+    document.querySelector('#close-sender-options').addEventListener('click', () => document.querySelector('#sender-options-dialog').close());
 
     function setStatus(message, state = 'ready') {
       status.textContent = message;
@@ -60,15 +72,19 @@
     }
 
     async function loadDestination() {
-      const response = await fetch('/api/beta/sender');
+      const response = await fetch('/api/beta/sender', {cache:'no-store'});
       if (response.status === 401) throw new Error('Sender access is missing in this browser. Open the complete private invitation link in this same Safari or Chrome browser.');
       if (!response.ok) throw new Error(await response.text());
       const context = await response.json();
+      photoRoutingSupported = context.photo_routing_version === 1;
+      if (!photoRoutingSupported) throw new Error('Photo sending is temporarily unavailable. Please refresh later.');
       document.querySelector('#place-label').textContent = context.place_name;
       document.querySelector('#place-name').textContent = context.place_name;
+      document.querySelector('#sender-options-frame').textContent = context.place_name;
       document.querySelector('#button-place').textContent = context.place_name;
+      destinations.configure(context.frames, context.frames[0].frame_id);
       document.querySelector('#sender-label').textContent = `Shared with ${context.invitation_label}`;
-      setStatus(`Ready / Your photo will go only to ${context.place_name}.`);
+      setStatus('Choose a photo and its destinations.');
     }
 
     photo.addEventListener('change', () => {
@@ -86,25 +102,31 @@
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
-      const button = form.querySelector('button');
+      if (!photoRoutingSupported) { setStatus('Photo sending is temporarily unavailable. Please refresh later.', 'error'); return; }
+      const button = form.querySelector('button[type="submit"]');
+      if (!destinations.recipients.length) { setStatus('Choose at least one frame.', 'error'); return; }
+      const destinationLabel = destinations.summary;
+      const body = new FormData(form); body.append('destinations', JSON.stringify(destinations.selection));
+      document.querySelector('#sender-destinations').disabled = true;
       button.disabled = true;
       setStatus('Sending / Preparing the photo for the frame…', 'sending');
       try {
         const response = await fetch('/api/beta/sender/photos', {
           method: 'POST',
-          body: new FormData(form)
+          body
         });
         if (response.status === 401) throw new Error('This invitation has been disabled. Ask the frame owner for a new link.');
         if (!response.ok) throw new Error(await response.text());
-        form.reset();
+        form.reset(); destinations.render();
         previewShell.hidden = true;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = undefined;
-        setStatus('Photo received / It is stored securely and waiting for the frame.', 'success');
+        setStatus(`Photo received for ${destinationLabel}. Waiting for the frames to connect.`, 'success');
       } catch (error) {
         setStatus(`Send failed / ${error.message}`, 'error');
       } finally {
         button.disabled = false;
+        document.querySelector('#sender-destinations').disabled = false;
       }
     });
 

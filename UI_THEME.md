@@ -12,10 +12,12 @@ than adopting the company website's terminal styling.
 
 1. Photos remain primary. Persistent frame chrome is small, translucent, and
    limited to identity, place, and connection state.
-2. Setup and sending may be more instrument-like because the user is actively
-   operating the product.
-3. Status is explicit. Prefer language such as `SIGNAL READY`, `SETUP LINK`,
-   and `TRANSFER ACTIVE` over ambiguous spinners.
+2. Setup and sending use short titles and focused forms. Keep useful controls
+   and photos near the top of the screen instead of spending height on large
+   introductions or repeated instructions.
+3. Status is explicit and uses plain language: sending progress, confirmed
+   receipt, and actionable errors. Do not imply a photo is displayed until
+   the device has acknowledged it.
 4. Color communicates structure, not decoration. Amber identifies the product,
    salmon marks small attention accents, lavender marks secondary actions, blue indicates
    work in progress, and green confirms a healthy link.
@@ -63,8 +65,17 @@ must work without internet access or external font and stylesheet requests.
 - A serif italic may be used sparingly for a single warm, human word in large
   headings. It should not appear in operational labels.
 - Preserve visible keyboard focus and reduced-motion behavior.
-- Owner invitations precede the photo gallery, with sticky shortcuts to both
-  sections and mobile touch targets at least 44px tall.
+- The owner home presents Invite, Send photos, Add a device, and Photos as
+  matching buttons with simple icons. Settings is a gear at the upper right.
+  Each task opens a focused view; do not give one home action a unique color.
+- Use a shared compact title row, with the house-icon Home button on the left
+  and relevant settings gear on the right. Show frame names prominently below
+  the title, and keep destination context accurate when switching frames.
+  Use compact page padding and keep Home alongside the task title. Remove
+  duplicate helper copy and empty status spacing before shrinking controls;
+  touch targets remain at least 44px tall. The gallery uses three columns of
+  square thumbnails, with photo actions and pin presets in the selected
+  photo's preview. Slideshow settings open separately.
 
 ## Implementations
 

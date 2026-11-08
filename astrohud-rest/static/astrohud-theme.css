@@ -243,7 +243,6 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .owner-actions a { position: relative; display: grid; gap: 0.35rem; min-height: 88px; align-content: center; justify-content: stretch; padding: 1rem 3rem 1rem 1.25rem; border: 1px solid var(--hud-line); border-radius: 16px; color: var(--hud-text); background: var(--hud-surface); text-align: left; text-decoration: none; transition: border-color 150ms ease, background 150ms ease; }
 .owner-actions a:hover { border-color: var(--hud-lavender); background: var(--hud-raised); }
 .owner-actions strong { font-size: 1.15rem; font-weight: 650; }
-.owner-actions a:first-child strong { color: var(--hud-amber); }
 .owner-actions span { color: var(--hud-muted); font-size: 0.85rem; line-height: 1.5; }
 .owner-actions i { position: absolute; top: 50%; right: 1.25rem; transform: translateY(-50%); color: var(--hud-muted); font-size: 1.4rem; font-style: normal; }
 .owner-secondary { display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; }
@@ -287,8 +286,6 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .simple-page .privacy-option small { font-family: inherit; font-weight: 400; letter-spacing: 0; text-transform: none; font-size: 0.8rem; }
 
 /* Photo browsing keeps controls out of the thumbnail grid. */
-.gallery-toolbar { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; margin: 0.75rem 0; }
-.gallery-toolbar .quiet-button { padding-inline: 0.75rem; font-size: 0.85rem; }
 .gallery-destination { margin: 0; color: var(--hud-muted); font-size: 0.95rem; overflow-wrap: anywhere; }
 .gallery-destination strong { font-weight: 400; }
 .gallery-playback { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; color: var(--hud-muted); font-size: 0.85rem; line-height: 1.5; }
@@ -308,8 +305,21 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .photo-navigation { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; }
 .photo-navigation .quiet-button { padding-inline: 0.6rem; font-size: 0.8rem; }
 #photo-detail-position { margin: 0; color: var(--hud-muted); font-size: 0.8rem; white-space: nowrap; }
-.photo-detail-actions { display: grid; gap: 0.75rem; }
-.photo-detail-actions label { margin: 0.25rem 0 -0.4rem; }
+.photo-detail-actions { display: flex; align-items: center; gap: 0.75rem; }
+.photo-icon-button { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 52px; width: 52px; height: 52px; padding: 0; border: 1px solid var(--hud-line); border-radius: 12px; color: var(--hud-text); background: var(--hud-raised); }
+.photo-icon-button svg { width: 24px; height: 24px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+#show-photo svg { fill: currentColor; stroke: none; }
+.photo-icon-button.danger { margin-left: auto; color: var(--hud-danger); }
+.photo-icon-button:hover { border-color: currentColor; }
+.photo-icon-button[aria-pressed="true"], .photo-icon-button[aria-expanded="true"] { color: var(--hud-amber); border-color: var(--hud-amber); background: #efb46a18; }
+.pin-options { display: grid; gap: 0.75rem; margin-top: 1rem; padding: 1rem; border: 1px solid var(--hud-line); border-radius: 12px; }
+.pin-options label, #pin-duration-label { margin: 0; }
+.pin-presets { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0.4rem; }
+.owner-page .pin-presets button { min-height: 48px; padding: 0.5rem 0.2rem; font-size: 0.85rem; }
+.pin-presets [aria-expanded="true"] { color: var(--hud-amber); border-color: var(--hud-amber); }
+.custom-pin-form { display: grid; gap: 0.75rem; }
+.custom-pin-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.75rem; }
+.custom-pin-form .field-help { margin: 0; }
 .photo-dialog [role="status"] { font-size: 0.9rem; line-height: 1.5; }
 .photo-dialog .display-controls { padding: 0; border: 0; background: none; }
 .upload-previews { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.6rem; }
@@ -320,3 +330,118 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 #upload-progress { width: 100%; height: 10px; margin-top: 1.25rem; accent-color: var(--hud-lavender); }
 body:has(dialog[open]) { overflow: hidden; }
 .photo-dialog button:disabled { opacity: 0.5; cursor: default; }
+
+
+/* Compact consumer pages: spend height on photos and controls. */
+.owner-shell { position: relative; padding: 1rem 0 1.5rem; }
+.owner-page h1 { min-height: 44px; display: flex; align-items: center; margin-bottom: 0.5rem; font-size: 1.6rem; line-height: 1.25; }
+.owner-subtitle { margin-bottom: 1rem; }
+.owner-page h2 { margin-top: 1rem; margin-bottom: 0.5rem; }
+.owner-page .instrument-copy { margin-bottom: 0.75rem; }
+.owner-actions { gap: 0.6rem; }
+.owner-actions a { min-height: 76px; gap: 0.2rem; padding: 0.75rem 3rem 0.75rem 1rem; }
+.owner-secondary { margin-top: 0.5rem; }
+.owner-device-summary { margin-top: 0.75rem; }
+.owner-recovery-reminder { margin-top: 0.5rem; }
+.owner-status { margin-top: 0.75rem; }
+.owner-page .quiet-button, .simple-page .quiet-button { min-height: 44px; }
+.owner-photo-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.5rem; margin-bottom: 0.5rem; }
+.owner-photo-heading .signal-button { min-height: 44px; padding: 0.6rem 0.75rem; font-size: 0.85rem; }
+#photo-status { margin-block: 0.5rem; line-height: 1.5; }
+.owner-photo-grid { margin-top: 0.5rem; }
+#owner-photo-form { gap: 0.85rem; }
+.owner-destination { padding: 0.6rem 0.8rem; }
+.owner-help { margin-block: 0.75rem; }
+.owner-help form { margin-top: 0.5rem; }
+.owner-steps { margin-block: 1rem; }
+.owner-steps li + li { margin-top: 0.6rem; }
+.owner-page .invitation-heading { margin-top: 1rem; }
+.owner-page .invitation-heading h2 { margin: 0; }
+.owner-page .connection-summary { margin-top: 0.65rem; }
+.owner-recovery { margin-bottom: 1rem; padding-bottom: 1rem; }
+.owner-page #device-settings .instrument-copy { margin-top: 0.5rem; }
+.simple-page .sender-main { padding: 1rem 0 1.5rem; }
+.simple-page .sender-intro h1 { min-height: 44px; display: flex; align-items: center; font-size: 1.6rem; line-height: 1.25; }
+.simple-page .sender-intro > p:last-child { margin: 0.5rem 0 1rem; line-height: 1.5; }
+.simple-page .instrument-heading { margin-bottom: 0.65rem; }
+.simple-page .instrument-copy { margin-bottom: 0.75rem; }
+.simple-page .full-width { margin-top: 0.75rem; }
+.simple-page .status-line { margin-top: 0.75rem; }
+.photo-dialog { padding: 1rem; }
+.dialog-heading { margin-bottom: 0.5rem; }
+#photo-detail-image { height: auto; max-height: min(42dvh, 360px); }
+.photo-navigation { margin-top: 0.5rem; }
+#photo-detail-date, #photo-detail-state, #photo-action-status { margin-block: 0.5rem; }
+#photo-detail-state:empty, #photo-action-status:empty, #owner-send-status:empty, #slideshow-feedback:empty, #playback-status:empty { display: none; }
+.pin-options { margin-top: 0.75rem; padding: 0.75rem; }
+/* Headings receive focus for screen-reader navigation, without a control ring. */
+.owner-views h1[tabindex="-1"]:focus { outline: none; box-shadow: none; }
+
+/* Keep slideshow controls in the photo header; the gallery refreshes itself. */
+.owner-photo-heading { grid-template-columns: auto minmax(0, 1fr) 44px; }
+.owner-photo-heading #open-slideshow { width: 44px; height: 44px; flex-basis: 44px; }
+.gallery-context { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 0.35rem; }
+.gallery-context .owner-back { flex-shrink: 0; margin: 0; font-size: 0.85rem; }
+.gallery-context .gallery-destination { font-size: 0.85rem; }
+
+#slide-duration-label { margin: 0; }
+#display-form { gap: 0.75rem; }
+.slide-presets [aria-pressed="true"] { color: var(--hud-amber); border-color: var(--hud-amber); background: #efb46a18; }
+.slideshow-background { margin-top: 1rem; }
+
+.home-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; min-height: 44px; padding: 0.55rem 0.65rem; border: 1px solid var(--hud-line); border-radius: 12px; color: var(--hud-text); background: var(--hud-surface); font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
+.home-button:hover { border-color: var(--hud-text); }
+.home-button svg { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
+.gallery-context { justify-content: space-between; min-height: 44px; }
+.gallery-context #add-photos { min-height: 44px; margin-left: auto; padding: 0.6rem 0.75rem; font-size: 0.85rem; flex-shrink: 0; }
+
+/* Keep the selected device explicit wherever a photo action can affect it. */
+.gallery-context .gallery-destination { min-width: 0; margin: 0; line-height: 1.35; }
+.frame-context-label { display: block; margin-bottom: 0.2rem; color: var(--hud-muted); font-size: 0.75rem; }
+.gallery-context .gallery-destination strong { display: block; color: var(--hud-amber); font-size: 1.15rem; font-weight: 650; overflow-wrap: anywhere; }
+.frame-context { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.5rem; margin: 0 0 0.75rem; color: var(--hud-muted); font-size: 0.85rem; line-height: 1.5; overflow-wrap: anywhere; }
+.frame-context strong { min-width: 0; color: var(--hud-amber); font-size: 1rem; font-weight: 650; overflow-wrap: anywhere; }
+
+/* One header and context treatment for all consumer tasks. */
+.page-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 0.5rem; min-height: 44px; margin-bottom: 0.75rem; }
+.page-heading:has(> .home-button) { grid-template-columns: auto minmax(0, 1fr) auto; }
+.owner-page .page-heading h1, .simple-page .page-heading h1 { min-width: 0; margin: 0; font-size: 1.5rem; line-height: 1.25; overflow-wrap: anywhere; }
+.page-heading .home-button { align-self: start; }
+.page-heading .photo-icon-button { width: 44px; height: 44px; flex-basis: 44px; }
+#connected-panel #open-device-settings { display: inline-flex; min-height: 44px; margin: 0; }
+.page-context { min-width: 0; margin: 0 0 1rem; line-height: 1.4; overflow-wrap: anywhere; }
+.context-name { display: block; margin: 0; color: var(--hud-amber); font-size: 1.15rem; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
+.simple-page .sender-intro > .page-context:last-child { margin: 0 0 1rem; }
+#connected-panel .owner-subtitle { margin-bottom: 0.75rem; }
+.owner-page #device-controls .invitation-card > strong { color: var(--hud-amber); font-size: 1.05rem; }
+.owner-recovery { margin-top: 1.5rem; padding-top: 1rem; border-top: 1px solid var(--hud-line); border-bottom: 0; padding-bottom: 0; }
+.owner-page .page-heading + .owner-recovery { margin-top: 0; }
+.simple-page label.privacy-option { font-size: 0.9rem; }
+
+/* Every home action has the same weight and a simple identifying icon. */
+.owner-actions a { grid-template-columns: 28px minmax(0, 1fr); gap: 0.25rem 0.85rem; padding: 0.85rem 1rem; }
+.owner-actions a > svg { grid-column: 1; grid-row: 1 / span 2; align-self: center; width: 28px; height: 28px; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; }
+.owner-actions a > strong, .owner-actions a > span { grid-column: 2; }
+.owner-actions a > strong { color: var(--hud-text); }
+
+/* A single selected frame follows the owner between tasks. */
+.owner-frame-context { display: flex; align-items: end; gap: 0.75rem; margin-bottom: 1rem; }
+.frame-picker { flex: 1; min-width: 0; }
+.owner-page .frame-picker label { margin: 0 0 0.25rem; color: var(--hud-muted); font-size: 0.75rem; font-weight: 400; }
+.owner-page #active-frame { min-height: 50px; padding-block: 0.7rem; color: var(--hud-amber); font-size: 1.05rem; font-weight: 650; }
+.owner-frame-context #add-photos { flex-shrink: 0; min-height: 44px; padding: 0.6rem 0.75rem; font-size: 0.85rem; }
+.local-demo-actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-block: 1rem; }
+.local-demo-frame { display: flex; align-items: center; justify-content: space-between; gap: 1rem; margin-top: 0.75rem; padding: 1rem; border: 1px solid var(--hud-line); border-radius: 12px; }
+.local-demo-frame strong { color: var(--hud-amber); }
+.local-demo-frame small { display: block; margin-top: 0.35rem; color: var(--hud-muted); }
+
+.send-destinations { min-width: 0; margin: 0; padding: 0; border: 0; }
+.send-destinations legend { margin-bottom: 0.5rem; font-size: 0.9rem; font-weight: 650; }
+.destination-modes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 0.4rem; }
+.owner-page .destination-modes button, .simple-page .destination-modes button { min-height: 48px; padding: 0.5rem 0.2rem; font-size: 0.8rem; }
+.destination-modes [aria-pressed="true"] { color: var(--hud-amber); border-color: var(--hud-amber); background: #efb46a18; }
+.destination-choices { display: grid; gap: 0.2rem; margin-top: 0.5rem; }
+.destination-choices label { display: flex; gap: 0.65rem; align-items: center; min-height: 44px; margin: 0; font-size: 0.9rem; overflow-wrap: anywhere; }
+.destination-choices input { width: 20px; height: 20px; min-height: 20px; margin: 0; flex-shrink: 0; accent-color: var(--hud-amber); }
+.destination-summary { margin: 0.5rem 0 0; color: var(--hud-amber); font-size: 0.85rem; line-height: 1.5; overflow-wrap: anywhere; }
+#photo-form > .send-destinations { margin-bottom: 1rem; }
