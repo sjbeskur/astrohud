@@ -1,0 +1,14 @@
+[Unit]
+Description=Expand Memory Lane photo storage on first boot
+After=local-fs.target
+Before=astrohud-frame.service astrohud-provisioner.service
+ConditionPathExists=!/var/lib/memory-lane/root-expanded
+
+[Service]
+Type=oneshot
+StateDirectory=memory-lane
+ExecStart=/usr/local/sbin/memory-lane-expand-root
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

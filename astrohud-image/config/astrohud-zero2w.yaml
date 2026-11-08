@@ -6,15 +6,23 @@ device:
 
 image:
   layer: image-rpios
-  boot_part_size: 512M
-  root_part_size: 4G
-  name: astrohud-zero2w
-  compression: zstd
+  boot_part_size: 200%
+  root_part_size: 150%
+  name: memory-lane-zero2w
 
 layer:
-  base: trixie-minbase
+  base: memory-lane-base
   app: astrohud-appliance
 
 ssh:
   pubkey_user1: ${@SRCROOT}/operator.pub
   pubkey_only: y
+
+locale:
+  default: en_US.UTF-8
+  timezone: Etc/UTC
+  keyboard_keymap: us
+  keyboard_layout: English (US)
+
+ieee80211:
+  regdom: US

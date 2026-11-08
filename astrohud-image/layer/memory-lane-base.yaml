@@ -1,0 +1,21 @@
+# METABEGIN
+# X-Env-Layer-Name: memory-lane-base
+# X-Env-Layer-Category: suite
+# X-Env-Layer-Desc: ARM64 appliance base without a desktop, browser or build tools
+# X-Env-Layer-Version: 1.0.0
+# X-Env-Layer-Requires: debian-trixie-arm64-slim,
+#  rpi-debian-trixie,
+#  rpi-misc-skel,
+#  rpi-user-credentials,
+#  systemd-min,
+#  openssh-server,
+#  systemd-timesyncd,
+#  wireless-regulatory
+# METAEND
+---
+mmdebstrap:
+  packages:
+    - apt
+    - iproute2
+    - kmod
+    - procps

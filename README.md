@@ -38,7 +38,7 @@ the Advanced Data Machines company homepage while keeping photographs primary.
 ## Build
 
 Pi image builds and SD card flashing are available through `just`; run `just`
-to list recipes. See [the image workflow](astrohud-image/README.md#just-recipes)
+to list recipes. See [the image workflow](astrohud-image/README.md#build-and-inspect)
 for build inputs and flashing commands.
 
 Check the Rust workspace:

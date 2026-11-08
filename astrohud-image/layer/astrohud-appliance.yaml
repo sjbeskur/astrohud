@@ -2,12 +2,17 @@
 # X-Env-Layer-Name: astrohud-appliance
 # X-Env-Layer-Category: application
 # X-Env-Layer-Desc: Sealed AstroHUD appliance services for Raspberry Pi Zero 2 W
-# X-Env-Layer-Version: 0.1.0
-# X-Env-Layer-Requires: trixie-minbase,rpizero2w
+# X-Env-Layer-Version: 0.2.0
+# X-Env-Layer-Provides: network-activator
+# X-Env-Layer-Requires: memory-lane-base,rpizero2w
 # METAEND
 ---
 mmdebstrap:
   packages:
+    - cloud-guest-utils
+    - wpasupplicant
+    - libegl-mesa0
+    - libgl1-mesa-dri
     - ca-certificates
     - dnsmasq-base
     - libdrm2
@@ -38,11 +43,6 @@ mmdebstrap:
       install -d -o 0 -g 0 -m 0755 $1/usr/local/sbin
       install -d -o 0 -g 0 -m 0750 $1/var/lib/astrohud
       chroot $1 chown astrohud:astrohud /var/lib/astrohud
-    - |-
-      set -eu
-      $BDEBSTRAP_HOOKS/disable-units "$1" iwd systemd-networkd NetworkManager-wait-online
-      $BDEBSTRAP_HOOKS/enable-units "$1" NetworkManager
-      $BDEBSTRAP_HOOKS/enable-units "$1" astrohud-frame astrohud-provisioner astrohud-wifi-guard.timer
     - |-
       set -eu
       printf '%s\n' 'astrohud-??????' > $1/etc/hostname
