@@ -456,3 +456,12 @@ body:has(dialog[open]) { overflow: hidden; }
 #more-owner-photos, #more-sent-photos { min-height: 44px; width: 100%; margin-top: 1rem; }
 #sent-photo-image { display: block; width: 100%; height: auto; max-height: 55dvh; object-fit: contain; border-radius: 8px; }
 #history-status, #sent-photo-position { color: var(--hud-muted); font-size: 0.85rem; }
+
+body:has(> .site-footer) { display: flex; flex-direction: column; min-height: 100dvh; }
+body:has(> .site-footer) > main { flex: 1; }
+body:has(> .site-footer) > .simulator-view { min-height: 0; }
+.site-footer { width: min(560px, calc(100% - 40px)); margin: 0 auto; padding: 0.25rem 0 1rem; color: var(--hud-muted); text-align: center; line-height: 1.5; }
+.site-footer small { font-size: 0.75rem; }
+.site-footer span { display: block; }
+.site-footer a { display: inline-flex; align-items: center; min-height: 44px; color: inherit; text-underline-offset: 3px; }
+.site-footer a:hover { color: var(--hud-text); }
