@@ -178,7 +178,7 @@
             const response = await fetch('/api/beta/sender/photos', {method:'POST', body});
             accessLost = response.status === 401;
             if (accessLost) throw new Error('Sender access is no longer available. Ask the frame owner for a new link.');
-            if (!response.ok) throw new Error('This photo was not accepted. Try another JPEG or PNG.');
+            if (!response.ok) throw new Error(response.status >= 400 && response.status < 500 ? (await response.text()).slice(0, 240) || 'This photo was not accepted.' : 'This photo was not accepted. Please try again.');
             uploadQueue = uploadQueue.filter(next => next !== item);
             URL.revokeObjectURL(item.url); sent++;
           } catch (error) {

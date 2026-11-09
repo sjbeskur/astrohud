@@ -266,38 +266,81 @@ BEGIN
 END;
 ";
 
-/// Downscales an oversized photo to `MAX_PHOTO_LONG_EDGE` and re-encodes it as
-/// JPEG, applying any EXIF orientation first so the baked-in pixels match
-/// what a browser would have shown for the original. Returns `None` (keep
-/// the original bytes as-is) when the image is already small enough, or if
-/// it can't be decoded — resizing is an optimization, not a requirement.
-fn downscale_if_oversized(bytes: &[u8]) -> Option<(Vec<u8>, &'static str, &'static str)> {
-    let mut reader = ImageReader::new(Cursor::new(bytes))
+const MAX_SOURCE_PIXELS: u64 = 64_000_000;
+const MAX_DECODE_BYTES: u64 = 192 * 1024 * 1024;
+const MAX_UPLOAD_BYTES: usize = MAX_IMAGE_BYTES + 64 * 1024;
+
+struct PreparedUpload {
+    bytes: Vec<u8>,
+    extension: &'static str,
+    mime_type: &'static str,
+    coordinates: Option<(f64, f64)>,
+}
+
+fn prepare_photo(
+    bytes: Vec<u8>,
+    include_location: bool,
+) -> std::result::Result<PreparedUpload, &'static str> {
+    let mut reader = ImageReader::new(Cursor::new(&bytes))
         .with_guessed_format()
-        .ok()?;
-    reader.no_limits();
-    let mut decoder = reader.into_decoder().ok()?;
+        .map_err(|_| "Could not read this photo.")?;
+    match reader.format() {
+        Some(image::ImageFormat::Jpeg | image::ImageFormat::Png) => {}
+        _ => return Err("Choose a JPEG or PNG photo."),
+    };
+    let mut limits = image::Limits::default();
+    limits.max_alloc = Some(MAX_DECODE_BYTES);
+    limits.max_image_width = Some(16_384);
+    limits.max_image_height = Some(16_384);
+    reader.limits(limits);
+    let mut decoder = reader
+        .into_decoder()
+        .map_err(|_| "Could not decode this photo; try a smaller JPEG or PNG.")?;
+    let (width, height) = decoder.dimensions();
+    if u64::from(width) * u64::from(height) > MAX_SOURCE_PIXELS
+        || decoder.total_bytes() > MAX_DECODE_BYTES
+    {
+        return Err("Photo resolution is too large; export a smaller JPEG or PNG.");
+    }
     let orientation = decoder
         .orientation()
         .unwrap_or(image::metadata::Orientation::NoTransforms);
-    let mut img = DynamicImage::from_decoder(decoder).ok()?;
+    let mut img = DynamicImage::from_decoder(decoder)
+        .map_err(|_| "Could not decode this photo; try another JPEG or PNG.")?;
+    let coordinates = include_location
+        .then(|| extract_gps(&bytes))
+        .flatten()
+        .map(|(lat, lon)| ((lat * 10.0).round() / 10.0, (lon * 10.0).round() / 10.0));
     img.apply_orientation(orientation);
-
-    let long_edge = img.width().max(img.height());
-    if long_edge <= MAX_PHOTO_LONG_EDGE {
-        return None;
-    }
-
-    let scale = MAX_PHOTO_LONG_EDGE as f32 / long_edge as f32;
-    let new_width = ((img.width() as f32 * scale).round() as u32).max(1);
-    let new_height = ((img.height() as f32 * scale).round() as u32).max(1);
-    let resized = img.resize(new_width, new_height, FilterType::Lanczos3);
-
+    let img = if img.width().max(img.height()) > MAX_PHOTO_LONG_EDGE {
+        img.resize(
+            MAX_PHOTO_LONG_EDGE,
+            MAX_PHOTO_LONG_EDGE,
+            FilterType::Lanczos3,
+        )
+    } else {
+        img
+    };
     let mut out = Vec::new();
-    let encoder = JpegEncoder::new_with_quality(&mut out, PHOTO_JPEG_QUALITY);
-    resized.into_rgb8().write_with_encoder(encoder).ok()?;
-
-    Some((out, "jpg", "image/jpeg"))
+    // Encode from pixels even for small inputs: never retain EXIF/GPS or
+    // other embedded metadata in a newly shared image.
+    let (extension, mime_type) = if img.color().has_alpha() {
+        img.write_to(&mut Cursor::new(&mut out), image::ImageFormat::Png)
+            .map_err(|_| "Could not prepare this photo.")?;
+        ("png", "image/png")
+    } else {
+        let encoder = JpegEncoder::new_with_quality(&mut out, PHOTO_JPEG_QUALITY);
+        img.into_rgb8()
+            .write_with_encoder(encoder)
+            .map_err(|_| "Could not prepare this photo.")?;
+        ("jpg", "image/jpeg")
+    };
+    Ok(PreparedUpload {
+        bytes: out,
+        extension,
+        mime_type,
+        coordinates,
+    })
 }
 
 #[derive(Debug, Serialize)]
@@ -700,46 +743,84 @@ async fn upload_photo_for_household(
     selected_channel_id: Option<String>,
     authority: Option<PhotoUploadAuthority>,
 ) -> Result<Photo> {
-    let mut channel_id = None;
-    let mut image = Vec::new();
-    let mut include_location = false;
-    let mut destinations = None;
+    let preparation = state.image_processing.try_lock_owned().ok_or_else(|| {
+        error::ErrorTooManyRequests("Another photo is processing. Please try again in a moment.")
+    })?;
+    let (channel_id, image, include_location, destinations) =
+        actix_web::rt::time::timeout(std::time::Duration::from_secs(60), async move {
+            let mut channel_id = None;
+            let mut image = Vec::new();
+            let mut include_location = false;
+            let mut destinations = None;
+            let mut received = 0usize;
+            let mut fields = 0usize;
+            let mut photo_seen = false;
 
-    while let Some(field) = multipart.next().await {
-        let mut field = field.map_err(error::ErrorBadRequest)?;
-        let field_name = field.name().unwrap_or_default().to_owned();
-        let mut bytes = Vec::new();
-        while let Some(chunk) = field.next().await {
-            let chunk = chunk.map_err(error::ErrorBadRequest)?;
-            if bytes.len() + chunk.len() > MAX_IMAGE_BYTES {
-                return Err(error::ErrorPayloadTooLarge("image exceeds 20 MiB"));
-            }
-            bytes.extend_from_slice(&chunk);
-        }
-
-        match field_name.as_str() {
-            "channel_id" => {
-                channel_id = Some(
-                    String::from_utf8(bytes)
-                        .map_err(|_| error::ErrorBadRequest("invalid channel id"))?,
-                );
-            }
-            "destinations" => {
-                if destinations.is_some() || bytes.len() > 16384 {
-                    return Err(error::ErrorBadRequest("invalid destinations"));
+            while let Some(field) = multipart.next().await {
+                let mut field = field.map_err(error::ErrorBadRequest)?;
+                let field_name = field.name().unwrap_or_default().to_owned();
+                fields += 1;
+                if fields > 16 {
+                    return Err(error::ErrorBadRequest("Too many upload fields."));
                 }
-                destinations = Some(
-                    serde_json::from_slice::<PhotoDestinations>(&bytes)
-                        .map_err(|_| error::ErrorBadRequest("invalid destinations"))?,
-                );
+                if field_name == "photo" {
+                    if photo_seen {
+                        return Err(error::ErrorBadRequest("Send one photo per upload request."));
+                    }
+                    photo_seen = true;
+                }
+                let field_limit = if field_name == "photo" {
+                    MAX_IMAGE_BYTES
+                } else {
+                    16384
+                };
+                let mut bytes = Vec::new();
+                while let Some(chunk) = field.next().await {
+                    let chunk = chunk.map_err(error::ErrorBadRequest)?;
+                    received = received.saturating_add(chunk.len());
+                    if received > MAX_UPLOAD_BYTES {
+                        return Err(error::ErrorPayloadTooLarge(
+                            "Upload request exceeds 20 MiB plus metadata.",
+                        ));
+                    }
+                    if bytes.len() + chunk.len() > field_limit {
+                        return Err(error::ErrorPayloadTooLarge(if field_name == "photo" {
+                            "Photo exceeds 20 MiB."
+                        } else {
+                            "Upload metadata exceeds 16 KiB."
+                        }));
+                    }
+                    bytes.extend_from_slice(&chunk);
+                }
+
+                match field_name.as_str() {
+                    "channel_id" => {
+                        channel_id = Some(
+                            String::from_utf8(bytes)
+                                .map_err(|_| error::ErrorBadRequest("invalid channel id"))?,
+                        );
+                    }
+                    "destinations" => {
+                        if destinations.is_some() || bytes.len() > 16384 {
+                            return Err(error::ErrorBadRequest("invalid destinations"));
+                        }
+                        destinations = Some(
+                            serde_json::from_slice::<PhotoDestinations>(&bytes)
+                                .map_err(|_| error::ErrorBadRequest("invalid destinations"))?,
+                        );
+                    }
+                    "photo" => image = bytes,
+                    "include_location" => {
+                        include_location = matches!(bytes.as_slice(), b"true" | b"on" | b"1")
+                    }
+                    _ => {}
+                }
             }
-            "photo" => image = bytes,
-            "include_location" => {
-                include_location = matches!(bytes.as_slice(), b"true" | b"on" | b"1")
-            }
-            _ => {}
-        }
-    }
+
+            Ok::<_, actix_web::Error>((channel_id, image, include_location, destinations))
+        })
+        .await
+        .map_err(|_| error::ErrorRequestTimeout("Photo upload timed out. Please try again."))??;
 
     let channel_id = selected_channel_id
         .or(channel_id)
@@ -747,16 +828,22 @@ async fn upload_photo_for_household(
     if image.is_empty() {
         return Err(error::ErrorBadRequest("photo is required"));
     }
-    let kind = infer::get(&image)
-        .filter(|kind| kind.mime_type().starts_with("image/"))
-        .ok_or_else(|| error::ErrorUnsupportedMediaType("file is not a supported image"))?;
-    let coordinates = include_location.then(|| extract_gps(&image)).flatten();
+    // Decode off the HTTP worker, with only one image decoder active per process.
+    let prepared = web::block(move || {
+        // The blocking decoder keeps its permit if the request is cancelled.
+        let _preparation = preparation;
+        prepare_photo(image, include_location)
+    })
+    .await
+    .map_err(|_| error::ErrorInternalServerError("Photo processing failed."))?
+    .map_err(error::ErrorUnprocessableEntity)?;
+    let PreparedUpload {
+        bytes: image,
+        extension,
+        mime_type,
+        coordinates,
+    } = prepared;
     let location_label = coordinates.map(approximate_location_label);
-
-    let (image, extension, mime_type) = match downscale_if_oversized(&image) {
-        Some((resized, extension, mime_type)) => (resized, extension, mime_type),
-        None => (image, kind.extension(), kind.mime_type()),
-    };
 
     let photo_id = Uuid::new_v4().to_string();
     let storage_key = format!("{photo_id}.{extension}");
@@ -1077,6 +1164,66 @@ fn approximate_location_label((latitude, longitude): (f64, f64)) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uploads_are_validated_resized_and_metadata_is_not_retained() {
+        let rgba = DynamicImage::new_rgba8(2, 3);
+        let mut small = Cursor::new(Vec::new());
+        rgba.write_to(&mut small, image::ImageFormat::Png).unwrap();
+        let prepared = prepare_photo(small.into_inner(), false).unwrap();
+        assert_eq!(prepared.mime_type, "image/png");
+        assert_eq!(
+            image::load_from_memory(&prepared.bytes).unwrap().to_rgba8(),
+            rgba.to_rgba8()
+        );
+        let mut large = Cursor::new(Vec::new());
+        DynamicImage::new_rgb8(2000, 1000)
+            .write_to(&mut large, image::ImageFormat::Png)
+            .unwrap();
+        let prepared = prepare_photo(large.into_inner(), false).unwrap();
+        assert_eq!(prepared.mime_type, "image/jpeg");
+        let image = image::load_from_memory(&prepared.bytes).unwrap();
+        assert_eq!((image.width(), image.height()), (1600, 800));
+        assert!(prepare_photo(b"GIF89a".to_vec(), false).is_err());
+        assert!(prepare_photo(vec![0xff, 0xd8, 0xff, 0xd9], false).is_err());
+
+        let mut jpeg = Cursor::new(Vec::new());
+        DynamicImage::new_rgb8(4, 4)
+            .write_to(&mut jpeg, image::ImageFormat::Jpeg)
+            .unwrap();
+        let exif = jpeg_with_gps();
+        let mut source = vec![0xff, 0xd8];
+        source.extend_from_slice(&exif[2..exif.len() - 2]);
+        source.extend_from_slice(&jpeg.into_inner()[2..]);
+        assert!(extract_gps(&source).is_some());
+        let private = prepare_photo(source.clone(), false).unwrap();
+        assert!(private.coordinates.is_none());
+        assert!(extract_gps(&private.bytes).is_none());
+        let approximate = prepare_photo(source, true).unwrap();
+        assert_eq!(approximate.coordinates, Some((40.0, -105.3)));
+        assert!(extract_gps(&approximate.bytes).is_none());
+    }
+
+    #[test]
+    fn enormous_png_dimensions_are_rejected_before_pixel_allocation() {
+        let mut header = b"IHDR".to_vec();
+        header.extend_from_slice(&1_000_000u32.to_be_bytes());
+        header.extend_from_slice(&1_000_000u32.to_be_bytes());
+        header.extend([8, 6, 0, 0, 0]);
+        let mut crc = !0u32;
+        for byte in &header {
+            crc ^= u32::from(*byte);
+            for _ in 0..8 {
+                crc = (crc >> 1) ^ (0xedb88320u32 & 0u32.wrapping_sub(crc & 1));
+            }
+        }
+        let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
+        png.extend(13u32.to_be_bytes());
+        png.extend(header);
+        png.extend((!crc).to_be_bytes());
+        png.extend_from_slice(&[0, 0, 0, 0, b'I', b'E', b'N', b'D', 0xae, 0x42, 0x60, 0x82]);
+        assert!(prepare_photo(png, false).is_err());
+    }
 
     fn jpeg_with_gps() -> Vec<u8> {
         fn short(bytes: &mut Vec<u8>, value: u16) {

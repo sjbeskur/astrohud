@@ -2471,3 +2471,122 @@ mod tests {
         std::fs::remove_dir_all(media_dir).expect("remove media directory");
     }
 }
+
+#[cfg(test)]
+mod upload_review_tests {
+    use super::*;
+    use actix_web::{App, http::StatusCode, test};
+    use rusqlite::Connection;
+
+    #[actix_web::test]
+    async fn upload_validation_is_atomic_and_busy_uploads_fail_without_queueing_bodies() {
+        let mut db = Connection::open_in_memory().unwrap();
+        crate::initialize_database(&db).unwrap();
+        let owner = crate::create_household_owner(&mut db, "Upload test", "Owner").unwrap();
+        db.execute(
+            "INSERT INTO frames(id,household_id,place_name) VALUES ('tv',?1,'TV')",
+            [&owner.household_id],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO frame_subscriptions VALUES ('tv',?1)",
+            [&owner.default_channel_id],
+        )
+        .unwrap();
+        let sender = create_sender_invitation(&db, &owner.owner_token, "Alice").unwrap();
+        let directory =
+            std::env::temp_dir().join(format!("memory-upload-review-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let state = web::Data::new(AppState::new(db, directory.clone()));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let mut output = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::new_rgb8(2, 2)
+            .write_to(&mut output, image::ImageFormat::Png)
+            .unwrap();
+        let png = output.into_inner();
+        let field = |name: &str, bytes: &[u8]| {
+            let mut out =
+                format!("--review\r\nContent-Disposition: form-data; name=\"{name}\"\r\n\r\n")
+                    .into_bytes();
+            out.extend(bytes);
+            out.extend(b"\r\n");
+            out
+        };
+        let mut good = field("photo", &png);
+        good.extend(b"--review--\r\n");
+        let mut duplicate = field("photo", &png);
+        duplicate.extend(field("photo", &png));
+        duplicate.extend(b"--review--\r\n");
+        let mut metadata = field("ignored", &vec![b'x'; 16385]);
+        metadata.extend(b"--review--\r\n");
+        let mut corrupt = field("photo", &[0xff, 0xd8, 0xff, 0xd9]);
+        corrupt.extend(b"--review--\r\n");
+        let mut many = Vec::new();
+        for _ in 0..17 {
+            many.extend(field("ignored", b"x"));
+        }
+        many.extend(b"--review--\r\n");
+        for (body, status) in [
+            (duplicate, StatusCode::BAD_REQUEST),
+            (metadata, StatusCode::PAYLOAD_TOO_LARGE),
+            (corrupt, StatusCode::UNPROCESSABLE_ENTITY),
+            (many, StatusCode::BAD_REQUEST),
+        ] {
+            let request = test::TestRequest::post()
+                .uri("/api/beta/sender/photos")
+                .cookie(Cookie::new(SENDER_COOKIE, sender.token.clone()))
+                .insert_header((header::CONTENT_TYPE, "multipart/form-data; boundary=review"))
+                .set_payload(body)
+                .to_request();
+            assert_eq!(test::call_service(&app, request).await.status(), status);
+        }
+        assert_eq!(std::fs::read_dir(&directory).unwrap().count(), 0);
+        assert_eq!(
+            state
+                .database
+                .lock()
+                .unwrap()
+                .query_row("SELECT COUNT(*) FROM photos", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            0
+        );
+        {
+            let _held = state.image_processing.try_lock().unwrap();
+            let request = test::TestRequest::post()
+                .uri("/api/beta/sender/photos")
+                .cookie(Cookie::new(SENDER_COOKIE, sender.token.clone()))
+                .insert_header((header::CONTENT_TYPE, "multipart/form-data; boundary=review"))
+                .set_payload(good.clone())
+                .to_request();
+            assert_eq!(
+                test::call_service(&app, request).await.status(),
+                StatusCode::TOO_MANY_REQUESTS
+            );
+        }
+        let request = test::TestRequest::post()
+            .uri("/api/beta/sender/photos")
+            .cookie(Cookie::new(SENDER_COOKIE, sender.token))
+            .insert_header((header::CONTENT_TYPE, "multipart/form-data; boundary=review"))
+            .set_payload(good)
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, request).await.status(),
+            StatusCode::CREATED
+        );
+        assert_eq!(
+            state
+                .database
+                .lock()
+                .unwrap()
+                .query_row("SELECT COUNT(*) FROM photos", [], |r| r.get::<_, i64>(0))
+                .unwrap(),
+            1
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+}

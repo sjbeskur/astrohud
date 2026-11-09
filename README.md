@@ -1,16 +1,16 @@
 # Memory Lane
 
-Current hosted release: **v0.5.0**. The server reports its package version at
+Current hosted release: **v0.5.1**. The server reports its package version at
 `/api/health`; Pi software is versioned independently.
 
-This release adds invitation promotion and uses schema 12. Older schema-11
-releases cannot open the database after this upgrade.
+This release hardens photo uploads and device setup, with viewer v0.2.2 and
+provisioner v0.1.1. Schema 12 is unchanged from v0.5.0; older schema-11 releases
+cannot open the database. See [the release review](RELEASE_REVIEW.md) for details.
 
-Memory Lane (formerly AstroHUD) currently contains a small proof of concept for sending an image to an
-Actix WebSocket service and displaying it in a browser through WebAssembly.
-
-The project is being rehabilitated as the foundation for a channel-based
-digital picture frame. See [VISION.md](VISION.md) for the product thesis,
+Memory Lane (formerly AstroHUD) is a shared digital picture frame, with a
+mobile-friendly owner and guest website, a hosted Rust API, and a native
+Raspberry Pi viewer. The supported appliance target is **Pi Zero 2 W**.
+See [VISION.md](VISION.md) for the product thesis,
 boundaries, and proof-of-concept milestones. The living
 [product burndown](PRODUCT_BURNDOWN.md) tracks the Pi appliance, hosted
 software/user engagement, and mobile application as separate delivery streams.
@@ -19,8 +19,8 @@ The current delivery target is the three-household friendly beta described in
 
 ## Current components
 
-- `astrohud-rest`: Actix server, static display page, and WebSocket relay
-- `astrohud-client`: command-line image sender
+- `astrohud-rest`: Actix API, owner/guest website, and opt-in demo WebSocket relay
+- `astrohud-client`: legacy command-line demo image sender
 - `astrohud-frame`: native SDL2 frame with an offline, size-bounded disk cache
 - `astrohud-provisioner`: native setup-AP and captive Wi-Fi provisioning service
 - `astroview_wasm`: browser display client
@@ -62,7 +62,7 @@ wasm-pack build astroview_wasm \
   --out-name astroview_wasm
 ```
 
-## Run the current demo
+## Run locally
 
 Start the service from any directory:
 
@@ -74,15 +74,28 @@ The server exposes these browser views:
 
 - `http://localhost:8080/` opens the Memory Lane owner home, also available at
   `/owner.html`, with Invite, Send photos, Add a device, and Photos actions.
-- `/sender.html` preserves the legacy channel and publishing demo.
+- `/send.html` lets activated owners and invited senders upload photos.
+- `/local-simulator.html` creates sample households and authenticated frames.
+- `/sender.html` preserves the legacy channel and publishing demo (opt-in below).
 - `http://localhost:8080/frame.html` displays the persistent manifest for the
   proof-of-concept frame named `Grandma's kitchen`.
 - `http://localhost:8080/wasm_index.html` preserves the original WebSocket/WASM
   transport demo. It derives its WebSocket endpoint from the page URL, so
   remote viewers can use the host's LAN address without rebuilding the WASM
-  module.
+  module. The legacy sender, frame, and WebSocket views require the demo flag.
 
-Persistent proof-of-concept data defaults to `astrohud-rest/data`. Set
+The unauthenticated legacy demo API, `/media`, and `/ws/` are **disabled by
+default**. Enable them only on an isolated development server:
+
+```sh
+ASTROHUD_ENABLE_DEMO=true cargo run --package astrohud-rest -- 127.0.0.1:8080
+```
+
+Leave `ASTROHUD_ENABLE_DEMO` unset or false on the hosted service. The owner,
+guest, Pi, and local simulator use the authenticated beta API and do not need
+this flag.
+
+Persistent application data defaults to `astrohud-rest/data`. Set
 `ASTROHUD_DATA_DIR` to use another directory:
 
 ```sh
@@ -192,11 +205,22 @@ recoverable author information and appear under **Earlier uploads**. Labels
 are presentation data; authorization uses the stable invitation ID.
 
 These galleries reuse the server's existing image files. They do not create
-another image copy. The server retains a display image, not just a thumbnail:
-images larger than 1,600 pixels on their long edge are resized to JPEG;
-smaller images remain as uploaded. Browser thumbnails are previews of those
-same files. Existing native manifest fields remain compatible; Display next
+another image copy. The server retains a display image, not just a thumbnail.
+New uploads are decoded, oriented, resized to at most 1,600 pixels on their
+long edge, and encoded from pixels: JPEG at quality 87 for opaque images, or
+PNG for images with an alpha channel. Embedded metadata, including EXIF/GPS,
+is removed even from small images. Opt-in location coordinates are rounded
+to one decimal place before storage. Previously stored files and coordinates
+are not rewritten automatically. Browser thumbnails preview those same files.
+Existing native manifest fields remain compatible; Display next
 adds optional playback fields for the updated viewer.
+
+Uploads accept JPEG/PNG files up to 20 MiB, 64 million source pixels, and
+16,384 pixels per dimension, subject to a 192 MiB decoder allocation budget
+and decoded-size limit. This is not a total process-memory guarantee. Multipart
+reads time out after 60 seconds; only one upload is read/processed at a time
+per server process. A simultaneous upload receives HTTP 429 and can be retried
+from its existing selection. Household storage quotas are still pending.
 
 Sender history was introduced in schema 10. The current schema
 is 12, with a pre-upgrade database snapshot through the existing startup guard.
@@ -400,10 +424,13 @@ test procedure are documented in [`RESET_BUTTON.md`](RESET_BUTTON.md).
 - `GET /api/frames/{frame_id}/manifest`
 - `GET /media/{storage_key}`
 
+Only `/api/health` in the list above is enabled by default; the other listed
+legacy routes require `ASTROHUD_ENABLE_DEMO=true`.
+
 The friendly-beta routes add owner sessions, device enrollment and claiming,
 revocable sender invitations, invitation-scoped uploads, and
 device-authenticated manifest and media delivery under `/api/beta`. The legacy
-manifest remains available for the original demo frame, but `/media` now serves
+manifest remains available for the original demo frame when enabled, but `/media` serves
 only demo-household photos; beta-household files require the claimed device's
 credential.
 
@@ -411,11 +438,10 @@ Channels created through the legacy demo API are automatically subscribed to
 the single `demo-frame` fixture. The friendly-beta claim flow instead creates
 an explicit household-scoped frame subscription.
 
-## Repository state
+## Release review
 
-The current branch predates the picture-frame product direction. Rehabilitation
-work should keep the transport demo operational while the first persistent
-vertical slice is introduced.
+See [RELEASE_REVIEW.md](RELEASE_REVIEW.md) for the Pi Zero 2 W release review,
+local fixes, validation, and outstanding storage and recovery work.
 
 ### Promote an existing sender
 

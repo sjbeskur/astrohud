@@ -21,24 +21,15 @@ async fn main() -> std::io::Result<()> {
     let app_state = web::Data::new(AppState::new(database, media_dir.clone()));
     purge_deleted_media(&app_state).map_err(std::io::Error::other)?;
 
+    let enable_demo = env::var("ASTROHUD_ENABLE_DEMO")
+        .is_ok_and(|value| matches!(value.as_str(), "1" | "true" | "yes"));
     println!("Server starting on http://{}", args.endpoint);
     HttpServer::new(move || {
         App::new()
             .app_data(app_state.clone())
             .configure(configure_beta_routes)
             .route("/api/health", web::get().to(health))
-            .service(
-                web::resource("/api/channels")
-                    .route(web::get().to(list_channels))
-                    .route(web::post().to(create_channel)),
-            )
-            .route("/api/photos", web::post().to(upload_photo))
-            .route(
-                "/api/frames/{frame_id}/manifest",
-                web::get().to(frame_manifest),
-            )
-            .route("/ws/", web::get().to(ws_handler))
-            .route("/media/{storage_key}", web::get().to(demo_media))
+            .configure(|cfg| configure_demo_routes(cfg, enable_demo))
             .service(
                 Files::new("/", env!("CARGO_MANIFEST_DIR").to_string() + "/static")
                     .index_file("owner.html"),

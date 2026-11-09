@@ -14,6 +14,9 @@ const DEVICE_CREDENTIAL_PATH: &str = "/var/lib/astrohud/device-credential";
 fn main() {
     if let Err(error) = run() {
         eprintln!("astrohud-provisioner: {error}");
+        if ProvisioningPaths::default().provisioning_required() {
+            let _ = setup_display::write_unavailable(Path::new(setup_display::SETUP_SCREEN_PATH));
+        }
         std::process::exit(1);
     }
 }
@@ -42,6 +45,7 @@ fn run() -> Result<(), String> {
         let paths = ProvisioningPaths::default();
         if paths.provisioning_required() {
             paths.request_provisioning().map_err(|e| e.to_string())?;
+            setup_display::write_preparing(Path::new(setup_display::SETUP_SCREEN_PATH))?;
             let manager = NetworkManager::new(paths);
             let portal = web::bind()?;
             let networks = manager.start_setup_ap(&identity)?;

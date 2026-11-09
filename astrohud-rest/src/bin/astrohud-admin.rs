@@ -1,5 +1,5 @@
 use astrohud_rest::{
-    DeviceEnrollmentState, create_household_owner, initialize_database, register_device,
+    DeviceEnrollmentState, create_household_owner, initialize_database_with_backup, register_device,
 };
 use image::{DynamicImage, GrayImage, ImageFormat, Luma};
 use qrcode::{QrCode, types::Color};
@@ -23,9 +23,36 @@ fn run() -> Result<(), Box<dyn std::error::Error>> {
     let data_dir = env::var_os("ASTROHUD_DATA_DIR")
         .map(PathBuf::from)
         .unwrap_or_else(|| PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("data"));
+    run_command(arguments, data_dir)
+}
+
+fn run_command(
+    arguments: Vec<String>,
+    data_dir: PathBuf,
+) -> Result<(), Box<dyn std::error::Error>> {
+    if matches!(arguments.as_slice(), [argument] if argument == "--help" || argument == "-h") {
+        println!("{}", usage());
+        return Ok(());
+    }
+    let valid = match arguments.as_slice() {
+        [command, _] | [command, _, _] | [command, _, _, _] if command == "create-household" => {
+            true
+        }
+        [command, _, _] if command == "create-device" => true,
+        _ => false,
+    };
+    if !valid {
+        return Err(usage().into());
+    }
     fs::create_dir_all(&data_dir)?;
-    let mut database = Connection::open(data_dir.join("astrohud.sqlite3"))?;
-    initialize_database(&database)?;
+    let database_path = data_dir.join("astrohud.sqlite3");
+    let mut database = Connection::open(&database_path)?;
+    if let Some(snapshot) = initialize_database_with_backup(&database, &database_path)? {
+        eprintln!(
+            "Saved pre-migration database backup: {}",
+            snapshot.display()
+        );
+    }
 
     match arguments.as_slice() {
         [command, household_name] if command == "create-household" => {
@@ -162,6 +189,52 @@ fn usage() -> &'static str {
 mod tests {
     use super::*;
     use std::os::unix::fs::PermissionsExt;
+
+    #[test]
+    fn help_and_invalid_commands_do_not_create_or_upgrade_a_database() {
+        let root = std::env::temp_dir().join(format!("memory-admin-no-write-{}", Uuid::new_v4()));
+        run_command(vec!["--help".into()], root.clone()).unwrap();
+        assert!(run_command(vec!["unknown".into()], root.clone()).is_err());
+        assert!(!root.exists());
+    }
+
+    #[test]
+    fn admin_commands_take_the_same_pre_upgrade_snapshot_as_server_startup() {
+        let root = std::env::temp_dir().join(format!("memory-admin-backup-{}", Uuid::new_v4()));
+        fs::create_dir_all(&root).unwrap();
+        let path = root.join("astrohud.sqlite3");
+        let db = Connection::open(&path).unwrap();
+        astrohud_rest::initialize_database(&db).unwrap();
+        db.execute_batch("DROP TABLE sender_owner_promotions; PRAGMA user_version=11;")
+            .unwrap();
+        drop(db);
+        run_command(
+            vec!["create-household".into(), "Test household".into()],
+            root.clone(),
+        )
+        .unwrap();
+        let snapshots = fs::read_dir(root.join("backups"))
+            .unwrap()
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        assert_eq!(snapshots.len(), 1);
+        let old = Connection::open(snapshots[0].path()).unwrap();
+        assert_eq!(
+            old.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            11
+        );
+        let current = Connection::open(path).unwrap();
+        assert_eq!(
+            current
+                .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            12
+        );
+        drop(current);
+        drop(old);
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn activation_card_is_a_private_png() {

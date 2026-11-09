@@ -68,13 +68,21 @@ impl ServerClient {
     }
 
     fn download(&self, photo: &Photo, cache: &CacheStore) -> Result<(), BoxError> {
-        let url = self.base_url.join(&photo.url)?;
-        if !matches!(url.scheme(), "http" | "https") {
-            return Err("photo URL must use HTTP or HTTPS".into());
-        }
+        let url = self.media_url(&photo.url)?;
         let response = self.authorized_get(url.as_str()).call()?;
         cache.install(photo, response.into_reader())?;
         Ok(())
+    }
+
+    fn media_url(&self, path: &str) -> Result<Url, BoxError> {
+        let url = self.base_url.join(path)?;
+        if url.origin() != self.base_url.origin()
+            || !url.username().is_empty()
+            || url.password().is_some()
+        {
+            return Err("photo URL must belong to the configured server".into());
+        }
+        Ok(url)
     }
 
     fn authorized_get(&self, url: &str) -> ureq::Request {
@@ -142,4 +150,30 @@ pub fn sync_once_with_updates(
     let playlist = cache.reconcile(&manifest)?;
     cache.save_manifest(&manifest)?;
     Ok(SyncResult { playlist, warnings })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn private_media_credentials_cannot_be_sent_to_another_origin() {
+        let client =
+            ServerClient::new("https://app.example.test", "frame", Some("private".into())).unwrap();
+        assert!(client.media_url("/api/beta/device/media/photo").is_ok());
+        assert!(
+            client
+                .media_url("https://app.example.test/api/beta/device/media/photo")
+                .is_ok()
+        );
+        for url in [
+            "https://elsewhere.test/photo",
+            "//elsewhere.test/photo",
+            "http://app.example.test/photo",
+            "https://app.example.test:8443/photo",
+            "file:///photo",
+            "https://user:password@app.example.test/photo",
+        ] {
+            assert!(client.media_url(url).is_err(), "{url}");
+        }
+    }
 }

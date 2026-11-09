@@ -601,7 +601,7 @@
         body.append('include_location', String(includeLocation));
         try {
           const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/photos`, {method:'POST', body});
-          if (!response.ok) throw new Error('This photo was not accepted. Try another JPEG or PNG.');
+          if (!response.ok) throw new Error(response.status >= 400 && response.status < 500 ? (await response.text()).slice(0, 240) || 'This photo was not accepted.' : 'This photo was not accepted. Please try again.');
           uploadQueue = uploadQueue.filter(next => next !== item);
           URL.revokeObjectURL(item.url); sent++;
         } catch (error) {

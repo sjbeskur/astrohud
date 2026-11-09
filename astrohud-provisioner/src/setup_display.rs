@@ -40,6 +40,15 @@ pub fn write_preparing(path: &Path) -> Result<(), String> {
     )
 }
 
+pub fn write_unavailable(path: &Path) -> Result<(), String> {
+    write_status(
+        path,
+        "WI-FI SETUP",
+        "UNAVAILABLE",
+        "CHECK POWER AND WI-FI HARDWARE / RETRYING AUTOMATICALLY",
+    )
+}
+
 pub fn write_waiting(path: &Path) -> Result<(), String> {
     write_status(
         path,

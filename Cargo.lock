@@ -371,7 +371,7 @@ dependencies = [
 
 [[package]]
 name = "astrohud-frame"
-version = "0.2.1"
+version = "0.2.2"
 dependencies = [
  "font8x8",
  "image",
@@ -384,7 +384,7 @@ dependencies = [
 
 [[package]]
 name = "astrohud-provisioner"
-version = "0.1.0"
+version = "0.1.1"
 dependencies = [
  "font8x8",
  "qrcode",
@@ -398,7 +398,7 @@ dependencies = [
 
 [[package]]
 name = "astrohud-rest"
-version = "0.5.0"
+version = "0.5.1"
 dependencies = [
  "actix",
  "actix-files",
@@ -410,7 +410,6 @@ dependencies = [
  "features",
  "futures-util",
  "image",
- "infer",
  "kamadak-exif",
  "qrcode",
  "rusqlite",
@@ -548,17 +547,6 @@ dependencies = [
  "jobserver",
  "libc",
  "shlex",
-]
-
-[[package]]
-name = "cfb"
-version = "0.7.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d38f2da7a0a2c4ccf0065be06397cc26a81f4e528be095826eee9d4adbb8c60f"
-dependencies = [
- "byteorder",
- "fnv",
- "uuid",
 ]
 
 [[package]]
@@ -1180,15 +1168,6 @@ checksum = "8c9c992b02b5b4c94ea26e32fe5bccb7aa7d9f390ab5c1221ff895bc7ea8b652"
 dependencies = [
  "equivalent",
  "hashbrown 0.15.2",
-]
-
-[[package]]
-name = "infer"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a588916bfdfd92e71cacef98a63d9b1f0d74d6599980d11894290e7ddefffcf7"
-dependencies = [
- "cfb",
 ]
 
 [[package]]
