@@ -7,6 +7,13 @@ These tests used temporary directories and simulated service control. They do
 not prove an actual application installation, physical power-loss recovery, or
 rendered output. Both installed services remained active with zero restarts.
 
+The R2 folder and all three uploaded objects have since been verified. Updater
+bootstrap also passed on the reference Pi: originals adopted as `baseline`,
+application PIDs unchanged, identity/credential/Wi-Fi checksums preserved,
+updater agent active and reporting to the isolated test API. A native signed
+release check succeeded and reports `0.5.2` available. Actual install/rollback
+steps still await the user's phone-side test.
+
 ## Test hosting
 
 Bucket: **memorylane-nightly**.
@@ -48,7 +55,9 @@ A denied bucket-root listing does not by itself mean object access is disabled.
 Production remains v0.5.1/schema 12. A local schema-13 API with a synthetic
 household is prepared in a private temporary directory. An authenticated device
 report is authorized there using the Pi credential's hash; the actual device
-credential and identity are not copied or changed. Only the updater agent will
+credential and identity are not copied or changed. The credential file ends
+with a newline: the synthetic enrollment fingerprint must hash the **trimmed**
+credential, matching the client, rather than the raw file bytes. Only the updater agent will
 point to the test API. Viewer, provisioner, Wi-Fi, existing photos, and pairing
 continue to use their existing production configuration.
 
@@ -114,3 +123,14 @@ provider-specific code.
 References: [Cloudflare public buckets](https://developers.cloudflare.com/r2/buckets/public-buckets/),
 [dashboard uploads](https://developers.cloudflare.com/r2/objects/upload-objects/),
 [Quick Tunnels](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/).
+
+## End the temporary test session
+
+After the agreed tests, record the installed release, service health and protected
+state checks. While production still runs schema 12, disable the test updater
+agent and check timer before stopping the temporary API/tunnel, unless the user
+explicitly wants the test session kept available. Keep the boot recovery service
+and its app dependencies intact while original binary paths use the managed
+release store. Do not point the updater agent at the production API until the
+matching schema-13 API/site have been deployed. Keep the test signing key and
+public trust configuration separate from any future production signing setup.

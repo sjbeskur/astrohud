@@ -8,14 +8,18 @@ The user selected R2 bucket `memorylane-nightly` and provided its public
 `r2.dev` URL. All 12 updater tests passed natively on the Pi using isolated
 temporary directories and simulated services. Read-only smoke checks passed;
 installed application hashes still match the November 8 release and services
-have zero restarts. No updater bootstrap or actual application switch yet.
+have zero restarts. Updater bootstrap is now installed; actual application switching still awaits
+the user's phone test. Originals were adopted as `baseline` without restarting
+the viewer/provisioner. Protected identity, pairing and Wi-Fi file checksums
+were preserved. Backups: `/var/backups/memory-lane/updater-20261114.cm7l2b/`.
 
 A signed known-good test bundle and public config are prepared under ignored
 `target/releases/pi-update-test-20261114/`; only the three files inside
 `upload/updater-test-20261114` go to R2. A disposable test signing key remains
 outside the repository in a private `/tmp` directory. R2 CLI credentials are
-not configured. The user has dashboard upload instructions; the manifest was
-still absent at the last check. See `astrohud-updater/R2_TEST.md`.
+not configured. The user uploaded the bundle into `updater-test-20261114/`. Its public manifest
+and both binaries were verified; the Pi successfully checked the signed release
+and reported test version `0.5.2` available. See `astrohud-updater/R2_TEST.md`.
 
 The isolated schema-13 test API is at loopback port 18114, with data in private
 `/tmp/memory-lane-updater-integration-20261114`. A temporary Cloudflare tunnel
@@ -25,8 +29,12 @@ household authorizes the Pi by its credential hash; actual device secrets and
 production pairing are unchanged. The test owner token is stored privately in
 that temporary data directory, never in repository documentation. Bootstrap
 kit staged at `/tmp/memory-lane-updater-test-20261114/bootstrap` on the Pi.
-The agent-only test API override must be installed before bootstrap starts
-the agent. Viewer/provisioner must keep their production API configuration.
+The agent-only test API override is installed and the agent is reporting every
+15 seconds to the isolated API. Viewer/provisioner retain their production API
+configuration. Initial test authentication failed because the credential file
+has a trailing newline; the synthetic enrollment hash was corrected to hash the
+trimmed value without copying/changing the actual secret. Future fixtures must
+hash the same trimmed credential used by the HTTP client.
 Production remains v0.5.1/schema 12; no production deployment was performed.
 
 ## Current development — 2026-11-09
