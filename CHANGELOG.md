@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Updater v0.1.1 explicitly sets public application directory permissions so the unprivileged viewer can start releases staged by the agent with `UMask=0077`; retries also repair verified release directories.
+
 - Headless appliance update controls in owner Settings, backed by scoped, durable requests and a device agent; checks are automatic and installs require owner confirmation.
 - Signed ARM64 application releases, atomic viewer/provisioner switching, process health checks, rollback and boot recovery; operator CLI and release packaging/bootstrap tooling.
 - Additive schema 13 stores per-frame update reports and requests, using the existing pre-upgrade snapshot. Deployment and physical hardware validation remain pending.

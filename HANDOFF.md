@@ -1,5 +1,28 @@
 # Memory Lane handoff
 
+## First hardware install attempt and fix — 2026-11-14
+
+The user initiated `0.5.2` installation from the isolated test webpage. The
+viewer failed to execute because the agent's `UMask=0077` made the staged
+release directory mode 0700. Automatic rollback restored `baseline`; both
+services are active/running with zero automatic restarts, protected-state
+checksums match, and the user confirmed photos returned. No factory reset or
+credential rotation was used. This exercised a real failed-startup rollback.
+
+Updater v0.1.1 now explicitly uses 0755 for public release/store/baseline
+directories, including previously staged verified releases. A new regression
+test runs init/staging/reuse in a dedicated child with umask 077; all 13 updater
+tests and Clippy passed, followed by the ARM64 build. The patched updater was
+installed manually, restarting only its agent; viewer/provisioner PIDs and
+protected state remained unchanged. v0.1.0 is backed up alongside the existing
+app backups. A fresh owner-initiated install and explicit rollback still need
+to pass before this is considered validated. No R2 re-upload is necessary.
+
+The user requested slideshow algorithm/fairness review **after the updater**.
+They observe a recent-photo bias and want playback options; agreed this can be
+the first real feature payload through the updater. Do not start that feature
+until updater install/rollback testing is complete.
+
 ## Pi/R2 test preparation — 2026-11-14
 
 Updater implementation committed as `7fd9086` on `feature/app-updater`; do not

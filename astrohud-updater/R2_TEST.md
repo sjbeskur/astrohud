@@ -134,3 +134,20 @@ and its app dependencies intact while original binary paths use the managed
 release store. Do not point the updater agent at the production API until the
 matching schema-13 API/site have been deployed. Keep the test signing key and
 public trust configuration separate from any future production signing setup.
+
+## First physical install attempt
+
+The first owner-requested install of test release 0.5.2 failed to start the
+viewer: its staged directory inherited the agent's umask 077 and was mode 0700,
+so the `astrohud` service account could not traverse it. Automatic rollback
+restored the baseline and healthy services; the user confirmed visible photos
+returned, and identity/pairing/Wi-Fi fingerprints were preserved.
+
+Updater v0.1.1 fixes this by explicitly setting public store/release directory
+permissions to 0755 and repairing verified existing release directories on reuse.
+A regression test reproduces the agent's umask in a separate process and covers
+bootstrap, staging and reuse. All 13 updater tests, Clippy and the ARM64 build
+passed. The patched updater was installed on the Pi with only its agent
+restarted. The R2 application bundle and its signing key are unchanged. Retry
+the owner install, then verify an explicit rollback, before declaring the
+normal update path validated.

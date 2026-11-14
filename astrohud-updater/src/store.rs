@@ -78,6 +78,13 @@ pub fn atomic_link(path: &Path, target: &Path) -> Result<()> {
 impl Store {
     pub fn lock(&self) -> Result<File> {
         fs::create_dir_all(self.root.join("releases"))?;
+        // The privileged agent uses UMask=0077, but the unprivileged viewer
+        // must be able to traverse the directories holding public binaries.
+        fs::set_permissions(&self.root, fs::Permissions::from_mode(0o755))?;
+        fs::set_permissions(
+            self.root.join("releases"),
+            fs::Permissions::from_mode(0o755),
+        )?;
         let file = OpenOptions::new()
             .read(true)
             .write(true)
@@ -165,6 +172,8 @@ impl Store {
             for (name, artifact) in [(FRAME, &release.frame), (PROVISIONER, &release.provisioner)] {
                 release::verify_binary(&fs::read(dir.join(name))?, artifact)?;
             }
+            fs::set_permissions(&dir, fs::Permissions::from_mode(0o755))?;
+            sync_dir(&dir)?;
             return Ok(id);
         }
         let staging = self.root.join("staging");
@@ -172,6 +181,7 @@ impl Store {
             fs::remove_dir_all(&staging)?;
         }
         fs::create_dir(&staging)?;
+        fs::set_permissions(&staging, fs::Permissions::from_mode(0o755))?;
         atomic_write(&staging.join(FRAME), frame, 0o755)?;
         atomic_write(&staging.join(PROVISIONER), provisioner, 0o755)?;
         atomic_write(
@@ -205,6 +215,7 @@ impl Store {
         } else {
             let baseline = self.release_dir("baseline")?;
             fs::create_dir_all(&baseline)?;
+            fs::set_permissions(&baseline, fs::Permissions::from_mode(0o755))?;
             for (name, source) in [(FRAME, frame), (PROVISIONER, provisioner)] {
                 // Bootstrap is reentrant across power loss, including a partial
                 // migration of the two original binary paths to symlinks.
@@ -230,6 +241,77 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn releases_are_traversable_with_the_agent_private_umask() {
+        const CHILD: &str = "MEMORY_LANE_TEST_PRIVATE_UMASK";
+        if std::env::var_os(CHILD).is_none() {
+            // umask is process-wide: use a dedicated child rather than racing
+            // other tests by changing it in this multithreaded test process.
+            let output = std::process::Command::new("sh")
+                .args(["-c", "umask 077; exec \"$1\" --exact store::tests::releases_are_traversable_with_the_agent_private_umask --test-threads=1", "umask-test"])
+                .arg(std::env::current_exe().unwrap())
+                .env(CHILD, "1")
+                .output().unwrap();
+            assert!(
+                output.status.success(),
+                "{}\n{}",
+                String::from_utf8_lossy(&output.stdout),
+                String::from_utf8_lossy(&output.stderr)
+            );
+            return;
+        }
+        let tmp = tempfile::tempdir().unwrap();
+        let store = Store {
+            root: tmp.path().join("store"),
+        };
+        let _lock = store.lock().unwrap();
+        let mut binary = vec![0; 64];
+        binary[..6].copy_from_slice(b"\x7fELF\x02\x01");
+        binary[18] = 183;
+        let artifact = release::Artifact {
+            url: "https://example.test/binary".into(),
+            bytes: 64,
+            sha256: release::hex(ring::digest::digest(&ring::digest::SHA256, &binary).as_ref()),
+        };
+        let release = Release {
+            schema: 1,
+            version: "0.5.2".into(),
+            sequence: 1,
+            expires_unix: 2_000_000_000,
+            target: release::TARGET.into(),
+            frame: artifact.clone(),
+            provisioner: artifact,
+        };
+        let frame = tmp.path().join(FRAME);
+        let provisioner = tmp.path().join(PROVISIONER);
+        fs::write(&frame, &binary).unwrap();
+        fs::write(&provisioner, &binary).unwrap();
+        store.init(&frame, &provisioner).unwrap();
+        let id = store.stage(&release, &binary, &binary).unwrap();
+        let dir = store.release_dir(&id).unwrap();
+        for path in [
+            &store.root,
+            &store.root.join("releases"),
+            &store.release_dir("baseline").unwrap(),
+            &dir,
+            &dir.join(FRAME),
+            &dir.join(PROVISIONER),
+        ] {
+            assert_eq!(
+                fs::metadata(path).unwrap().permissions().mode() & 0o777,
+                0o755,
+                "viewer must traverse/read/execute {}",
+                path.display()
+            );
+        }
+        // Reuse must also repair a verified release left by the old installer.
+        fs::set_permissions(&dir, fs::Permissions::from_mode(0o700)).unwrap();
+        store.stage(&release, &binary, &binary).unwrap();
+        assert_eq!(
+            fs::metadata(dir).unwrap().permissions().mode() & 0o777,
+            0o755
+        );
+    }
     #[test]
     fn unsafe_release_paths_are_rejected() {
         let store = Store {
