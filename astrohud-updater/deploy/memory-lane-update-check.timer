@@ -1,0 +1,11 @@
+[Unit]
+Description=Check daily for Memory Lane updates (manual installation)
+
+[Timer]
+OnBootSec=10min
+OnUnitActiveSec=1d
+RandomizedDelaySec=30min
+Unit=memory-lane-update-check.service
+
+[Install]
+WantedBy=timers.target

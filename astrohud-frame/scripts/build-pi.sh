@@ -14,4 +14,5 @@ cd "${workspace_dir}"
 cargo build --locked --release \
     --package astrohud-frame \
     --package astrohud-provisioner \
+    --package astrohud-updater \
     --target aarch64-unknown-linux-gnu

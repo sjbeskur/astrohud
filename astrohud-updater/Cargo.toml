@@ -1,0 +1,20 @@
+[package]
+name = "astrohud-updater"
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.89"
+
+[[bin]]
+name = "memory-lane"
+path = "src/main.rs"
+
+[dependencies]
+ring = "0.17.14"
+semver = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+ureq = { version = "2.12.1", default-features = false, features = ["tls"] }
+url = "2.5"
+
+[dev-dependencies]
+tempfile = "3"

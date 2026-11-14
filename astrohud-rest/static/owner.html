@@ -114,6 +114,7 @@
           <h2>Your devices</h2>
           <p class="instrument-copy">Factory reset clears a device's photos, Wi-Fi, and pairing. Other devices and your saved photos stay available.</p>
           <div id="device-controls" class="connection-summary"></div>
+          <div id="software-update" class="owner-recovery" hidden></div>
           <div id="reset-history" class="connection-summary" role="status"></div>
           <div class="owner-recovery">
             <h2>Owner access</h2>
@@ -204,6 +205,7 @@
   </main>
 
   <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
+  <script src="/device-updates.js?v=1"></script>
   <script>
     const photosPanel = document.querySelector('#photos-panel');
     const photoFrame = document.querySelector('#active-frame');
@@ -214,6 +216,7 @@
     try { selectedFrameId = localStorage.getItem('memory-lane-selected-frame') || ''; } catch (_) {}
     let photoRequest = 0;
     let resetTimer;
+    const softwareUpdates = new MemoryLaneUpdates(document.querySelector('#software-update'));
     let recoveryExists = false;
     let uploadQueue = [];
     let uploading = false;
@@ -445,6 +448,8 @@
     function renderDeviceSettings(context) {
       clearTimeout(resetTimer);
       const resets = context.resets || [];
+      const updateFrame = context.frames.find(frame => frame.frame_id === selectedFrameId);
+      softwareUpdates.setFrame(updateFrame, resets.some(reset => reset.frame_id === selectedFrameId && reset.state !== 'complete'));
       recoveryExists = Boolean(context.recovery);
       document.querySelector('#create-recovery').textContent = recoveryExists ? 'Replace recovery link' : 'Create recovery link';
       document.querySelector('#recovery-reminder').hidden = recoveryExists;

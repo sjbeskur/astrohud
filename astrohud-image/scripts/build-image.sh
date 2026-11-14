@@ -38,7 +38,8 @@ fi
 
 frame_binary="$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release/astrohud-frame"
 provisioner_binary="$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release/astrohud-provisioner"
-for binary in "$frame_binary" "$provisioner_binary"; do
+updater_binary="$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release/memory-lane"
+for binary in "$frame_binary" "$provisioner_binary" "$updater_binary"; do
     if [ ! -x "$binary" ]; then
         echo "Missing ARM64 binary: $binary" >&2
         echo "Run astrohud-frame/scripts/build-pi-container.sh first." >&2
@@ -66,6 +67,16 @@ install -D -m 0755 "$image_dir/scripts/expand-root.sh" "$overlay/usr/local/sbin/
 install -D -m 0644 "$image_dir/deploy/memory-lane-expand-root.service" "$overlay/etc/systemd/system/memory-lane-expand-root.service"
 install -D -m 0755 "$frame_binary" "$overlay/usr/local/bin/astrohud-frame"
 install -D -m 0755 "$provisioner_binary" "$overlay/usr/local/sbin/astrohud-provisioner"
+install -D -m 0755 "$updater_binary" "$overlay/usr/local/bin/memory-lane"
+for unit in memory-lane-update-check.service memory-lane-update-check.timer memory-lane-update-recover.service memory-lane-update-agent.service; do
+    install -D -m 0644 "$workspace_dir/astrohud-updater/deploy/$unit" "$overlay/etc/systemd/system/$unit"
+done
+for unit in astrohud-frame.service astrohud-provisioner.service; do
+    install -D -m 0644 "$workspace_dir/astrohud-updater/deploy/10-update-recovery.conf" "$overlay/etc/systemd/system/$unit.d/10-update-recovery.conf"
+done
+# Release URL and trust key are operator-provided, never fetched from the
+# release server. Until configured and initialized, checks skip safely.
+install -d -m 0755 "$overlay/opt/memory-lane"
 install -D -m 0755 "$workspace_dir/astrohud-provisioner/deploy/astrohud-enter-setup.sh" "$overlay/usr/local/sbin/astrohud-enter-setup"
 install -D -m 0755 "$workspace_dir/astrohud-provisioner/deploy/astrohud-exit-setup.sh" "$overlay/usr/local/sbin/astrohud-exit-setup"
 install -D -m 0755 "$workspace_dir/astrohud-frame/deploy/astrohud-wifi-guard.sh" "$overlay/usr/local/sbin/astrohud-wifi-guard"
@@ -78,7 +89,8 @@ install -D -m 0644 "$workspace_dir/astrohud-provisioner/deploy/astrohud-captive-
 
 sed -i "s|^Environment=ASTROHUD_SERVER_URL=.*|Environment=ASTROHUD_SERVER_URL=$server_url|" \
     "$overlay/etc/systemd/system/astrohud-frame.service" \
-    "$overlay/etc/systemd/system/astrohud-provisioner.service"
+    "$overlay/etc/systemd/system/astrohud-provisioner.service" \
+    "$overlay/etc/systemd/system/memory-lane-update-agent.service"
 
 install -d -m 0755 "$overlay/etc/astrohud"
 {

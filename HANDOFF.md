@@ -1,3 +1,236 @@
+# Memory Lane handoff
+
+## Current development — 2026-11-09
+
+The application updater (`D-106`) is now implemented locally, not published or
+installed. This section supersedes the next-feature/deferred notes below.
+The device is a **headless appliance**: owners initiate checks/installation/
+rollback through **webpage Settings → Software update**, eventually the phone
+app. The user chose automatic checks and **manual installation**. The rustup-
+style CLI is for operator servicing, never the primary household interface.
+
+The new `astrohud-updater` workspace package builds `/usr/local/bin/memory-lane`.
+A separate root agent receives authenticated owner requests, while a timer
+checks signed release metadata automatically. Installation verifies exact owner-
+confirmed versions, signatures, expiry, sequence, hashes, sizes and ARM64 ELF;
+switches one shared release pointer after stopping viewer/provisioner; checks
+both processes for 15 seconds; and commits or restores the previous release.
+An on-disk journal and required boot recovery unit handle interrupted switches.
+The baseline/current/previous binaries are retained. App data and Wi-Fi remain
+outside the release store. The updater/agent and OS stay outside app updates.
+
+Backend and website changes are local too. Server **schema 13** adds durable
+per-frame update state and uses the existing pre-migration snapshot guard.
+Production is still v0.5.1/schema 12. Deploy website and API together; old
+schema-12 server code cannot open schema 13. Requests are household/device-
+scoped, deduplicated and expire after 30 minutes; reset/update requests exclude
+one another. The new agent must be bootstrapped onto an existing appliance
+before remote controls become available. No production trust key was generated.
+
+Validated locally: 98 Rust tests passed (six preview tests ignored), 15 Python
+checks, formatting/Clippy with the existing test-only lint exception, ARM64
+viewer/provisioner/updater build, and browser update-flow checks at
+320/390/1280px with 44px touch targets. Tests use synthetic local devices.
+
+See `astrohud-updater/README.md` for the diagram, API, signing/publication,
+bootstrap and validation commands. Physical signed-update, offline rollback,
+failed update and power-interruption tests remain required before distribution.
+Do not imply that local tests prove physical appliance behavior.
+
+## Resume here — 2026-11-08
+
+The user is ending the session after a successful release. Backend and Pi
+updates are complete; nothing remains pending for this deployment. The next
+planned feature is the application updater, deferred until later this week.
+Stay focused on **Pi Zero 2 W**. Do not restart the original Zero/Zero W effort.
+
+Repository: `/home/sbeskur/repos/adm/astro-hud`, branch `master`.
+Release commit: `eaaf6a7`, annotated tag `v0.5.1`.
+GitHub: https://github.com/sjbeskur/astrohud/releases/tag/v0.5.1
+Hosted application: https://app.astrohud.com
+
+This section is authoritative. The August notes below are retained only as
+historical research; their release versions, LAN server, device identity,
+Chromium setup, permissions, and deletion/reset instructions are obsolete.
+
+## Published and installed state
+
+| Component | Version | Last verification |
+| --- | --- | --- |
+| Hosted REST API and website | v0.5.1 | Live health, schema 12, all 14 checked website assets match local release; protected endpoints reject anonymous access. |
+| Pi native viewer | v0.2.2 | Installed and running from the expected binary; active, zero automatic restarts. |
+| Pi Wi-Fi provisioner | v0.1.1 | Installed and running from the expected binary; active, zero automatic restarts. |
+| Database | Schema 12 | Unchanged from v0.5.0. Older schema-11 code cannot open it. |
+
+The live legacy unauthenticated channel/upload/manifest/media/WebSocket routes
+are now disabled. `ASTROHUD_ENABLE_DEMO=true` opts in only for an isolated local
+transport demonstration. Owner, invited-sender, paired-device, and authenticated
+local simulator flows do not need that flag.
+
+The release includes versioned ARM64 binaries and `SHA256SUMS` on GitHub.
+Local copies are in ignored `target/releases/v0.5.1/`. No new SD image was
+built or flashed for this deployment. Existing image files can contain older
+applications; rebuild/repack before calling them v0.5.1 images.
+
+## Pi access, verification, and rollback
+
+- Target: Pi Zero 2 W, ARM64, `192.168.50.57`.
+- SSH account: `astrohud-support`, key authentication and passwordless sudo.
+- Previously verified/trusted ED25519 fingerprint:
+  `SHA256:p0Fts2kLqA/jmMlqrWyFUYW/lDrM5w315yzQ7B80Vno`.
+- Session host-key file: `/tmp/memory-lane-pi-57-host-key` (temporary; it may
+  disappear after workstation shutdown). If reconstructing it, compare the
+  scanned fingerprint to the trusted value rather than bypassing host checks.
+- Viewer: `/usr/local/bin/astrohud-frame`, `astrohud-frame.service`.
+- Provisioner: `/usr/local/sbin/astrohud-provisioner`,
+  `astrohud-provisioner.service`.
+- Cache and saved manifest: `/var/lib/astrohud`.
+- Runtime identity: `/etc/astrohud/device.json`; device credential:
+  `/var/lib/astrohud/device-credential`. Never print or commit their contents.
+- Deployment preserved identity and pairing credential, verified by hashes.
+  Wi-Fi settings and cached photos were not wiped. No reboot was required.
+- Both services were still healthy on the final follow-up check; the cached
+  manifest was being refreshed. No destructive reset/onboarding test was run.
+- Previous application binaries are backed up on the Pi in
+  `/var/backups/memory-lane/v0.5.1.7ijb40/` as `astrohud-frame` and
+  `astrohud-provisioner`. The installer had automatic rollback on failure;
+  deployment succeeded. Restoring those binaries and restarting both services
+  provides an application rollback, not a database or OS restore.
+
+Installed binary SHA-256 values (also checked against `/proc/<pid>/exe`):
+
+```text
+a3c2026385998176d9bf5cede1dcaf27668349223cd190c44b9aeca189fc8b32  astrohud-frame v0.2.2
+111a3bec6021ac6bf8dc712b8a9867ee5e0b6efd9d62aa06978fbff843edd396  astrohud-provisioner v0.1.1
+```
+
+On this minimal image, do not assume tools such as `hostname`, `curl`, or
+Python are installed. Build software on the workstation, not on the Pi.
+
+## Work completed this session
+
+The unpublished original Zero/Zero W source changes, recipes, build helpers,
+configuration, and isolated image/cache artifacts were rolled back. The test
+board was actually a non-wireless Pi Zero v1.3; its lack of a Wi-Fi interface
+was hardware, not a provisioning regression. Existing Zero 2 W build paths,
+images, and caches were retained. Do not reintroduce ARMv6 support unless the
+user explicitly reopens that work.
+
+The release review produced and published these fixes:
+
+- Gate the old unauthenticated demo routes behind an explicit environment flag.
+- Validate JPEG/PNG decoding rather than storing undecodable originals. Bound
+  upload bodies/metadata, source dimensions, decoded size and allocations;
+  impose a 60-second multipart-read timeout. Process one image at a time off
+  the HTTP worker; the blocking decoder retains its permit if a client leaves.
+- Normalize every new upload from pixels, even small photos, applying
+  orientation and removing embedded metadata. Maximum long edge is 1,600px;
+  opaque images use JPEG quality 87, alpha images retain PNG. Opt-in location
+  coordinates are rounded to one decimal before storage. Historical files and
+  coordinates were not rewritten.
+- Show useful 4xx upload errors while retaining failed selections for retry.
+  Simultaneous upload attempts can receive 429; successful items are not resent.
+- Use pre-migration database snapshots in the admin CLI as well as server
+  startup. Help/invalid commands do not create or migrate a database.
+- Keep native private media credentials on the configured server origin.
+- Display preparing/unavailable setup feedback when provisioning cannot start.
+- Remove the unused `infer` dependency and refresh outdated documentation.
+
+Full findings, limitations, and remaining priorities: [RELEASE_REVIEW.md](RELEASE_REVIEW.md).
+
+## Established product behavior to preserve
+
+- Product name is **Memory Lane**; copyright links to Advanced Data Machines,
+  LLC d/b/a Santamatronic Labs and the Advanced Data Machines website.
+- Compact mobile layout with clear frame context, Home house button and
+  upper-right settings gear; warm colors, no decorative vertical bars.
+- Multi-frame household context and explicit upload destinations: this frame,
+  chosen frames, or all currently allowed frames.
+- Owners and invited senders can upload multiple photos; failed items can be
+  retried without resending known successes.
+- Sender history is scoped to the stable invitation identity and survives
+  link replacement and frame-local removal. Owners see photos grouped by sender.
+- Guests may delete their own photos globally. Guest Display next is off by
+  default, owner-enabled per frame, own photos only, with a shared ten-minute
+  cooldown and no interruption of owner pins.
+- Co-owners have full household owner access. Promotion issues a new owner
+  link; the original sender link remains restricted, history stays intact,
+  and the invitation list shows one row. Full owner access is trusted admin
+  access, including recovery and managing grants.
+- Owner recovery links restore access after browser cookies are cleared;
+  recovery secrets are private. Physical GPIO reset remains unimplemented;
+  owner-requested factory reset is implemented.
+- Native centered cover-crop background with blur and slight darkening,
+  complete foreground image, offline cache, photo pinning and display timing,
+  next-image preparation, and hidden fullscreen cursor.
+- Phone onboarding is a Wi-Fi / Password / Finish wizard at `10.42.0.1` while
+  connected to the setup AP; household claiming then uses the hosted service.
+
+## Next session
+
+1. **Application updater (`D-106`), later this week.** Design signed release
+   metadata, atomic installation of viewer/provisioner, health checks and
+   rollback, and visible installed version/status. Preserve identity, pairing,
+   Wi-Fi and photos; keep OS upgrades separate. It is planned, not implemented.
+2. **Backend capacity and recovery.** Measure hosted disk usage/capacity;
+   add household quotas, disk-pressure rejection, enrollment/upload rate
+   controls, and an operator usage view. Establish independent database AND
+   media backups and prove a coordinated restore. Migration snapshots alone
+   are not sufficient.
+3. **Cleanup/privacy.** Define history retention and owner-wide deletion;
+   add periodic failed-deletion retries and cautious orphan reconciliation.
+   Audit historical images/coordinates before deciding on a backed-up scrub.
+4. **Release automation/hardware validation.** Bring browser regression checks
+   into the repo and CI. Before distributing a rebuilt image, repeat physical
+   Zero 2 W first boot, iPhone/Android onboarding, offline playback, factory
+   reset, root expansion and memory-pressure tests. Review production support
+   SSH access policy. No full dependency advisory audit was run this session.
+
+Other deferred items remain in [PRODUCT_BURNDOWN.md](PRODUCT_BURNDOWN.md).
+Mobile apps: Tauri is a proposed path; iOS needs a Mac or hosted macOS builds,
+which the user does not currently have. Do not begin native-app work implicitly.
+
+## Checks and build workflow
+
+Passed for the release: 82 Rust tests (six manual-preview tests ignored),
+12 image-helper Python tests, formatting, Clippy (allowing the existing
+host-toolchain test-only `chunks_exact_to_as_chunks` suggestion), Chrome
+regressions for upload/retry, permissions, invitations/promotion, guest
+controls, mobile layouts and automated accessibility, plus the ARM64 build.
+
+```sh
+just                         # List existing Zero 2 W recipes
+just image-check             # Rust and image-helper checks
+just pi-build                # Viewer and provisioner ARM64 binaries
+just image-repack target/astrohud-images/memory-lane-v0.5.1.img
+# Repack reuses the cached OS; use image-build after OS/package changes.
+```
+
+These commands are reference instructions, not pending or running work.
+Do not flash an SD card without identifying and authorizing the actual target.
+
+Useful temporary session scripts (may disappear on shutdown):
+`/tmp/compact-invitations-qa.mjs`, `/tmp/sender-batch-qa.mjs`,
+`/tmp/owner-promotion-qa.mjs`, `/tmp/verify-memory-lane-v0.5.1-release.py`,
+`/tmp/memory-lane-install-v0.5.1.sh`.
+Browser QA uses Puppeteer from the sibling `adm-website` dependencies and a
+local test server at port 18087 with synthetic data; it does not require
+production owner links. Local preview processes are not production services
+and need not survive workstation shutdown.
+
+The release was pushed to `origin/master` and `v0.5.1`, and published on GitHub.
+The working tree was clean after deployment; the end-of-session handoff/backlog
+edits are documentation-only and are not another application deployment.
+
+---
+
+## Historical archive — superseded August notes
+
+Everything below predates the current hosted product and clean ARM64 image.
+Preserved for investigation only. In particular, do not execute its direct
+SQL/media deletion commands, restore the old Chromium kiosk, or treat its
+LAN-only authentication and reset statements as current instructions.
+
 # AstroHUD desktop handoff
 
 ## Release consolidation (2026-08-23)

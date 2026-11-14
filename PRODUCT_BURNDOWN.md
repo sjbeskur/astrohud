@@ -54,12 +54,12 @@ risk and effort than an `S` display refinement.
 | --- | --- | --- | --- | --- | --- |
 | `D-101` | P0 | M | Waiting | Install and test the documented GPIO17 recovery button. Short presses do nothing, medium holds enter change-Wi-Fi mode, and long holds clearly authorize factory reset. | Physical button and mounting test |
 | `D-102` | P0 | M | Implemented; physical validation pending | Immutable manufacturing identity, owner-requested reset, rotatable credentials, and journaled appliance cleanup are implemented. Validate Wi-Fi wipe, service transitions, and power interruption on a spare unit; GPIO authorization remains under `D-101`. | Updated provisioner and systemd units; spare appliance |
-| `D-103` | P0 | M | Waiting | Benchmark the regular Pi Zero W for decode time, slideshow smoothness, sync latency, memory, thermals, and onboarding responsiveness before choosing it as the cost target. | Pi Zero W hardware |
+| `D-103` | P0 | M | Deferred; effort rolled back | Pi Zero 2 W remains the supported target. The original Zero/Zero W experiment was canceled and removed; the test board was a non-wireless Pi Zero v1.3. Reopen other hardware support only at the user's request. | Explicit hardware-scope decision |
 | `D-104` | P0 | L | Hardware validation | Clean ARM64 image and containerized just recipes built; verify physical boot, Wi-Fi setup, graphics, root expansion, and memory pressure before distribution. | `D-102`, `D-105` |
 | `D-105` | P0 | M | Waiting | Provision a unique device credential and authenticate every manifest/media request. Revocation stops a lost or resold frame without affecting others. | `C-103` |
-| `D-106` | P0 | L | Planned; later this week | Add a small application updater for the native viewer/provisioner: signed release metadata, atomic binary installation, health checks, rollback, and visible version/status. Preserve Wi-Fi, identity and cached photos. Keep OS upgrades separate; no browser desktop or full-card reflash for ordinary app updates. User requested this as the next follow-up after the release-review deployment; implementation is deferred. | `D-104` |
+| `D-106` | P0 | L | Implemented locally; deployment and hardware validation pending | Headless owner controls in webpage Settings (future app can reuse API), automatic checks with manual installation, signed metadata, exact-version requests, atomic viewer/provisioner installation, health checks, rollback and boot recovery. Preserves Wi-Fi, identity and cached photos; OS/updater upgrades remain separate. Operator CLI supports servicing only. See `astrohud-updater/README.md`; server schema 13 requires coordinated API/site deployment. | Signed release publication, trusted public key provisioning, attended Zero 2 W validation |
 | `D-107` | P0 | M | Ready | Pass a repeatable resilience matrix: seven-day soak, router outage, server outage, repeated power loss, full cache, bad image, corrupt download, and clock correction. No blank-screen or SSH-only recovery is allowed. | `D-102`, `D-104`, `D-106` |
-| `D-108` | P0 | M | Waiting | Freeze a serviceable BOM for compute module, SD card, power, cable, enclosure, button, mounting, packaging, and manufacturing label; record landed cost and assembly time. | `D-103`, physical prototypes |
+| `D-108` | P0 | M | Waiting | Freeze a serviceable BOM for compute module, SD card, power, cable, enclosure, button, mounting, packaging, and manufacturing label; record landed cost and assembly time. | Pi Zero 2 W baseline, physical prototypes |
 | `D-109` | P1 | M | Ready | Run provisioner and viewer with the least privilege practical; audit writable paths, secrets, local ports, and service sandboxing. | `D-104`, `C-103` |
 | `D-110` | P1 | S | Ready | Add manifest byte sizes and checksums; detect corrupt cache entries and repair them without discarding healthy offline media. | Cloud manifest change |
 | `D-111` | P1 | M | Waiting | Report privacy-safe health telemetry: software version, last sync, storage pressure, temperature/throttling, reboot reason, and recovery events. Never include photos or credentials. | `C-109` |
@@ -204,8 +204,9 @@ results rather than assume all required mobile integrations are ready-made.
 
 ## Recommended burn order
 
-1. **Finish the unattended appliance prototype:** `D-101`, `D-102`, `D-103`,
-   `D-104`, then the resilience matrix in `D-107`.
+1. **Finish the unattended Pi Zero 2 W appliance:** prioritize the application
+   updater `D-106` later this week, complete `D-101`, `D-102`, and `D-104`, then
+   the resilience matrix in `D-107`. Other Zero hardware work is deferred.
 2. **Open the secure remote path:** `C-101` through `C-108`, paired with
    `D-105`. Prove one outside-the-home family send before expanding features.
 3. **Measure the web journey:** `C-109` through `C-113`. Use actual household

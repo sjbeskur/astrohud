@@ -9,13 +9,14 @@ export ASTROHUD_SERVER_URL := env("ASTROHUD_SERVER_URL", "https://app.astrohud.c
 default:
     @just --list
 
-# Cross-compile both Pi applications using Docker.
+# Cross-compile the Pi applications and application updater using Docker.
 pi-build:
     bash astrohud-frame/scripts/build-pi-container.sh
 
 # Test the application and offline boot configuration.
 image-check:
-    cargo test -p astrohud-frame -p astrohud-provisioner -p astrohud-rest
+    cargo test -p astrohud-frame -p astrohud-provisioner -p astrohud-rest -p astrohud-updater
+    python3 astrohud-updater/scripts/test-release.py
     python3 astrohud-image/scripts/test-configure-boot.py
     python3 astrohud-image/scripts/test-image-artifact.py
     python3 astrohud-image/scripts/test-expand-root.py

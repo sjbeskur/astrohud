@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 12;
+const SCHEMA_VERSION: i64 = 13;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
@@ -194,6 +194,18 @@ CREATE TABLE IF NOT EXISTS device_resets (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS device_resets_active
 ON device_resets(frame_id) WHERE state != 'complete';
+CREATE TABLE IF NOT EXISTS frame_updates (
+    frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
+    report TEXT NOT NULL DEFAULT '{}',
+    reported_unix INTEGER,
+    command_id TEXT,
+    action TEXT CHECK (action IN ('check', 'update', 'rollback')),
+    release_id TEXT,
+    command_state TEXT CHECK (command_state IN ('pending', 'running', 'succeeded', 'failed')),
+    requested_unix INTEGER,
+    expires_unix INTEGER,
+    message TEXT
+);
 CREATE TRIGGER IF NOT EXISTS frame_subscriptions_same_household_insert
 BEFORE INSERT ON frame_subscriptions
 WHEN NOT EXISTS (

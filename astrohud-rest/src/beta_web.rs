@@ -102,6 +102,7 @@ impl From<DeviceRegistration> for DeviceRegistrationResponse {
 }
 
 pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
+    crate::configure_update_routes(config);
     config
         .route(
             "/api/beta/owner/session",
@@ -942,7 +943,7 @@ async fn display_sender_photo_next(
     }
 }
 
-fn owner_token(request: &HttpRequest) -> Result<String> {
+pub(crate) fn owner_token(request: &HttpRequest) -> Result<String> {
     request
         .cookie(OWNER_COOKIE)
         .map(|cookie| cookie.value().to_owned())
@@ -966,7 +967,7 @@ fn access_cookie(name: &'static str, token: &str) -> Cookie<'static> {
         .finish()
 }
 
-fn bearer_token(request: &HttpRequest) -> Result<String> {
+pub(crate) fn bearer_token(request: &HttpRequest) -> Result<String> {
     request
         .headers()
         .get(header::AUTHORIZATION)

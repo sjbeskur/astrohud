@@ -1,5 +1,11 @@
 # Release notes
 
+## Unreleased
+
+- Headless appliance update controls in owner Settings, backed by scoped, durable requests and a device agent; checks are automatic and installs require owner confirmation.
+- Signed ARM64 application releases, atomic viewer/provisioner switching, process health checks, rollback and boot recovery; operator CLI and release packaging/bootstrap tooling.
+- Additive schema 13 stores per-frame update reports and requests, using the existing pre-upgrade snapshot. Deployment and physical hardware validation remain pending.
+
 ## v0.5.0 — 2026-11-08
 
 - Promote an existing photo sender to co-owner using a new owner link, preserving sender access and upload history and showing one invitation row.

@@ -420,6 +420,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "astrohud-updater"
+version = "0.1.0"
+dependencies = [
+ "ring",
+ "semver",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "ureq",
+ "url",
+]
+
+[[package]]
 name = "astroview_wasm"
 version = "0.1.0"
 dependencies = [
