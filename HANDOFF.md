@@ -1,5 +1,34 @@
 # Memory Lane handoff
 
+## Pi/R2 test preparation — 2026-11-14
+
+Updater implementation committed as `7fd9086` on `feature/app-updater`; do not
+include the unrelated deletion of `futo-lookback.jpg` in updater commits.
+The user selected R2 bucket `memorylane-nightly` and provided its public
+`r2.dev` URL. All 12 updater tests passed natively on the Pi using isolated
+temporary directories and simulated services. Read-only smoke checks passed;
+installed application hashes still match the November 8 release and services
+have zero restarts. No updater bootstrap or actual application switch yet.
+
+A signed known-good test bundle and public config are prepared under ignored
+`target/releases/pi-update-test-20261114/`; only the three files inside
+`upload/updater-test-20261114` go to R2. A disposable test signing key remains
+outside the repository in a private `/tmp` directory. R2 CLI credentials are
+not configured. The user has dashboard upload instructions; the manifest was
+still absent at the last check. See `astrohud-updater/R2_TEST.md`.
+
+The isolated schema-13 test API is at loopback port 18114, with data in private
+`/tmp/memory-lane-updater-integration-20261114`. A temporary Cloudflare tunnel
+is running in container `memory-lane-updater-test-tunnel-20261114`. Its address
+is recorded in ignored `test-plan.json` beside the bundle. The synthetic
+household authorizes the Pi by its credential hash; actual device secrets and
+production pairing are unchanged. The test owner token is stored privately in
+that temporary data directory, never in repository documentation. Bootstrap
+kit staged at `/tmp/memory-lane-updater-test-20261114/bootstrap` on the Pi.
+The agent-only test API override must be installed before bootstrap starts
+the agent. Viewer/provisioner must keep their production API configuration.
+Production remains v0.5.1/schema 12; no production deployment was performed.
+
 ## Current development — 2026-11-09
 
 The application updater (`D-106`) is now implemented locally, not published or

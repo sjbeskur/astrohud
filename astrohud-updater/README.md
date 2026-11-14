@@ -129,6 +129,10 @@ Never remove `/opt/memory-lane` while original binary paths point into it.
 
 ## Publish a signed release
 
+Cloudflare R2 is the selected test host. See [R2 and the guided Pi test](R2_TEST.md)
+for the bucket, upload layout, and phone-side test sequence. Any public HTTPS
+object host works; appliances do not need storage-account credentials.
+
 The workstation-only packaging script uses Python's standard library and
 OpenSSL. Build the two applications with the existing Bookworm ARM64 toolchain,
 then package them using a monotonically increasing sequence and stable product
