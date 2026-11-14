@@ -161,3 +161,14 @@ with zero automatic restarts, the new release directory is mode 0755 and the
 viewer account can execute it. Binary hashes match the signed R2 bundle and
 protected identity/pairing/Wi-Fi fingerprints are unchanged. The explicit
 owner-requested rollback test is the remaining normal-path check.
+
+## Explicit rollback passed
+
+The user then selected **Restore previous version** and reported success. The
+API confirmed a succeeded rollback, installed `baseline`, previous `1-0.5.2`.
+The native release pointer is `releases/baseline`; both services are active and
+running with zero automatic restarts. Baseline binary hashes and protected
+identity/pairing/Wi-Fi fingerprints match the pre-test values. This completes
+the normal owner-driven install/rollback cycle. The first failed-startup test
+also exercised automatic rollback successfully. Physical power-loss recovery
+and the wider resilience matrix remain outstanding.

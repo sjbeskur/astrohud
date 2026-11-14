@@ -1,5 +1,29 @@
 # Memory Lane handoff
 
+## Normal updater cycle validated — 2026-11-14
+
+The user successfully exercised both Install update and Restore previous version
+from the isolated owner webpage. Explicit rollback is confirmed `succeeded`: Pi
+current release is `baseline`, previous is `1-0.5.2`, and updater is v0.1.1. Both
+application services are active/running with zero automatic restarts. Baseline
+binary hashes and protected identity/pairing/Wi-Fi fingerprints are unchanged.
+The earlier failed-startup automatic rollback was also visually confirmed.
+Normal install/explicit rollback and a real failed-startup rollback have passed;
+physical power-interruption and broader resilience tests remain unperformed.
+Production API/site remain v0.5.1/schema 12; test agent still uses the isolated
+API/tunnel for the planned first feature update. Do not treat this as a
+production rollout or rotate signing trust implicitly.
+
+Next task requested by user: examine slideshow recent-photo bias and offer
+playback options as the first real feature update through this updater. Initial
+source review: device manifests order eligible photos newest-first and cap at
+200 (`astrohud-rest/src/api.rs`); native cache favors newer entries when full
+(`cache.rs`); native and browser players cycle sequentially. Native sync
+preserves the current photo by ID, so it does not reset to newest on every sync.
+Startup begins at the first eligible photo. Review participation/retention as
+well as ordering before promising fair coverage of the entire library. Playback
+mode choices and their defaults have not yet been finalized or implemented.
+
 ## Successful owner-requested install — 2026-11-14
 
 The user retried Install update with updater v0.1.1 and reported it worked.
