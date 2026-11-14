@@ -489,5 +489,11 @@ body:has(> .site-footer) > .simulator-view { min-height: 0; }
 
 .owner-page .invite-icon-button.promote { color: var(--hud-amber); }
 
-.update-actions { flex-wrap: wrap; gap: 0.65rem; }
+.update-actions { display: grid; grid-template-columns: minmax(0, 1fr); gap: 0.65rem; }
 .update-actions > button { min-height: 44px; white-space: normal; }
+.update-actions > .quiet-button { justify-self: start; }
+.owner-page .update-actions .update-install { width: 100%; min-height: 52px; color: #17120d; background: var(--hud-amber); font-weight: 750; }
+.owner-page .update-actions .update-install:hover { background: #f5c486; }
+
+.owner-home #open-device-settings { position: relative; overflow: visible; }
+.settings-update-badge { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border: 2px solid var(--hud-raised); border-radius: 50%; background: var(--hud-amber); pointer-events: none; }

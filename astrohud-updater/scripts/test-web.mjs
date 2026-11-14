@@ -37,8 +37,13 @@ try {
   await heartbeat();
   await page.evaluate(() => softwareUpdates.refresh());
   await page.waitForFunction(() => !document.querySelector('#software-update .signal-button').hidden);
+  await page.evaluate(() => { location.hash = 'home'; });
+  await page.waitForFunction(() => document.querySelector('#home-update-badge').offsetHeight > 0);
+  await page.click('#open-device-settings');
+  await page.waitForFunction(() => location.hash === '#device-settings' && document.querySelector('#software-update').offsetHeight > 0);
   for (const width of [320, 390, 1280]) {
     await page.setViewport({width, height: 900, isMobile: width < 500, hasTouch: width < 500});
+    await page.waitForFunction(() => document.querySelector('#software-update .update-install')?.offsetHeight > 0);
     assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `horizontal overflow at ${width}px`);
     const buttons = await page.$$eval('#software-update button', buttons => buttons.filter(b => !b.hidden).map(b => ({label: b.textContent, height: b.getBoundingClientRect().height})));
     assert(buttons.every(b => b.height >= 44), `touch targets at ${width}px`);
@@ -57,6 +62,7 @@ try {
   await page.evaluate(() => softwareUpdates.refresh());
   await page.waitForFunction(() => document.querySelector('#software-update').textContent.includes('up to date'));
   assert(await page.$eval('#software-update .signal-button', button => button.hidden));
+  assert(await page.$eval('#home-update-badge', badge => badge.hidden));
   const rollback = await page.$$('#software-update button');
   await rollback[2].click();
   await page.waitForFunction(() => document.querySelector('#software-update').textContent.includes('Waiting for the frame'));

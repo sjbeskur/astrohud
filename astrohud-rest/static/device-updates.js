@@ -9,6 +9,8 @@ class MemoryLaneUpdates {
     this.generation = 0;
     this.fetchId = 0;
     this.timer = null;
+    this.homeBadge = document.querySelector('#home-update-badge');
+    this.settingsButton = document.querySelector('#open-device-settings');
     const heading = document.createElement('h2');
     heading.textContent = 'Software update';
     this.detail = document.createElement('p');
@@ -20,10 +22,10 @@ class MemoryLaneUpdates {
     const actions = document.createElement('div');
     actions.className = 'field-row update-actions';
     this.buttons = {};
-    for (const [action, label] of [['check', 'Check for updates'], ['update', 'Install update'], ['rollback', 'Restore previous version']]) {
+    for (const [action, label] of [['update', 'Install update'], ['check', 'Check for updates'], ['rollback', 'Restore previous version']]) {
       const button = document.createElement('button');
       button.type = 'button';
-      button.className = action === 'update' ? 'signal-button' : 'quiet-button';
+      button.className = action === 'update' ? 'signal-button update-install' : 'quiet-button';
       button.textContent = label;
       button.addEventListener('click', () => this.request(action));
       this.buttons[action] = button;
@@ -31,13 +33,16 @@ class MemoryLaneUpdates {
     }
     container.replaceChildren(heading, this.detail, this.progress, actions);
     window.addEventListener('hashchange', () => {
-      if (location.hash === '#device-settings') this.refresh();
+      if (this.shouldPoll()) this.refresh();
       else clearTimeout(this.timer);
     });
     document.addEventListener('visibilitychange', () => {
-      if (!document.hidden && location.hash === '#device-settings') this.refresh();
+      if (this.shouldPoll()) this.refresh();
       else clearTimeout(this.timer);
     });
+  }
+  shouldPoll() {
+    return !document.hidden && ['', '#home', '#connected-panel', '#device-settings'].includes(location.hash);
   }
   setFrame(frame, resetting) {
     this.resetting = resetting;
@@ -67,8 +72,8 @@ class MemoryLaneUpdates {
       if (generation !== this.generation || fetchId !== this.fetchId) return;
       this.progress.textContent = error.message;
     } finally {
-      if (generation === this.generation && fetchId === this.fetchId && location.hash === '#device-settings' && !document.hidden) {
-        this.timer = setTimeout(() => this.refresh(), 5000);
+      if (generation === this.generation && fetchId === this.fetchId && this.shouldPoll()) {
+        this.timer = setTimeout(() => this.refresh(), location.hash === '#device-settings' ? 5000 : 30000);
       }
     }
   }
@@ -81,6 +86,14 @@ class MemoryLaneUpdates {
     const current = this.version(report.installed_release);
     const fresh = report.metadata_expires_unix > Date.now() / 1000;
     const available = fresh && report.available_release && report.available_release !== report.installed_release;
+    if (this.homeBadge) {
+      this.homeBadge.hidden = !available;
+    }
+    if (this.settingsButton) {
+      const label = available ? `Settings — software update ${report.available_version || ''} available` : 'Settings';
+      this.settingsButton.setAttribute('aria-label', label);
+      this.settingsButton.title = label;
+    }
     this.detail.textContent = !this.data ? 'Checking the frame’s software…'
       : !supported ? 'Remote software updates are not available on this frame yet.'
       : `${current ? `Installed: ${current}. ` : 'Current installation. '}${available ? `Version ${report.available_version} is available.` : fresh ? 'Your frame is up to date.' : 'Check for updates to see the latest version.'}`;
