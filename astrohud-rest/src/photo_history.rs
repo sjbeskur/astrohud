@@ -48,6 +48,7 @@ fn photo_row(row: &rusqlite::Row<'_>, prefix: &str) -> rusqlite::Result<(Photo, 
     let id: String = row.get(0)?;
     Ok((
         Photo {
+            upload_order: None,
             url: format!("{prefix}/{id}"),
             id,
             channel_id: row.get(1)?,

@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 12;
+const SCHEMA_VERSION: i64 = 14;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
@@ -121,6 +121,11 @@ CREATE TABLE IF NOT EXISTS frame_playback (
     pinned_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
     pinned_until INTEGER
 );
+CREATE TABLE IF NOT EXISTS frame_playback_modes (
+    frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
+    mode TEXT NOT NULL DEFAULT 'scenic_route' CHECK (mode IN ('scenic_route','fresh_prints','serendipity')),
+    viewer_supports_modes INTEGER NOT NULL DEFAULT 0 CHECK (viewer_supports_modes IN (0,1))
+);
 CREATE TABLE IF NOT EXISTS owner_recovery_links (
     household_id TEXT PRIMARY KEY REFERENCES households(id) ON DELETE CASCADE,
     token_hash BLOB NOT NULL UNIQUE,
@@ -194,6 +199,18 @@ CREATE TABLE IF NOT EXISTS device_resets (
 );
 CREATE UNIQUE INDEX IF NOT EXISTS device_resets_active
 ON device_resets(frame_id) WHERE state != 'complete';
+CREATE TABLE IF NOT EXISTS frame_updates (
+    frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
+    report TEXT NOT NULL DEFAULT '{}',
+    reported_unix INTEGER,
+    command_id TEXT,
+    action TEXT CHECK (action IN ('check', 'update', 'rollback')),
+    release_id TEXT,
+    command_state TEXT CHECK (command_state IN ('pending', 'running', 'succeeded', 'failed')),
+    requested_unix INTEGER,
+    expires_unix INTEGER,
+    message TEXT
+);
 CREATE TRIGGER IF NOT EXISTS frame_subscriptions_same_household_insert
 BEFORE INSERT ON frame_subscriptions
 WHEN NOT EXISTS (
@@ -358,6 +375,8 @@ pub struct CreateChannel {
 #[derive(Debug, Serialize)]
 pub struct Photo {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub(crate) upload_order: Option<i64>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub(crate) sender: Option<crate::PhotoSender>,
     pub(crate) id: String,
     pub(crate) channel_id: String,
@@ -377,6 +396,7 @@ pub struct FrameManifest {
 
 #[derive(Debug, Serialize)]
 pub struct Health {
+    playback_modes_version: u8,
     version: &'static str,
     database_schema: i64,
     sender_photo_actions_version: u8,
@@ -547,6 +567,7 @@ fn ensure_foreign_keys_are_valid(connection: &Connection) -> rusqlite::Result<()
 
 pub async fn health() -> web::Json<Health> {
     web::Json(Health {
+        playback_modes_version: 1,
         version: env!("CARGO_PKG_VERSION"),
         database_schema: SCHEMA_VERSION,
         sender_photo_actions_version: 1,
@@ -940,6 +961,7 @@ async fn upload_photo_for_household(
     };
 
     Ok(Photo {
+        upload_order: None,
         sender: None,
         id: photo_id,
         channel_id,
@@ -1035,7 +1057,7 @@ fn manifest_for_household_with_protected_media(
     let playback = crate::frame_playback(database, frame_id)?;
     let mut statement = database.prepare(
         "SELECT p.id, p.channel_id, p.storage_key, p.mime_type, p.created_at,
-                    p.location_label
+                    p.location_label, p.rowid
              FROM photos p
              JOIN channels c ON c.id = p.channel_id
              JOIN frames f ON f.id = ?1
@@ -1052,7 +1074,7 @@ fn manifest_for_household_with_protected_media(
                                WHERE r.frame_id = f.id AND r.photo_id = p.id)
              ORDER BY CASE WHEN p.id = ?3 THEN 0 WHEN p.id = ?4 THEN 1 WHEN p.id = ?5 THEN 2 ELSE 3 END,
                       p.created_at DESC, p.rowid DESC
-             LIMIT 200",
+             LIMIT 2000",
     )?;
     let photos = statement
         .query_map(
@@ -1067,6 +1089,7 @@ fn manifest_for_household_with_protected_media(
                 let photo_id: String = row.get(0)?;
                 let storage_key: String = row.get(2)?;
                 Ok(Photo {
+                    upload_order: Some(row.get(6)?),
                     sender: None,
                     url: if protected_media {
                         format!("/api/beta/device/media/{photo_id}")

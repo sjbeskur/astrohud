@@ -5,6 +5,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Debug, Serialize, PartialEq, Eq)]
 pub struct Playback {
+    pub playback_mode: String,
+    pub viewer_supports_playback_modes: bool,
     pub guest_display_next: bool,
     pub next_photo_id: Option<String>,
     pub next_revision: u64,
@@ -20,6 +22,8 @@ pub struct Playback {
 impl Default for Playback {
     fn default() -> Self {
         Self {
+            playback_mode: "scenic_route".into(),
+            viewer_supports_playback_modes: false,
             guest_display_next: false,
             next_photo_id: None,
             next_revision: 0,
@@ -36,6 +40,7 @@ impl Default for Playback {
 
 #[derive(Deserialize)]
 pub struct PlaybackRequest {
+    pub playback_mode: Option<String>,
     pub guest_display_next: Option<bool>,
     pub action: Option<String>,
     pub photo_id: Option<String>,
@@ -71,6 +76,17 @@ pub(crate) fn frame_playback(db: &Connection, frame: &str) -> rusqlite::Result<P
         )
         .optional()?
         .unwrap_or_default();
+    if let Some((mode, supported)) = db
+        .query_row(
+            "SELECT mode,viewer_supports_modes FROM frame_playback_modes WHERE frame_id=?1",
+            [frame],
+            |r| Ok((r.get::<_, String>(0)?, r.get::<_, bool>(1)?)),
+        )
+        .optional()?
+    {
+        playback.playback_mode = mode;
+        playback.viewer_supports_playback_modes = supported;
+    }
     if let Some((enabled, photo, revision, expires)) = db.query_row(
         "SELECT enabled,photo_id,revision,expires_at FROM frame_guest_requests WHERE frame_id=?1",
         [frame], |r| Ok((r.get::<_, bool>(0)?, r.get::<_, Option<String>>(1)?, r.get::<_, u64>(2)?, r.get::<_, Option<u64>>(3)?))
@@ -138,6 +154,17 @@ pub fn update_playback(
     }
     let tx = db.transaction()?;
     let mut playback = frame_playback(&tx, frame)?;
+    if let Some(mode) = &request.playback_mode {
+        if !["scenic_route", "fresh_prints", "serendipity"].contains(&mode.as_str()) {
+            return Err(BetaError::InvalidInput("unknown playback style"));
+        }
+        if !playback.viewer_supports_playback_modes {
+            return Err(BetaError::InvalidInput(
+                "update this frame's software before choosing a playback style",
+            ));
+        }
+        tx.execute("INSERT INTO frame_playback_modes(frame_id,mode) VALUES (?1,?2) ON CONFLICT(frame_id) DO UPDATE SET mode=excluded.mode", params![frame,mode])?;
+    }
     if let Some(seconds) = request.slide_seconds {
         playback.slide_seconds = seconds;
     }
@@ -201,6 +228,23 @@ pub fn update_playback(
     Ok(frame_playback(db, frame)?)
 }
 
+/// An authenticated manifest request advertises capability; an older viewer
+/// clears it again after rollback. Merely upgrading the API never claims that
+/// an old frame has applied its new playback setting.
+pub(crate) fn record_playback_capability(
+    db: &Connection,
+    frame: &str,
+    supported: bool,
+) -> rusqlite::Result<()> {
+    db.execute(
+        "INSERT INTO frame_playback_modes(frame_id,viewer_supports_modes) VALUES (?1,?2)
+        ON CONFLICT(frame_id) DO UPDATE SET viewer_supports_modes=excluded.viewer_supports_modes
+        WHERE viewer_supports_modes != excluded.viewer_supports_modes",
+        params![frame, supported],
+    )?;
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -224,7 +268,7 @@ mod tests {
         .unwrap();
         db.execute("INSERT INTO photos (id,channel_id,storage_key,mime_type) VALUES ('old-photo',?1,'old.png','image/png')",[&owner.default_channel_id]).unwrap();
         // A pinned photo must remain in the bounded manifest after new uploads.
-        for i in 0..205 {
+        for i in 0..2005 {
             db.execute("INSERT INTO photos (id,channel_id,storage_key,mime_type) VALUES (?1,?2,?1,'image/png')",params![format!("photo-{i}"),owner.default_channel_id]).unwrap();
         }
         let pin:PlaybackRequest=serde_json::from_value(serde_json::json!({"action":"pin","photo_id":"old-photo","pin_seconds":900,"slide_seconds":30,"blur_background":true})).unwrap();
@@ -238,7 +282,7 @@ mod tests {
         let manifest = protected_manifest_for_household(&db, &owner.household_id, "tv")
             .unwrap()
             .unwrap();
-        assert_eq!(manifest.photos.len(), 200);
+        assert_eq!(manifest.photos.len(), 2000);
         assert_eq!(manifest.photos[0].id, "old-photo");
         let invalid: PlaybackRequest =
             serde_json::from_value(serde_json::json!({"slide_seconds":0})).unwrap();
@@ -274,5 +318,121 @@ mod tests {
                 .selected_photo_id
                 .is_none()
         );
+    }
+    #[test]
+    fn playback_styles_are_scoped_capability_gated_and_do_not_interrupt_pins() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize_database(&db).unwrap();
+        let owner = create_household_owner(&mut db, "Home", "Owner").unwrap();
+        let other = create_household_owner(&mut db, "Other", "Owner").unwrap();
+        db.execute(
+            "INSERT INTO frames(id,household_id,place_name) VALUES ('styles',?1,'Living room')",
+            [&owner.household_id],
+        )
+        .unwrap();
+        db.execute(
+            "INSERT INTO frame_subscriptions VALUES ('styles',?1)",
+            [&owner.default_channel_id],
+        )
+        .unwrap();
+        db.execute("INSERT INTO photos(id,channel_id,storage_key,mime_type) VALUES ('pinned',?1,'pinned.jpg','image/jpeg')",[&owner.default_channel_id]).unwrap();
+        let request = |mode: &str| {
+            serde_json::from_value::<PlaybackRequest>(serde_json::json!({"playback_mode":mode}))
+                .unwrap()
+        };
+        assert_eq!(
+            frame_playback(&db, "styles").unwrap().playback_mode,
+            "scenic_route"
+        );
+        assert!(
+            update_playback(
+                &mut db,
+                &owner.owner_token,
+                "styles",
+                &request("serendipity")
+            )
+            .is_err()
+        );
+        record_playback_capability(&db, "styles", true).unwrap();
+        assert!(matches!(
+            update_playback(
+                &mut db,
+                &other.owner_token,
+                "styles",
+                &request("serendipity")
+            ),
+            Err(BetaError::NotFound)
+        ));
+        let pin: PlaybackRequest=serde_json::from_value(serde_json::json!({"action":"pin","photo_id":"pinned","pin_seconds":0,"slide_seconds":20})).unwrap();
+        update_playback(&mut db, &owner.owner_token, "styles", &pin).unwrap();
+        for mode in ["scenic_route", "fresh_prints", "serendipity"] {
+            let playback =
+                update_playback(&mut db, &owner.owner_token, "styles", &request(mode)).unwrap();
+            assert_eq!(playback.playback_mode, mode);
+            assert_eq!(playback.pinned_photo_id.as_deref(), Some("pinned"));
+            assert_eq!(playback.slide_seconds, 20);
+        }
+        assert!(
+            update_playback(
+                &mut db,
+                &owner.owner_token,
+                "styles",
+                &request("surprise_me")
+            )
+            .is_err()
+        );
+        assert_eq!(
+            frame_playback(&db, "styles").unwrap().playback_mode,
+            "serendipity"
+        );
+        initialize_database(&db).unwrap();
+        assert_eq!(
+            frame_playback(&db, "styles").unwrap().playback_mode,
+            "serendipity"
+        );
+        record_playback_capability(&db, "styles", false).unwrap();
+        let playback = frame_playback(&db, "styles").unwrap();
+        assert!(!playback.viewer_supports_playback_modes);
+        assert_eq!(playback.playback_mode, "serendipity");
+        assert!(
+            update_playback(
+                &mut db,
+                &owner.owner_token,
+                "styles",
+                &request("fresh_prints")
+            )
+            .is_err()
+        );
+    }
+
+    #[test]
+    fn schema_thirteen_upgrade_is_backed_up_before_adding_playback_styles() {
+        let root =
+            std::env::temp_dir().join(format!("memory-lane-styles-{}", uuid::Uuid::new_v4()));
+        std::fs::create_dir(&root).unwrap();
+        let path = root.join("db.sqlite3");
+        let db = Connection::open(&path).unwrap();
+        initialize_database(&db).unwrap();
+        db.execute_batch("DROP TABLE frame_playback_modes; PRAGMA user_version=13;")
+            .unwrap();
+        let snapshot = crate::initialize_database_with_backup(&db, &path)
+            .unwrap()
+            .unwrap();
+        let old = Connection::open(snapshot).unwrap();
+        assert_eq!(
+            old.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            13
+        );
+        assert!(old.prepare("SELECT * FROM frame_playback_modes").is_err());
+        assert!(db.prepare("SELECT * FROM frame_playback_modes").is_ok());
+        assert_eq!(
+            db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            14
+        );
+        drop(old);
+        drop(db);
+        std::fs::remove_dir_all(root).unwrap();
     }
 }

@@ -56,6 +56,15 @@ pub fn request_device_reset(
             "enter the device's place name to confirm reset",
         ));
     }
+    crate::updates::expire_command(db, frame)?;
+    let updating: bool = db.query_row(
+        "SELECT EXISTS(SELECT 1 FROM frame_updates WHERE frame_id=?1 AND command_state IN ('pending','running'))",
+        [frame], |r| r.get(0))?;
+    if updating {
+        return Err(BetaError::InvalidInput(
+            "finish the application update request before resetting the device",
+        ));
+    }
     db.execute("INSERT OR IGNORE INTO device_resets (id, enrollment_id, household_id, frame_id, place_name, state)
                 VALUES (?1, ?2, ?3, ?4, ?5, 'pending')",
         params![Uuid::new_v4().to_string(), enrollment, household, frame, place])?;

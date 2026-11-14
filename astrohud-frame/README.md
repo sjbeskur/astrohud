@@ -196,3 +196,10 @@ slideshow behavior.
 
 Fullscreen appliance mode hides the mouse cursor before the first rendered
 screen. Windowed desktop mode retains the pointer for local development.
+
+## Named playback styles
+
+Viewer v0.3.0 implements The Scenic Route, Fresh Prints and Serendipity through
+the owner webpage's Photos → Slideshow settings. See the [playback release
+guide](PLAYBACK_RELEASE.md) for behavior, persistence, compatibility and the
+manual field-test update. `astrohud-frame --version` identifies this viewer.

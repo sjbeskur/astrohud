@@ -1,0 +1,23 @@
+[Unit]
+Description=Memory Lane appliance update control
+Wants=network-online.target
+Requires=memory-lane-update-recover.service
+After=network-online.target memory-lane-update-recover.service
+ConditionPathExists=/etc/memory-lane-updater.json
+
+[Service]
+Type=simple
+ExecStart=/usr/local/bin/memory-lane agent
+Environment=ASTROHUD_SERVER_URL=https://app.astrohud.com
+Restart=on-failure
+RestartSec=15
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/memory-lane
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+
+[Install]
+WantedBy=multi-user.target

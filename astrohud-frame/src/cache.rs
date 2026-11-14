@@ -132,6 +132,8 @@ impl CacheStore {
             used = used.saturating_add(size);
             retained.insert(path.clone());
             photos.push(CachedPhoto {
+                upload_order: photo.upload_order,
+                created_at: photo.created_at.clone(),
                 id: photo.id.clone(),
                 path,
                 location_label: photo.location_label.clone(),
@@ -145,7 +147,15 @@ impl CacheStore {
             }
         }
 
+        // Forced owner/guest entries remain downloadable first, but ordinary
+        // Fresh Prints playback follows upload time rather than command priority.
+        photos.sort_by(|a, b| {
+            b.created_at
+                .cmp(&a.created_at)
+                .then_with(|| b.upload_order.cmp(&a.upload_order))
+        });
         Ok(Playlist {
+            frame_id: manifest.frame_id.clone(),
             place_name: manifest.place_name.clone(),
             photos,
             playback: manifest.playback.clone(),
@@ -156,6 +166,7 @@ impl CacheStore {
         match self.load_manifest()? {
             Some(manifest) => self.reconcile(&manifest),
             None => Ok(Playlist {
+                frame_id: String::new(),
                 place_name: "Memory Lane".to_owned(),
                 photos: Vec::new(),
                 playback: Default::default(),
@@ -246,6 +257,7 @@ mod tests {
 
     fn photo(id: &str) -> Photo {
         Photo {
+            upload_order: None,
             id: id.to_owned(),
             channel_id: "family".to_owned(),
             url: format!("/media/{id}.png"),
@@ -342,6 +354,33 @@ mod tests {
             fs::metadata(&playlist.photos[0].path)
                 .expect("photo metadata")
                 .len()
+        );
+    }
+    #[test]
+    fn playback_order_is_newest_first_even_when_commands_promote_an_older_batch_photo() {
+        let directory = TestDirectory::new();
+        let store = CacheStore::open(&directory.0, 1024 * 1024).unwrap();
+        let mut old = photo("old-command");
+        old.upload_order = Some(1);
+        let mut new = photo("new-upload");
+        new.upload_order = Some(2);
+        for p in [&old, &new] {
+            store.install(p, Cursor::new(png_bytes(2, 2))).unwrap();
+        }
+        let manifest = FrameManifest {
+            frame_id: "frame".into(),
+            place_name: "Home".into(),
+            photos: vec![old, new],
+            playback: Default::default(),
+        };
+        let playlist = store.reconcile(&manifest).unwrap();
+        assert_eq!(
+            playlist
+                .photos
+                .iter()
+                .map(|p| p.id.as_str())
+                .collect::<Vec<_>>(),
+            vec!["new-upload", "old-command"]
         );
     }
 }

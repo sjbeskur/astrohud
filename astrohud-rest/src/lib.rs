@@ -10,6 +10,7 @@ mod playback;
 mod recovery;
 mod reset;
 mod sender_actions;
+mod updates;
 mod websocket;
 
 pub use api::*;
@@ -24,4 +25,5 @@ pub use playback::*;
 pub use recovery::*;
 pub use reset::*;
 pub use sender_actions::*;
+pub use updates::configure_update_routes;
 pub use websocket::*;

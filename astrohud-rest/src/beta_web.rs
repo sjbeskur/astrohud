@@ -102,6 +102,7 @@ impl From<DeviceRegistration> for DeviceRegistrationResponse {
 }
 
 pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
+    crate::configure_update_routes(config);
     config
         .route(
             "/api/beta/owner/session",
@@ -720,6 +721,12 @@ async fn get_authenticated_device_manifest(
         .lock()
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     let access = claimed_device_access(&database, &credential).map_err(beta_http_error)?;
+    let supported = request
+        .headers()
+        .get("X-Memory-Lane-Playback-Modes")
+        .is_some_and(|value| value == "1");
+    crate::playback::record_playback_capability(&database, &access.frame_id, supported)
+        .map_err(error::ErrorInternalServerError)?;
     let manifest =
         protected_manifest_for_household(&database, &access.household_id, &access.frame_id)
             .map_err(error::ErrorInternalServerError)?
@@ -942,7 +949,7 @@ async fn display_sender_photo_next(
     }
 }
 
-fn owner_token(request: &HttpRequest) -> Result<String> {
+pub(crate) fn owner_token(request: &HttpRequest) -> Result<String> {
     request
         .cookie(OWNER_COOKIE)
         .map(|cookie| cookie.value().to_owned())
@@ -966,7 +973,7 @@ fn access_cookie(name: &'static str, token: &str) -> Cookie<'static> {
         .finish()
 }
 
-fn bearer_token(request: &HttpRequest) -> Result<String> {
+pub(crate) fn bearer_token(request: &HttpRequest) -> Result<String> {
     request
         .headers()
         .get(header::AUTHORIZATION)

@@ -1,0 +1,13 @@
+[Unit]
+Description=Recover an interrupted Memory Lane application update
+Before=astrohud-frame.service astrohud-provisioner.service
+RequiresMountsFor=/opt/memory-lane
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/memory-lane recover-boot
+RemainAfterExit=yes
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target
