@@ -12,6 +12,31 @@ layer, rather than the broader multi-architecture suite. Build dependencies
 and ARM emulation live in a Docker tool image; no build packages are installed
 on the workstation.
 
+To ship a configured application updater, supply `ASTROHUD_UPDATER_CONFIG`
+pointing to a JSON file containing only `manifest_url` (a public HTTPS URL)
+and `public_key` (the hexadecimal Ed25519 verification key). Private signing
+keys and device credentials never belong in the image. On first boot, an
+ordered service adopts the factory applications before viewers and update
+controls start. Without this input the updater remains unconfigured.
+
+For an update-test card, `ASTROHUD_APP_BIN_DIR` selects a directory containing
+the exact ARM64 `astrohud-frame`, `astrohud-provisioner` and `memory-lane`
+executables. Invoke the container wrapper directly so `pi-build` does not
+replace a deliberately selected older application release:
+
+```sh
+ASTROHUD_UPDATER_CONFIG=/path/to/public-updater.json \
+ASTROHUD_APP_BIN_DIR=target/releases/v0.5.2-image-input \
+  bash astrohud-image/scripts/build-clean-container.sh \
+    target/astrohud-images/memory-lane-v0.5.2-update-test.img --image-only
+```
+
+The selected directory must be inside the repository. Repacking reuses the
+previous clean OS build; omitting the updater config removes any cached
+channel configuration. Factory apps initially report `baseline` in updater
+status; the image release file records their exact hashes. Fresh setup creates
+a new device identity and pairing and does not migrate an existing frame.
+
 ## Build and inspect
 
 Host requirements: Docker, `just`, Python 3, and an operator SSH public key.
@@ -87,7 +112,8 @@ limit, not a preallocated file in the image.
 The resize service supports this image's standard two-partition, ext4 root
 layout. It must be validated on a spare physical Pi/card before distributing
 this image. Removing large swap allocations also needs a memory-pressure test
-on the 512 MiB Pi Zero 2 W. The image contains no application updater yet.
+on the 512 MiB Pi Zero 2 W. The image includes the application updater; its
+channel and verification key must be selected explicitly as described above.
 
 The post-build hook clears package download/index caches and rejects leaked
 runtime identities, device credentials, Wi-Fi profiles, photos, assigned

@@ -36,9 +36,10 @@ if [ "$actual_image_gen_commit" != "$expected_image_gen_commit" ]; then
     exit 1
 fi
 
-frame_binary="$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release/astrohud-frame"
-provisioner_binary="$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release/astrohud-provisioner"
-updater_binary="$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release/memory-lane"
+binary_dir="${ASTROHUD_APP_BIN_DIR:-$workspace_dir/target/pi-bookworm/aarch64-unknown-linux-gnu/release}"
+frame_binary="$binary_dir/astrohud-frame"
+provisioner_binary="$binary_dir/astrohud-provisioner"
+updater_binary="$binary_dir/memory-lane"
 for binary in "$frame_binary" "$provisioner_binary" "$updater_binary"; do
     if [ ! -x "$binary" ]; then
         echo "Missing ARM64 binary: $binary" >&2
@@ -77,6 +78,17 @@ done
 # Release URL and trust key are operator-provided, never fetched from the
 # release server. Until configured and initialized, checks skip safely.
 install -d -m 0755 "$overlay/opt/memory-lane"
+if [ -n "${ASTROHUD_UPDATER_CONFIG:-}" ]; then
+    python3 "$image_dir/scripts/validate-updater-config.py" "$ASTROHUD_UPDATER_CONFIG"
+    install -D -m 0644 "$ASTROHUD_UPDATER_CONFIG" "$overlay/etc/memory-lane-updater.json"
+elif [ "${#image_args[@]}" -ne 0 ]; then
+    # Repacking must not silently inherit a previously selected channel/key.
+    echo 'Repacking without ASTROHUD_UPDATER_CONFIG leaves updates unconfigured.'
+fi
+install -D -m 0644 "$image_dir/deploy/memory-lane-update-init.service" "$overlay/etc/systemd/system/memory-lane-update-init.service"
+for unit in astrohud-frame.service astrohud-provisioner.service memory-lane-update-agent.service memory-lane-update-check.service; do
+    install -D -m 0644 "$image_dir/deploy/20-update-init.conf" "$overlay/etc/systemd/system/$unit.d/20-update-init.conf"
+done
 install -D -m 0755 "$workspace_dir/astrohud-provisioner/deploy/astrohud-enter-setup.sh" "$overlay/usr/local/sbin/astrohud-enter-setup"
 install -D -m 0755 "$workspace_dir/astrohud-provisioner/deploy/astrohud-exit-setup.sh" "$overlay/usr/local/sbin/astrohud-exit-setup"
 install -D -m 0755 "$workspace_dir/astrohud-frame/deploy/astrohud-wifi-guard.sh" "$overlay/usr/local/sbin/astrohud-wifi-guard"
@@ -104,6 +116,10 @@ install -d -m 0755 "$overlay/etc/astrohud"
     printf 'rpi_image_gen_commit=%s\n' "$actual_image_gen_commit"
     printf 'frame_sha256=%s\n' "$(sha256sum "$frame_binary" | cut -d ' ' -f 1)"
     printf 'provisioner_sha256=%s\n' "$(sha256sum "$provisioner_binary" | cut -d ' ' -f 1)"
+    printf 'updater_sha256=%s\n' "$(sha256sum "$updater_binary" | cut -d ' ' -f 1)"
+    if [ -n "${ASTROHUD_UPDATER_CONFIG:-}" ]; then
+        printf 'updater_config_sha256=%s\n' "$(sha256sum "$ASTROHUD_UPDATER_CONFIG" | cut -d ' ' -f 1)"
+    fi
     printf 'server_url=%s\n' "$server_url"
 } > "$overlay/etc/astrohud/image-release"
 chmod 0644 "$overlay/etc/astrohud/image-release"
@@ -115,6 +131,9 @@ if [ "${#image_args[@]}" -ne 0 ]; then
     case "$cached_root" in "$workspace_dir"/target/image-work/chroot-*/filesystem) ;; *) echo 'No matching clean build filesystem; run image-build first.' >&2; exit 1;; esac
     test -d "$cached_root"
     cached_context="${cached_root%/filesystem}"
+    if [ -z "${ASTROHUD_UPDATER_CONFIG:-}" ]; then
+        rm -f "$cached_root/etc/memory-lane-updater.json"
+    fi
     image_overrides=(-- "IGconf_artefact_context=${cached_context##*/}")
     # Reuse only the local build root, refresh the applications, then recheck
     # that it is sealed. This never operates on a mounted customer SD card.

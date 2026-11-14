@@ -21,6 +21,7 @@ image-check:
     python3 astrohud-image/scripts/test-configure-boot.py
     python3 astrohud-image/scripts/test-image-artifact.py
     python3 astrohud-image/scripts/test-expand-root.py
+    python3 astrohud-image/scripts/test-updater-config.py
 
 # Build the default clean image.
 image-build output="target/astrohud-images/memory-lane-clean.img": (image-build-clean output)

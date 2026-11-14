@@ -1,8 +1,9 @@
-# Playback styles — prepared release v0.5.3
+# Playback styles — release v0.5.3
 
 This release pairs the website/API v0.5.3 (schema 14) with Pi viewer v0.3.0.
-The provisioner remains v0.1.1 and updater remains v0.1.1. It is prepared for
-review and has not yet been deployed to production.
+The provisioner remains v0.1.1 and updater remains v0.1.1. API/site deployment
+and signed R2 publication are complete. The user confirmed successful field
+deployment/update after fresh setup with a v0.5.2 SD card on 2026-11-14.
 
 Owners open **Photos → Slideshow settings (gear) → Playback style**:
 
@@ -28,9 +29,9 @@ The native 2 MiB manifest guard and image/cache limits remain in place.
 
 ## Compatibility and deployment order
 
-1. Deploy the matching API and website together. Production is currently schema
-   12; startup takes a pre-migration snapshot before creating the additive
-   schema-13 update table and schema-14 playback-style table.
+1. Deploy the matching API and website together. Production migrated from
+   schema 12 to 14; startup takes a pre-migration snapshot before creating the
+   additive schema-13 update table and schema-14 playback-style table.
 2. Existing older viewers continue their existing playback. New controls stay
    disabled until an authenticated manifest request advertises
    `X-Memory-Lane-Playback-Modes: 1`. A rollback to an old viewer clears that
@@ -41,8 +42,9 @@ The native 2 MiB manifest guard and image/cache limits remain in place.
    existing production connection, identity, credentials and cache.
 4. Install through the owner webpage. Viewer v0.3.0 advertises support on its
    next sync (normally within five seconds); the selector then becomes usable.
-5. The user will update the other field-test Pi manually with the converged
-   viewer binary. Its existing software remains supported until then.
+5. The field-test Pi received a fresh v0.5.2 card with the updater configured;
+   the user confirmed successful update and deployment. Older viewers remain
+   supported for any appliances that have not yet upgraded.
 
 Older server code cannot open schema 14. Prefer a compatible forward fix;
 restoring the pre-upgrade database snapshot discards later metadata and does
@@ -91,5 +93,5 @@ just pi-build
 Tests cover rounds, additions/removals, restart progress, mode changes, random
 repeats, empty/single collections, prefetch stability, API permissions, migration
 snapshots, legacy gating/rollback, real browser image loading, owner pin priority
-and 320/390/1280px layouts. Physical mode switching on the Pi still requires the
-matching API/site deployment and installing the new signed viewer release.
+and 320/390/1280px layouts. The user confirmed field installation/deployment;
+individual playback-mode switching on physical hardware remains to be checked.

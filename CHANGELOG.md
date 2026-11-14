@@ -1,6 +1,6 @@
 # Release notes
 
-## Unreleased — prepared v0.5.3
+## v0.5.3 — 2026-11-14
 
 - Photos → Slideshow settings gains The Scenic Route (default fair shuffle), Fresh Prints (newest first), and Serendipity (independent random picks).
 - Pi viewer v0.3.0 and the browser simulator retain Scenic progress across restarts, preserve progress across syncs, and keep pins/guest requests in priority. Playback catalogues now include up to 2,000 eligible photos.
@@ -10,7 +10,8 @@
 
 - Headless appliance update controls in owner Settings, backed by scoped, durable requests and a device agent; checks are automatic and installs require owner confirmation.
 - Signed ARM64 application releases, atomic viewer/provisioner switching, process health checks, rollback and boot recovery; operator CLI and release packaging/bootstrap tooling.
-- Additive schema 13 stores per-frame update reports and requests, using the existing pre-upgrade snapshot. Production deployment remains pending; install/rollback and failed-startup rollback passed on the reference Pi.
+- Additive schema 13 stores per-frame update reports and requests, using the existing pre-upgrade snapshot. API/site v0.5.3 are deployed with schema 14; install/rollback and failed-startup rollback passed on the reference Pi.
+- Fresh SD images can include an explicitly configured update channel and verification key, initialize the updater on first boot, and select older factory binaries for upgrade tests. The user confirmed the fresh v0.5.2 field unit updated and deployed successfully.
 
 ## v0.5.0 — 2026-11-08
 

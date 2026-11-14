@@ -1,5 +1,73 @@
 # Memory Lane handoff
 
+## Field rollout confirmed; v0.5.3 release — 2026-11-14
+
+User reports the field unit "updated and deployed with little drama" after
+the fresh v0.5.2 card was supplied for the v0.5.3 update test. Record this as
+user-confirmed field setup/update success, not an independent hardware audit.
+Production API/site, signed R2 publication and field deployment are complete.
+Individual playback-mode behavior on physical hardware remains to be checked;
+power-interruption and broader resilience testing remain outstanding.
+Release notes and rollout guide now reflect the deployed release. Historical
+pending/uncommitted notes below describe earlier stages and are superseded.
+
+## Fresh field-replacement update-test card — 2026-11-14
+
+User requested a new SD card, then explicitly chose fresh setup/pairing and
+factory applications v0.5.2 so the v0.5.3 update can be exercised again.
+Prepared target/astrohud-images/memory-lane-v0.5.2-update-test-20261114.img
+(1,291,845,632 bytes), using the clean cached Debian OS, original R2 v0.5.2
+viewer/provisioner (known hashes verified), updater v0.1.1 and the same nightly
+channel/public verification key as the local Pi. It contains no device/Wi-Fi/
+photo state or private signing key. Factory updater status initially identifies
+the original application release as baseline.
+
+Image tooling now supports explicit ASTROHUD_UPDATER_CONFIG and
+ASTROHUD_APP_BIN_DIR. A first-boot unit initializes the managed baseline after
+update recovery and before apps/control services; without a config it skips.
+Image sealing, checksum, unit ordering and all 13 image-tooling tests passed.
+The initial v0.5.3 image was superseded by the user's v0.5.2 choice; do not use
+it for this test. Selected fresh artifact hash inputs are recorded in its
+/etc/astrohud/image-release file. Source changes are local and uncommitted.
+
+Confirmed removable target /dev/sde, 15,931,539,456 bytes (14.8 GiB), USB reader
+serial 201601060924. Unmounted BOOT through udisksctl. Flash completed in exec
+session 37133: 1,291,845,632 bytes written, full `cmp` readback passed, exit 0.
+Host sudo requires interactive authentication; approved Docker device access
+was used for the write. `udisksctl power-off -b /dev/sde` then succeeded; the
+card is safe to remove. No field device was accessed or migrated. Next:
+fresh phone setup/pairing and owner-page v0.5.3 update test.
+
+## Production API/site deployed — 2026-11-14
+
+User explicitly approved merge and deployment through feature commit f07423a.
+Merged as 8551718 on master and pushed origin/master. Production health now
+reports v0.5.3, schema 14 and playback_modes_version 1. Live owner.html,
+display.js, device-updates.js and astrohud-theme.css match repository bytes.
+
+Only the local Pi updater agent was moved to https://app.astrohud.com. Its
+temporary API override is backed up under
+/var/backups/memory-lane/updater-20261114.cm7l2b/90-integration-test.conf.
+Viewer/provisioner/agent are active with zero automatic restarts, protected
+identity/pairing/Wi-Fi fingerprints match, and recent agent logs show no
+connection errors. The temporary updater-test Cloudflare tunnel was stopped.
+Actual current application release is 1-0.5.2, previous baseline; the user
+apparently installed again after the earlier recorded rollback. No install
+was initiated during this deployment and the field Pi was not accessed.
+
+User uploaded the v0.5.3 R2 bundle and promoted the channel. All four public
+objects (two binaries and both manifest copies) match the prepared artifacts
+byte-for-byte. The local Pi's `memory-lane check` verified signed metadata and
+reports v0.5.3 available; all three services remain active. No installation
+was initiated: current remains 1-0.5.2, previous baseline.
+
+Remaining: user installs v0.5.3 through the normal owner Settings page, then
+verify installation health and physical playback-mode switching on the local
+Pi. The other field Pi remains under the user's manual update control.
+Earlier entries below are historical; their production-pending statements
+are superseded by this entry. Release/burndown documentation can be finalized
+alongside the remaining R2 and physical rollout results.
+
 ## Playback styles implemented locally — 2026-11-14
 
 User finalized **The Scenic Route** (fair shuffled rounds; default), **Fresh

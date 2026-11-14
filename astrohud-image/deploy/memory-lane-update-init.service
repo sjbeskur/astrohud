@@ -1,0 +1,15 @@
+[Unit]
+Description=Adopt factory applications into the Memory Lane updater
+Requires=memory-lane-update-recover.service
+After=memory-lane-update-recover.service
+Before=astrohud-frame.service astrohud-provisioner.service memory-lane-update-agent.service memory-lane-update-check.service
+ConditionPathExists=/etc/memory-lane-updater.json
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/memory-lane init
+RemainAfterExit=yes
+UMask=0022
+
+[Install]
+WantedBy=multi-user.target

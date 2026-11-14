@@ -10,6 +10,7 @@ python3 "$boot_config" "$rootfs"
 # The source overlay is applied after YAML customize-hooks. Enable these only
 # now that the actual unit files are installed.
 systemctl --root="$rootfs" enable astrohud-regenerate-ssh-keys.service NetworkManager astrohud-frame astrohud-provisioner astrohud-wifi-guard.timer memory-lane-expand-root.service memory-lane-update-recover.service memory-lane-update-check.timer memory-lane-update-agent.service
+systemctl --root="$rootfs" enable memory-lane-update-init.service
 # NetworkManager also enables its wait-online unit; disable it afterwards.
 systemctl --root="$rootfs" disable systemd-networkd systemd-networkd-wait-online NetworkManager-wait-online.service 2>/dev/null || true
 # NetworkManager supplies normal DNS; the setup AP uses its separate dnsmasq.
@@ -42,6 +43,7 @@ for required in \
     usr/local/sbin/astrohud-provisioner \
     usr/local/bin/memory-lane \
     etc/systemd/system/memory-lane-update-recover.service \
+    etc/systemd/system/memory-lane-update-init.service \
     etc/systemd/system/memory-lane-update-check.timer \
     etc/systemd/system/astrohud-frame.service \
     etc/systemd/system/astrohud-provisioner.service \
@@ -82,4 +84,8 @@ fi
 
 chroot "$rootfs" /usr/local/bin/astrohud-frame --help >/dev/null
 chroot "$rootfs" /usr/local/bin/memory-lane --help >/dev/null
+if [ -e "$rootfs/opt/memory-lane/state.json" ]; then
+    echo 'AstroHUD image verification failed: updater runtime state exists' >&2
+    exit 1
+fi
 echo "Memory Lane image verification passed: application loads and appliance state is sealed"
