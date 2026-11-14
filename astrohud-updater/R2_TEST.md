@@ -151,3 +151,13 @@ passed. The patched updater was installed on the Pi with only its agent
 restarted. The R2 application bundle and its signing key are unchanged. Retry
 the owner install, then verify an explicit rollback, before declaring the
 normal update path validated.
+
+## Successful retry
+
+With updater v0.1.1 installed, the user retried **Install update** and reported
+success. The test API confirmed `succeeded`, installed `1-0.5.2`, previous
+`baseline`; native status reports Up to date. Both services are active/running
+with zero automatic restarts, the new release directory is mode 0755 and the
+viewer account can execute it. Binary hashes match the signed R2 bundle and
+protected identity/pairing/Wi-Fi fingerprints are unchanged. The explicit
+owner-requested rollback test is the remaining normal-path check.

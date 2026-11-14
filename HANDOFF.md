@@ -1,5 +1,17 @@
 # Memory Lane handoff
 
+## Successful owner-requested install — 2026-11-14
+
+The user retried Install update with updater v0.1.1 and reported it worked.
+The isolated API records `succeeded`, installed release `1-0.5.2`, previous
+release `baseline`. Both application services are active/running with zero
+automatic restarts. Release directory mode is 0755; the `astrohud` account
+can execute the viewer. Installed binary hashes match the signed known-good
+R2 payload; identity, pairing and Wi-Fi fingerprints are unchanged. The
+updater reports Up to date. Explicit owner-requested Restore previous version
+still needs to be tested before moving to slideshow changes. The earlier
+automatic failed-startup rollback was already confirmed visually by the user.
+
 ## First hardware install attempt and fix — 2026-11-14
 
 The user initiated `0.5.2` installation from the isolated test webpage. The
