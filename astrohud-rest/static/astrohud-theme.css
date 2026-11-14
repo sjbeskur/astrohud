@@ -496,4 +496,4 @@ body:has(> .site-footer) > .simulator-view { min-height: 0; }
 .owner-page .update-actions .update-install:hover { background: #f5c486; }
 
 .owner-home #open-device-settings { position: relative; overflow: visible; }
-.settings-update-badge { position: absolute; top: -2px; right: -2px; width: 10px; height: 10px; border: 2px solid var(--hud-raised); border-radius: 50%; background: var(--hud-amber); pointer-events: none; }
+.settings-update-badge { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 24px; height: 24px; border: 2px solid var(--hud-raised); border-radius: 50%; color: #fff; background: #dc2626; font-size: 12px; font-weight: 750; line-height: 1; pointer-events: none; }
