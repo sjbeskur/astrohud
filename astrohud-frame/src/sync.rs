@@ -55,7 +55,10 @@ impl ServerClient {
             }
         }
 
-        let response = self.authorized_get(url.as_str()).call()?;
+        let response = self
+            .authorized_get(url.as_str())
+            .set("X-Memory-Lane-Playback-Modes", "1")
+            .call()?;
         let mut bytes = Vec::new();
         response
             .into_reader()

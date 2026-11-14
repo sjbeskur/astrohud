@@ -16,6 +16,7 @@ pi-build:
 # Test the application and offline boot configuration.
 image-check:
     cargo test -p astrohud-frame -p astrohud-provisioner -p astrohud-rest -p astrohud-updater
+    node astrohud-frame/scripts/test-playback-order.mjs
     python3 astrohud-updater/scripts/test-release.py
     python3 astrohud-image/scripts/test-configure-boot.py
     python3 astrohud-image/scripts/test-image-artifact.py

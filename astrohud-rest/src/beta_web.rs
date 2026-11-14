@@ -721,6 +721,12 @@ async fn get_authenticated_device_manifest(
         .lock()
         .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
     let access = claimed_device_access(&database, &credential).map_err(beta_http_error)?;
+    let supported = request
+        .headers()
+        .get("X-Memory-Lane-Playback-Modes")
+        .is_some_and(|value| value == "1");
+    crate::playback::record_playback_capability(&database, &access.frame_id, supported)
+        .map_err(error::ErrorInternalServerError)?;
     let manifest =
         protected_manifest_for_household(&database, &access.household_id, &access.frame_id)
             .map_err(error::ErrorInternalServerError)?

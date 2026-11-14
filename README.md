@@ -471,6 +471,20 @@ the appliance. The local implementation includes a device agent, signed release
 verification, atomic viewer/provisioner switching, health checks and rollback.
 It has not been deployed. See [updater operations and process diagram](astrohud-updater/README.md).
 
-This change upgrades the server database to **schema 13** with a pre-upgrade
+This development release upgrades the server database to **schema 14** with a pre-upgrade
 snapshot. Deploy API and website together; v0.5.1 and older servers cannot open
-schema 13. Pi application rollback is independent of server/database rollback.
+schema 14. Pi application rollback is independent of server/database rollback.
+
+## Playback styles (prepared v0.5.3)
+
+Under **Photos → Slideshow settings → Playback style**, updated frames support
+**The Scenic Route** (fair shuffle, default), **Fresh Prints** (newest first),
+and **Serendipity** (independent random picks, repeats allowed). The selector
+enables only after viewer v0.3.0 reports support. Existing older viewers remain
+compatible with the new API. Scenic progress survives normal restarts and sync;
+pins and guest requests retain priority. The catalogue limit rises from 200 to
+2,000, while the local cache budget still limits downloaded photos.
+
+The matching API/site, schema-14 snapshot migration, R2 artifacts and manual
+field-Pi update are described in [the release guide](astrohud-frame/PLAYBACK_RELEASE.md).
+This code is prepared locally; production rollout has not yet happened.

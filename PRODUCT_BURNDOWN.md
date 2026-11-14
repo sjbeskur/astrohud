@@ -63,6 +63,7 @@ risk and effort than an `S` display refinement.
 | `D-109` | P1 | M | Ready | Run provisioner and viewer with the least privilege practical; audit writable paths, secrets, local ports, and service sandboxing. | `D-104`, `C-103` |
 | `D-110` | P1 | S | Ready | Add manifest byte sizes and checksums; detect corrupt cache entries and repair them without discarding healthy offline media. | Cloud manifest change |
 | `D-111` | P1 | M | Waiting | Report privacy-safe health telemetry: software version, last sync, storage pressure, temperature/throttling, reboot reason, and recovery events. Never include photos or credentials. | `C-109` |
+| `D-112` | P1 | M | Implemented locally; rollout pending | Named playback styles: The Scenic Route (default fair rounds), Fresh Prints (newest uploads first), Serendipity (independent random). Native/browser progress survives restart/sync, pins retain priority, old viewers remain compatible, and the catalogue expands to 2,000. Prepared API v0.5.3/schema 14 + viewer v0.3.0 as the first signed feature update. | Matching API/site rollout, R2 publication, local-Pi mode test; user will manually update field Pi |
 | `D-201` | P2 | M | Later | Add owner-configurable display schedule, sleep/wake behavior, rotation timing, and HDMI/CEC experiments. | Stable appliance baseline |
 | `D-202` | P2 | S | Later | Evaluate restrained transitions only after memory and week-long stability remain within budget. | `D-107` |
 

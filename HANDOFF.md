@@ -1,5 +1,39 @@
 # Memory Lane handoff
 
+## Playback styles implemented locally — 2026-11-14
+
+User finalized **The Scenic Route** (fair shuffled rounds; default), **Fresh
+Prints** (newest first), and **Serendipity** (independent random picks including
+repeats), and explicitly requested implementation as the first real feature
+update. User will manually update the one other field-test Pi after this dev
+cycle. Hosted service auto-deploys from `origin/master` (user confirmed).
+
+Local API/site target v0.5.3/schema 14; viewer is v0.3.0, updater v0.1.1 and
+provisioner v0.1.1. New owner selector is in Photos → Slideshow settings. Mode
+updates are household/frame scoped, validated, preserve pins/timing, and require
+an authenticated viewer capability header before the control enables. Older
+viewers keep their existing behavior. Rolling back a viewer clears capability
+on its next manifest request while retaining the preference. Manifest catalogue
+limit is 2,000 instead of 200; local cache limits still apply. Native/browser
+selection state survives restart, sync and membership changes; prefetch doesn't
+consume draws, and consumed owner commands aren't replayed after restart.
+
+All 106 Rust tests passed (six preview tests ignored), plus browser order
+properties and real browser selector/playback tests covering legacy gating,
+random repeats, pins, restart progress and mobile layouts. Clippy/format checks
+passed. Final ARM64 build and passive --version/--help loader checks on the
+local Pi passed; its running viewer remains unchanged. Standalone release
+files, SHA256SUMS, signed v0.5.3/sequence-2 R2 bundle and channel promotion copy
+are prepared under ignored `target/releases/v0.5.3/`. See
+`astrohud-frame/PLAYBACK_RELEASE.md` for the concrete rollout and field-Pi guide.
+Production is still v0.5.1/schema 12; no merge/push/deployment has occurred.
+The field Pi will be manually updated by the user; do not access it directly.
+A parallel-test fork/exec lock inheritance race was fixed by serializing the
+updater umask helper against the immediate lock-release assertion (test-only).
+Production API/site must deploy together before enabling real-device mode
+selection. Once ready, move only the local updater agent's temporary test API
+override to the live API; preserve its viewer/provisioner production config.
+
 ## Normal updater cycle validated — 2026-11-14
 
 The user successfully exercised both Install update and Restore previous version

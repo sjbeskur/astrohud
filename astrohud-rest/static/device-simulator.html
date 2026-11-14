@@ -47,7 +47,7 @@
     </section>
   </main>
 
-  <script src="/display.js?v=1723a0cf2626"></script>
+  <script src="/display.js?v=0ae02bc02039"></script>
   <script>
     const localHost = location.hostname.replace(/[\[\]]/g, '');
     if (localHost === 'localhost' || localHost === '127.0.0.1' || localHost === '::1' || localHost.endsWith('.local') || /^(10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.)/.test(localHost)) document.querySelector('#multi-frame-demo-link').hidden = false;
@@ -139,7 +139,7 @@
     async function syncFrame(device) {
       try {
         if (await processReset(device)) return;
-        const headers = {authorization: `Bearer ${device.credential}`};
+        const headers = {authorization: `Bearer ${device.credential}`, 'X-Memory-Lane-Playback-Modes': '1'};
         const response = await fetch('/api/beta/device/manifest', {headers});
         if (!response.ok) throw new Error(await response.text());
         const manifest = await response.json();

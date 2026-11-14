@@ -196,14 +196,14 @@ mod tests {
         assert_eq!(queued.next_photo_id.as_deref(), Some("alice"));
         assert!(queued.selected_photo_id.is_none());
         // A request from older history must still reach the bounded device playlist.
-        for index in 0..205 {
+        for index in 0..2005 {
             db.execute("INSERT INTO photos(id,channel_id,storage_key,mime_type) VALUES (?1,?2,?1,'image/png')",
                 params![format!("later-{index}"),owner.default_channel_id]).unwrap();
         }
         let manifest = protected_manifest_for_household(&db, &owner.household_id, "tv")
             .unwrap()
             .unwrap();
-        assert_eq!(manifest.photos.len(), 200);
+        assert_eq!(manifest.photos.len(), 2000);
         assert_eq!(manifest.photos[0].id, "alice");
         db.execute("DELETE FROM photos WHERE id LIKE 'later-%'", [])
             .unwrap();
@@ -352,7 +352,7 @@ mod migration_tests {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            13
+            14
         );
         assert!(
             crate::initialize_database_with_backup(&db, &path)

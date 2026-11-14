@@ -1,6 +1,7 @@
 pub mod cache;
 pub mod config;
 pub mod model;
+pub mod order;
 pub mod prepared;
 pub mod sync;
 

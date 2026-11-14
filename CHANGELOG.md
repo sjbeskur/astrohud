@@ -1,12 +1,16 @@
 # Release notes
 
-## Unreleased
+## Unreleased — prepared v0.5.3
+
+- Photos → Slideshow settings gains The Scenic Route (default fair shuffle), Fresh Prints (newest first), and Serendipity (independent random picks).
+- Pi viewer v0.3.0 and the browser simulator retain Scenic progress across restarts, preserve progress across syncs, and keep pins/guest requests in priority. Playback catalogues now include up to 2,000 eligible photos.
+- Additive schema 14 stores per-frame playback style and viewer capability. Older viewers keep working; new controls enable only when the viewer advertises support. API and website deploy together with a pre-migration snapshot.
 
 - Updater v0.1.1 explicitly sets public application directory permissions so the unprivileged viewer can start releases staged by the agent with `UMask=0077`; retries also repair verified release directories.
 
 - Headless appliance update controls in owner Settings, backed by scoped, durable requests and a device agent; checks are automatic and installs require owner confirmation.
 - Signed ARM64 application releases, atomic viewer/provisioner switching, process health checks, rollback and boot recovery; operator CLI and release packaging/bootstrap tooling.
-- Additive schema 13 stores per-frame update reports and requests, using the existing pre-upgrade snapshot. Deployment and physical hardware validation remain pending.
+- Additive schema 13 stores per-frame update reports and requests, using the existing pre-upgrade snapshot. Production deployment remains pending; install/rollback and failed-startup rollback passed on the reference Pi.
 
 ## v0.5.0 — 2026-11-08
 

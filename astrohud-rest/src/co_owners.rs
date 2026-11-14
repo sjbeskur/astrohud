@@ -360,7 +360,7 @@ mod promotion_tests {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            13
+            14
         );
         let context = owner_context(&db, &co.token).unwrap();
         assert_eq!(context.co_owners.len(), 1);

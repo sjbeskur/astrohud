@@ -188,12 +188,13 @@ updates must preserve backward compatibility with persistent device data so
 binary rollback remains safe. Updater upgrades, service-unit changes, OS
 upgrades, native app UI and proactive update notifications remain separate work.
 
-The website and API must deploy together. The additive server schema upgrade
-is **12 → 13**, protected by the existing pre-migration database snapshot.
-Production v0.5.1 and older binaries reject schema 13; application binaries on
-the Pi are separate from this server rollback boundary. Use a schema-13-aware
+The website and API must deploy together. The updater table was introduced in schema 13. The combined prepared playback
+release now upgrades production **12 → 14**, protected by the existing
+pre-migration database snapshot. See `../astrohud-frame/PLAYBACK_RELEASE.md`.
+Production v0.5.1 and older binaries reject schema 14; application binaries on
+the Pi are separate from this server rollback boundary. Use a schema-14-aware
 forward fix or restore a coordinated database/media backup; do not deploy an
-older server over a schema-13 database.
+older server over a schema-14 database.
 
 API contract (owners use the existing owner session; devices use their own
 Bearer credential):

@@ -153,6 +153,15 @@
       <div class="dialog-heading"><h2 id="display-title">Slideshow settings</h2><button class="quiet-button" type="button" data-close-dialog>Done</button></div>
       <p id="slideshow-destination" class="frame-context"><span>Frame</span><strong></strong></p>
       <form id="display-form" class="display-controls">
+        <div class="playback-style">
+          <label for="playback-mode">Playback style</label>
+          <select id="playback-mode" aria-describedby="playback-mode-help" disabled>
+            <option value="scenic_route">The Scenic Route</option>
+            <option value="fresh_prints">Fresh Prints</option>
+            <option value="serendipity">Serendipity</option>
+          </select>
+          <p id="playback-mode-help" class="field-help">Install the latest frame software to choose a playback style.</p>
+        </div>
         <p id="slide-duration-label">Change photo every</p>
         <div class="pin-presets slide-presets" role="group" aria-labelledby="slide-duration-label">
           <button class="quiet-button" type="button" data-slide-seconds="5" aria-label="Change photo every 5 seconds" aria-pressed="false">5 sec</button>
@@ -634,6 +643,12 @@
       document.querySelector('#playback-status').textContent += ' Change saved; the frame will apply it on its next sync.';
     }
     function renderSlideshowSettings(playback) {
+      const mode = document.querySelector('#playback-mode');
+      mode.value = playback.playback_mode || 'fresh_prints';
+      mode.disabled = slideshowBusy || playback.viewer_supports_playback_modes !== true;
+      document.querySelector('#playback-mode-help').textContent = mode.disabled
+        ? 'Install the latest frame software to choose a playback style.'
+        : ({scenic_route: 'A shuffled round of the photos on your frame. Every photo gets a turn before repeats; progress is remembered.', fresh_prints: 'Cycle from newest uploads to oldest.', serendipity: 'A fresh random pick each time. Repeats and surprises are part of the fun.'}[mode.value]);
       const seconds = playback.slide_seconds || 12;
       document.querySelector('#slide-seconds').value = String(seconds);
       document.querySelector('#slideshow-current').textContent = `Currently every ${seconds} seconds`;
@@ -648,19 +663,21 @@
     async function saveSlideshowSettings(payload) {
       if (slideshowBusy) return;
       slideshowBusy = true;
-      const controls = [...document.querySelectorAll('#display-form button, #display-form input, #blur-background, #guest-display-next')];
+      const controls = [...document.querySelectorAll('#display-form button, #display-form input, #display-form select, #blur-background, #guest-display-next')];
       controls.forEach(control => control.disabled = true);
       document.querySelector('#slideshow-feedback').textContent = 'Saving…';
       try {
         await changePlayback(payload);
         document.querySelector('#slideshow-feedback').textContent = 'Saved. Your frame will apply this on its next sync.';
       } catch (error) {
+        renderSlideshowSettings(galleryPlayback);
         document.querySelector('#blur-background').checked = galleryPlayback.blur_background !== false;
         document.querySelector('#guest-display-next').checked = galleryPlayback.guest_display_next === true;
         document.querySelector('#slideshow-feedback').textContent = 'Could not save. Please try again.';
       } finally {
         slideshowBusy = false;
         controls.forEach(control => control.disabled = false);
+        document.querySelector('#playback-mode').disabled = galleryPlayback.viewer_supports_playback_modes !== true;
         document.querySelector('#guest-display-next').disabled = !Object.hasOwn(galleryPlayback, 'guest_display_next');
       }
     }
@@ -676,6 +693,7 @@
       if (!event.target.reportValidity()) return;
       saveSlideshowSettings({slide_seconds:Number(document.querySelector('#slide-seconds').value)});
     });
+    document.querySelector('#playback-mode').addEventListener('change', event => saveSlideshowSettings({playback_mode:event.target.value}));
     document.querySelector('#blur-background').addEventListener('change', event => saveSlideshowSettings({blur_background:event.target.checked}));
     document.querySelector('#guest-display-next').addEventListener('change', event => saveSlideshowSettings({guest_display_next:event.target.checked}));
     document.querySelector('#resume-slideshow').addEventListener('click', async () => {

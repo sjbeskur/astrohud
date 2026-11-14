@@ -371,10 +371,11 @@ dependencies = [
 
 [[package]]
 name = "astrohud-frame"
-version = "0.2.2"
+version = "0.3.0"
 dependencies = [
  "font8x8",
  "image",
+ "rand 0.9.0",
  "sdl2",
  "serde",
  "serde_json",
@@ -398,7 +399,7 @@ dependencies = [
 
 [[package]]
 name = "astrohud-rest"
-version = "0.5.1"
+version = "0.5.3"
 dependencies = [
  "actix",
  "actix-files",

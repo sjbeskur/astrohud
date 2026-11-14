@@ -2,6 +2,7 @@ use astrohud_frame::BoxError;
 use astrohud_frame::cache::CacheStore;
 use astrohud_frame::config::{Config, usage};
 use astrohud_frame::model::Playlist;
+use astrohud_frame::order::PlaybackOrder;
 use astrohud_frame::prepared::{Prefetcher, PreparedImage};
 use astrohud_frame::sync::{ServerClient, sync_once_with_updates};
 use font8x8::{BASIC_FONTS, UnicodeFonts};
@@ -34,6 +35,10 @@ const HUD_ACCENTS: [Color; 4] = [HUD_AMBER, HUD_SALMON, HUD_LAVENDER, HUD_BLUE];
 fn main() -> Result<(), BoxError> {
     if env::args().any(|argument| matches!(argument.as_str(), "--help" | "-h")) {
         println!("{}", usage());
+        return Ok(());
+    }
+    if env::args().any(|argument| argument == "--version") {
+        println!("astrohud-frame {}", env!("CARGO_PKG_VERSION"));
         return Ok(());
     }
     let config = Config::from_env_and_args()?;
@@ -123,11 +128,21 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
     let started = Instant::now();
     let mut playlist =
         CacheStore::open(&config.cache_dir, config.cache_limit_bytes)?.cached_playlist()?;
+    let order_path = config.cache_dir.join("playback-order.json");
+    let mut order = PlaybackOrder::load(&order_path).unwrap_or_else(|error| {
+        eprintln!("could not restore playback progress: {error}");
+        PlaybackOrder::default()
+    });
+    order.reconcile(
+        &playlist.frame_id,
+        playlist.playback.playback_mode,
+        playlist.photos.iter().map(|p| p.id.clone()).collect(),
+    );
     let updates = spawn_sync(config.clone());
 
     let mut events = sdl.event_pump().map_err(other)?;
     let mut current = None;
-    let mut seen_revision = 0;
+    let mut seen_revision = order.owner_revision();
     let guest_revision_path = config.cache_dir.join("guest-display-revision");
     let mut seen_guest_revision = fs::read_to_string(&guest_revision_path)
         .ok()
@@ -167,6 +182,12 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                             + Duration::from_secs(update.playback.slide_seconds.clamp(5, 3600));
                     }
                     playlist = update;
+                    order.reconcile(
+                        &playlist.frame_id,
+                        playlist.playback.playback_mode,
+                        playlist.photos.iter().map(|p| p.id.clone()).collect(),
+                    );
+                    seen_revision = order.owner_revision();
                     current =
                         current_id.and_then(|id| playlist.photos.iter().position(|p| p.id == id));
                     if current.is_none() {
@@ -229,6 +250,10 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
             };
             if changed && (selected.is_some() || playlist.playback.selected_photo_id.is_none()) {
                 seen_revision = playlist.playback.selection_revision;
+                order.consume_owner_revision(seen_revision);
+                if let Err(error) = order.save(&order_path) {
+                    eprintln!("could not save owner playback receipt: {error}");
+                }
                 next_slide = now;
             }
             let forced = pinned.or(selected);
@@ -261,13 +286,21 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                             if redraw {
                                 current.unwrap_or(0)
                             } else {
-                                current
-                                    .map(|i| (i + 1) % playlist.photos.len())
+                                order
+                                    .peek(&mut rand::rng())
+                                    .and_then(|id| playlist.photos.iter().position(|p| p.id == id))
                                     .unwrap_or(0)
                             }
                         });
                     if Some(target) != current || redraw {
                         current = show_photo(&mut canvas, &playlist, target, &mut prefetch);
+                    }
+                    if let Some(index) = current {
+                        order.shown(&playlist.photos[index].id);
+                        order.consume_owner_revision(seen_revision);
+                        if let Err(error) = order.save(&order_path) {
+                            eprintln!("could not save playback progress: {error}");
+                        }
                     }
                     if forced.is_none()
                         && !redraw
@@ -293,12 +326,15 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                         Duration::from_secs(seconds.clamp(5, 3600))
                     };
             }
-            if let Some(i) = current
-                && playlist.photos.len() > 1
-                && pinned.is_none()
-            {
-                let next = requested.unwrap_or((i + 1) % playlist.photos.len());
-                prefetch.request(&playlist.photos[next].path);
+            if current.is_some() && playlist.photos.len() > 1 && pinned.is_none() {
+                let next = requested.or_else(|| {
+                    order
+                        .peek(&mut rand::rng())
+                        .and_then(|id| playlist.photos.iter().position(|p| p.id == id))
+                });
+                if let Some(next) = next {
+                    prefetch.request(&playlist.photos[next].path);
+                }
             }
         }
 

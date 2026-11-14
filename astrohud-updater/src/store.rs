@@ -241,8 +241,13 @@ impl Store {
 #[cfg(test)]
 mod tests {
     use super::*;
+    // A fork briefly inherits unrelated open flock descriptions until exec
+    // closes CLOEXEC descriptors. Do not fork the umask helper during the
+    // test that asserts immediate lock release after dropping its last file.
+    static PROCESS_SPAWN_GUARD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     #[test]
     fn releases_are_traversable_with_the_agent_private_umask() {
+        let _guard = PROCESS_SPAWN_GUARD.lock().unwrap();
         const CHILD: &str = "MEMORY_LANE_TEST_PRIVATE_UMASK";
         if std::env::var_os(CHILD).is_none() {
             // umask is process-wide: use a dedicated child rather than racing
@@ -355,6 +360,7 @@ mod tests {
     }
     #[test]
     fn exclusive_lock_survives_abandoned_lock_file() {
+        let _guard = PROCESS_SPAWN_GUARD.lock().unwrap();
         let tmp = tempfile::tempdir().unwrap();
         let store = Store {
             root: tmp.path().into(),

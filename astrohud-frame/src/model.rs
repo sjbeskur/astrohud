@@ -3,6 +3,8 @@ use std::path::PathBuf;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq, Serialize)]
 pub struct Photo {
+    #[serde(default)]
+    pub upload_order: Option<i64>,
     pub id: String,
     pub channel_id: String,
     pub url: String,
@@ -30,6 +32,7 @@ pub struct FrameManifest {
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct Playback {
+    pub playback_mode: crate::order::PlaybackMode,
     pub next_photo_id: Option<String>,
     pub next_revision: u64,
     pub next_expires_at: Option<u64>,
@@ -43,6 +46,7 @@ pub struct Playback {
 impl Default for Playback {
     fn default() -> Self {
         Self {
+            playback_mode: Default::default(),
             next_photo_id: None,
             next_revision: 0,
             next_expires_at: None,
@@ -74,6 +78,8 @@ impl Playback {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct CachedPhoto {
+    pub upload_order: Option<i64>,
+    pub created_at: String,
     pub id: String,
     pub path: PathBuf,
     pub location_label: Option<String>,
@@ -81,6 +87,7 @@ pub struct CachedPhoto {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Playlist {
+    pub frame_id: String,
     pub place_name: String,
     pub photos: Vec<CachedPhoto>,
     pub playback: Playback,
@@ -107,6 +114,10 @@ mod tests {
         let old: FrameManifest =
             serde_json::from_str(r#"{"frame_id":"tv","place_name":"TV","photos":[]}"#).unwrap();
         assert_eq!(old.playback.slide_seconds, 0);
+        assert_eq!(
+            old.playback.playback_mode,
+            crate::order::PlaybackMode::FreshPrints
+        );
         assert!(old.playback.blur_background);
         let mut playback = Playback {
             pinned_photo_id: Some("photo".into()),
