@@ -57,7 +57,11 @@ pub(crate) fn expire_command(db: &Connection, frame: &str) -> rusqlite::Result<(
         WHERE frame_id=?1 AND command_state IN ('pending','running') AND expires_unix <= ?2", params![frame, now()])?;
     Ok(())
 }
-fn owner_frame(db: &Connection, owner: &str, frame: &str) -> std::result::Result<(), BetaError> {
+pub(crate) fn owner_frame(
+    db: &Connection,
+    owner: &str,
+    frame: &str,
+) -> std::result::Result<(), BetaError> {
     let household = owner_household_id(db, owner)?;
     let exists: bool = db.query_row(
         "SELECT EXISTS(SELECT 1 FROM frames WHERE id=?1 AND household_id=?2)",
@@ -511,7 +515,7 @@ mod tests {
         assert_eq!(
             db.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            14
+            crate::api::SCHEMA_VERSION
         );
         assert!(db.prepare("SELECT * FROM frame_updates").is_ok());
         assert!(

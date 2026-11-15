@@ -1,5 +1,15 @@
 # Release notes
 
+## v0.5.4 — 2026-11-14
+
+- Slideshow controls now live directly in the main Settings page, followed by Storage and Software updates. Photos retains Show now, Pin and Resume slideshow; the separate slideshow gear/dialog is removed.
+- Owner navigation stays visible while scrolling, with labeled Home, Photos, Send, Invite and Settings links, the current section highlighted, and software-update badges available from every section.
+- Slideshow playback styles use three visible selection cards with descriptions, an orange selected state, keyboard support, and immediate saving instead of a dropdown.
+- Owner Settings gains a per-device Storage card with available disk space, downloaded photo count, photo storage usage/allowance, and an approximate number of additional photos that fit.
+- Estimates use actual stored image sizes with a 25% margin and respect both the configured photo allowance and a 512 MiB device reserve. Empty collections wait for a sample; old readings retain their timestamp and do not produce current home-page warnings.
+- Viewer v0.4.0 reports storage on startup and every five minutes. Photo downloads preserve the reserve, remove incomplete files on failure, and retry missing photos when space returns while existing photos keep playing.
+- Additive schema 15 stores only the latest authenticated storage snapshot per frame. API/site deployment and physical Pi validation are pending; existing updater agents need no upgrade.
+
 ## v0.5.3 — 2026-11-14
 
 - Photos → Slideshow settings gains The Scenic Route (default fair shuffle), Fresh Prints (newest first), and Serendipity (independent random picks).

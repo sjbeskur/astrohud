@@ -5,11 +5,19 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=60d6235c3d07">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=b24d14e66b30">
 </head>
 <body class="owner-page">
+  <header id="owner-navigation" class="owner-topbar" hidden>
+    <nav class="owner-nav" aria-label="Main navigation">
+      <a id="owner-home-link" class="owner-nav-link" href="#home" data-view="connected-panel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>Home</span></a>
+      <a class="owner-nav-link" href="#photos-panel" data-view="photos-panel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8" cy="8" r="1"/><path d="m21 15-5-5L5 21"/></svg><span>Photos</span></a>
+      <a class="owner-nav-link" href="#owner-send-panel" data-view="owner-send-panel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg><span>Send</span></a>
+      <a class="owner-nav-link" href="#invite-panel" data-view="invite-panel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M19 7v6M16 10h6"/></svg><span>Invite</span></a>
+      <a id="open-device-settings" class="owner-nav-link" href="#device-settings" data-view="device-settings" aria-label="Settings" title="Settings"><span class="owner-nav-icon"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9.2 3-.6 2.2-1.5.9-2.2-.5-2.2 3.8 1.6 1.7v1.8l-1.6 1.7 2.2 3.8 2.2-.5 1.5.9.6 2.2h4.4l.6-2.2 1.5-.9 2.2.5 2.2-3.8-1.6-1.7v-1.8l1.6-1.7-2.2-3.8-2.2.5-1.5-.9-.6-2.2z"/><circle cx="11.4" cy="12" r="3"/></svg><span id="home-update-badge" class="settings-update-badge" hidden aria-hidden="true">1</span></span><span>Settings</span></a>
+    </nav>
+  </header>
   <main class="hud-shell owner-shell">
-    <a id="owner-home-link" class="home-button" href="#home" hidden><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>Home</span></a>
     <div id="owner-frame-context" class="owner-frame-context" hidden>
       <div class="frame-picker"><label id="active-frame-label" for="active-frame">Frame</label><select id="active-frame" aria-label="Selected frame"></select><strong id="active-frame-name" class="context-name" hidden></strong></div>
       <button id="add-photos" class="signal-button" type="button" hidden>+ Add photos</button>
@@ -47,7 +55,8 @@
       </section>
 
       <section id="connected-panel" class="instrument-panel owner-home" hidden aria-labelledby="connected-title">
-        <header class="page-heading"><h1 id="connected-title">Memory Lane</h1><button id="open-device-settings" class="photo-icon-button" type="button" aria-label="Settings" title="Settings"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9.2 3-.6 2.2-1.5.9-2.2-.5-2.2 3.8 1.6 1.7v1.8l-1.6 1.7 2.2 3.8 2.2-.5 1.5.9.6 2.2h4.4l.6-2.2 1.5-.9 2.2.5 2.2-3.8-1.6-1.7v-1.8l1.6-1.7-2.2-3.8-2.2.5-1.5-.9-.6-2.2z"/><circle cx="11.4" cy="12" r="3"/></svg><span id="home-update-badge" class="settings-update-badge" hidden aria-hidden="true">1</span></button></header>
+        <header class="page-heading"><h1 id="connected-title">Memory Lane</h1></header>
+        <a id="home-storage-notice" class="storage-notice" href="#device-settings" hidden>Device storage low</a>
         <nav id="owner-actions" class="owner-actions" aria-label="Main actions">
           <a href="#invite-panel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2M19 7v6M16 10h6"/></svg><strong>Invite</strong><span>Let friends and family send photos</span></a>
           <a href="#owner-send-panel"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m22 2-7 20-4-9-9-4zM22 2 11 13"/></svg><strong>Send photos</strong><span>Choose photos from your phone</span></a>
@@ -111,57 +120,25 @@
 
       <section id="device-settings" class="instrument-panel" hidden aria-labelledby="settings-title">
         <header class="page-heading"><h1 id="settings-title">Settings</h1></header>
-          <h2>Your devices</h2>
-          <p class="instrument-copy">Factory reset clears a device's photos, Wi-Fi, and pairing. Other devices and your saved photos stay available.</p>
-          <div id="device-controls" class="connection-summary"></div>
-          <div id="software-update" class="owner-recovery" hidden></div>
-          <div id="reset-history" class="connection-summary" role="status"></div>
-          <div class="owner-recovery">
-            <h2>Owner access</h2>
-            <p class="instrument-copy">Save a private recovery link in your password manager. It lets you return after changing phones or clearing browser data.</p>
-            <p id="recovery-state" class="instrument-copy"></p>
-            <button id="create-recovery" class="quiet-button" type="button">Create recovery link</button>
-            <div id="recovery-reveal" class="link-reveal" hidden>
-              <strong>Save this private recovery link</strong>
-              <p>This is the only time the complete link is shown. Save it before leaving this page; you can replace it later if needed.</p>
-              <label for="recovery-url">Private owner recovery link</label>
-              <div class="field-row">
-                <input id="recovery-url" readonly autocomplete="off" spellcheck="false">
-                <button id="copy-recovery" class="signal-button secondary" type="button">Copy link</button>
-                <button id="share-recovery" class="signal-button secondary" type="button" hidden>Save or share</button>
-              </div>
-              <p id="recovery-feedback" role="status"></p>
-            </div>
-          </div>
-      </section>
-
-      <section id="photos-panel" class="instrument-panel" hidden aria-labelledby="photos-title">
-        <div class="owner-photo-heading page-heading">
-          <a id="gallery-home-link" class="home-button" href="#home"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8"/></svg><span>Home</span></a>
-          <h1 id="photos-title">Photos</h1>
-          <button id="open-slideshow" class="photo-icon-button" type="button" aria-label="Slideshow settings" title="Slideshow settings"><svg viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="m9.2 3-.6 2.2-1.5.9-2.2-.5-2.2 3.8 1.6 1.7v1.8l-1.6 1.7 2.2 3.8 2.2-.5 1.5.9.6 2.2h4.4l.6-2.2 1.5-.9 2.2.5 2.2-3.8-1.6-1.7v-1.8l1.6-1.7-2.2-3.8-2.2.5-1.5-.9-.6-2.2z"/><circle cx="11.4" cy="12" r="3"/></svg></button>
-        </div>
-        <div class="gallery-playback"><p id="playback-status" role="status"></p><button id="resume-slideshow" class="quiet-button" type="button" hidden>Resume slideshow</button></div>
-        <p id="photo-status" role="status"></p>
-        <div id="sender-filters" class="sender-filters" role="group" aria-label="Filter photos by sender"></div>
-        <div id="frame-photos" class="owner-photo-groups"></div>
-        <button id="more-owner-photos" class="quiet-button" type="button" hidden>Load more photos</button>
-      </section>
-    </div>
-
-    <dialog id="slideshow-dialog" class="photo-dialog" aria-labelledby="display-title">
-      <div class="dialog-heading"><h2 id="display-title">Slideshow settings</h2><button class="quiet-button" type="button" data-close-dialog>Done</button></div>
-      <p id="slideshow-destination" class="frame-context"><span>Frame</span><strong></strong></p>
+    <section id="slideshow-settings" class="owner-recovery settings-group" aria-labelledby="display-title" hidden>
+      <h2 id="display-title">Slideshow</h2>
       <form id="display-form" class="display-controls">
-        <div class="playback-style">
-          <label for="playback-mode">Playback style</label>
-          <select id="playback-mode" aria-describedby="playback-mode-help" disabled>
-            <option value="scenic_route">The Scenic Route</option>
-            <option value="fresh_prints">Fresh Prints</option>
-            <option value="serendipity">Serendipity</option>
-          </select>
+        <fieldset id="playback-mode" class="playback-style" aria-describedby="playback-mode-help" disabled>
+          <legend>Playback style</legend>
+          <label class="playback-choice">
+            <input type="radio" name="playback-mode" value="scenic_route" aria-labelledby="scenic-route-title" aria-describedby="scenic-route-description">
+            <span class="playback-choice-copy"><strong id="scenic-route-title">The Scenic Route <span class="playback-selected" aria-hidden="true">Selected</span></strong><small id="scenic-route-description">A shuffled journey through your photos. Every photo gets a turn before repeats.</small></span>
+          </label>
+          <label class="playback-choice">
+            <input type="radio" name="playback-mode" value="fresh_prints" aria-labelledby="fresh-prints-title" aria-describedby="fresh-prints-description">
+            <span class="playback-choice-copy"><strong id="fresh-prints-title">Fresh Prints <span class="playback-selected" aria-hidden="true">Selected</span></strong><small id="fresh-prints-description">Start with your newest photos, then work back.</small></span>
+          </label>
+          <label class="playback-choice">
+            <input type="radio" name="playback-mode" value="serendipity" aria-labelledby="serendipity-title" aria-describedby="serendipity-description">
+            <span class="playback-choice-copy"><strong id="serendipity-title">Serendipity <span class="playback-selected" aria-hidden="true">Selected</span></strong><small id="serendipity-description">A random pick every time. Repeats welcome.</small></span>
+          </label>
           <p id="playback-mode-help" class="field-help">Install the latest frame software to choose a playback style.</p>
-        </div>
+        </fieldset>
         <p id="slide-duration-label">Change photo every</p>
         <div class="pin-presets slide-presets" role="group" aria-labelledby="slide-duration-label">
           <button class="quiet-button" type="button" data-slide-seconds="5" aria-label="Change photo every 5 seconds" aria-pressed="false">5 sec</button>
@@ -179,7 +156,48 @@
       <label class="privacy-option slideshow-background" for="blur-background"><input id="blur-background" type="checkbox" checked><span><strong>Soft photo background</strong><small>Fill empty space with a centered, softly blurred copy.</small></span></label>
       <label class="privacy-option" for="guest-display-next"><input id="guest-display-next" type="checkbox"><span><strong>Allow guest “Display next” requests</strong><small>Off by default. Guests can request their own photos, once per frame every 10 minutes. Owner pins take priority. Requires the updated frame viewer.</small></span></label>
       <p id="slideshow-feedback" role="status"></p>
-    </dialog>
+      <button id="retry-slideshow" class="quiet-button" type="button" hidden>Try again</button>
+    </section>
+          <div id="device-storage" class="owner-recovery settings-group" hidden></div>
+          <div id="software-update" class="owner-recovery settings-group" hidden></div>
+          <section id="device-management" class="owner-recovery settings-group" aria-labelledby="device-management-title">
+          <h2 id="device-management-title">Your devices</h2>
+          <p class="instrument-copy">Factory reset clears a device's photos, Wi-Fi, and pairing. Other devices and your saved photos stay available.</p>
+          <div id="device-controls" class="connection-summary"></div>
+          <div id="reset-history" class="connection-summary" role="status"></div>
+          </section>
+          <section id="owner-access-settings" class="owner-recovery settings-group" aria-labelledby="owner-access-settings-title">
+            <h2 id="owner-access-settings-title">Owner access</h2>
+            <p class="instrument-copy">Save a private recovery link in your password manager. It lets you return after changing phones or clearing browser data.</p>
+            <p id="recovery-state" class="instrument-copy"></p>
+            <button id="create-recovery" class="quiet-button" type="button">Create recovery link</button>
+            <div id="recovery-reveal" class="link-reveal" hidden>
+              <strong>Save this private recovery link</strong>
+              <p>This is the only time the complete link is shown. Save it before leaving this page; you can replace it later if needed.</p>
+              <label for="recovery-url">Private owner recovery link</label>
+              <div class="field-row">
+                <input id="recovery-url" readonly autocomplete="off" spellcheck="false">
+                <button id="copy-recovery" class="signal-button secondary" type="button">Copy link</button>
+                <button id="share-recovery" class="signal-button secondary" type="button" hidden>Save or share</button>
+              </div>
+              <p id="recovery-feedback" role="status"></p>
+            </div>
+          </section>
+      </section>
+
+      <section id="photos-panel" class="instrument-panel" hidden aria-labelledby="photos-title">
+        <div class="owner-photo-heading page-heading">
+          <h1 id="photos-title">Photos</h1>
+        </div>
+        <div class="gallery-playback"><p id="playback-status" role="status"></p><button id="resume-slideshow" class="quiet-button" type="button" hidden>Resume slideshow</button></div>
+        <p id="photo-status" role="status"></p>
+        <div id="sender-filters" class="sender-filters" role="group" aria-label="Filter photos by sender"></div>
+        <div id="frame-photos" class="owner-photo-groups"></div>
+        <button id="more-owner-photos" class="quiet-button" type="button" hidden>Load more photos</button>
+      </section>
+    </div>
+
+
 
     <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-detail-title">
       <div class="dialog-heading"><h2 id="photo-detail-title">Photo</h2><button class="quiet-button" type="button" data-close-dialog>Close</button></div>
@@ -215,6 +233,7 @@
 
   <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
   <script src="/device-updates.js?v=25cd5d26b8ee"></script>
+  <script src="/device-storage.js?v=6ea289b1ad4f"></script>
   <script>
     const photosPanel = document.querySelector('#photos-panel');
     const photoFrame = document.querySelector('#active-frame');
@@ -226,6 +245,7 @@
     let photoRequest = 0;
     let resetTimer;
     const softwareUpdates = new MemoryLaneUpdates(document.querySelector('#software-update'));
+    const deviceStorage = new MemoryLaneStorage(document.querySelector('#device-storage'), document.querySelector('#home-storage-notice'));
     let recoveryExists = false;
     let uploadQueue = [];
     let uploading = false;
@@ -244,7 +264,10 @@
     let galleryExpanded = false;
     let galleryVersion = '';
     const photoDialog = document.querySelector('#photo-dialog');
-    const slideshowDialog = document.querySelector('#slideshow-dialog');
+    let slideshowPlayback = {};
+    let slideshowFrameId = '';
+    let slideshowRequest = 0;
+    let slideshowLoading = false;
     const invitations = document.querySelector('#invitations');
     const invitationCount = document.querySelector('#invitation-count');
     const newInvitation = document.querySelector('#new-invitation');
@@ -285,9 +308,11 @@
       }
       for (const id of sections) document.getElementById(id).hidden = id !== view;
       document.querySelector('#manual-claim').hidden = !ownerContext;
-      const homeLink = document.querySelector('#owner-home-link');
-      homeLink.hidden = ['connected-panel', 'owner-access-help', 'photos-panel'].includes(view);
-      if (!homeLink.hidden) document.getElementById(view).querySelector('.page-heading').prepend(homeLink);
+      document.querySelector('#owner-navigation').hidden = !ownerContext;
+      for (const link of document.querySelectorAll('.owner-nav-link')) {
+        if (link.dataset.view === (view === 'claim-panel' ? 'connected-panel' : view)) link.setAttribute('aria-current', 'page');
+        else link.removeAttribute('aria-current');
+      }
       const frameContext = document.querySelector('#owner-frame-context');
       frameContext.hidden = !ownerContext?.frames.length || !['connected-panel', 'owner-send-panel', 'photos-panel', 'device-settings'].includes(view);
       if (!frameContext.hidden) document.getElementById(view).querySelector('.page-heading').after(frameContext);
@@ -301,6 +326,7 @@
         window.scrollTo(0, 0);
       }
       if (view === 'photos-panel' && photoFrame.value) loadPhotos();
+      if (view === 'device-settings' && photoFrame.value) loadSlideshowSettings();
     }
 
     window.addEventListener('hashchange', () => {
@@ -394,8 +420,11 @@
       render(await response.json());
     }
 
-    document.querySelector('#open-device-settings').addEventListener('click', () => {
-      location.hash = 'device-settings';
+    for (const link of document.querySelectorAll('.owner-nav-link')) link.addEventListener('click', event => {
+      if (location.hash === link.hash) {
+        event.preventDefault();
+        showOwnerView(true);
+      }
     });
 
     document.querySelector('#save-recovery-shortcut').addEventListener('click', () => {
@@ -460,6 +489,18 @@
       const resets = context.resets || [];
       const updateFrame = context.frames.find(frame => frame.frame_id === selectedFrameId);
       softwareUpdates.setFrame(updateFrame, resets.some(reset => reset.frame_id === selectedFrameId && reset.state !== 'complete'));
+      deviceStorage.setFrame(updateFrame);
+      document.querySelector('#slideshow-settings').hidden = !updateFrame;
+      if (slideshowFrameId !== (updateFrame?.frame_id || '')) {
+        slideshowFrameId = updateFrame?.frame_id || '';
+        ++slideshowRequest;
+        slideshowBusy = false;
+        slideshowLoading = false;
+        slideshowPlayback = {};
+        document.querySelector('#slideshow-feedback').textContent = '';
+        document.querySelector('#retry-slideshow').hidden = true;
+        renderSlideshowSettings(slideshowPlayback);
+      }
       recoveryExists = Boolean(context.recovery);
       document.querySelector('#create-recovery').textContent = recoveryExists ? 'Replace recovery link' : 'Create recovery link';
       document.querySelector('#recovery-reminder').hidden = recoveryExists;
@@ -642,45 +683,94 @@
       if (photoFrame.value === frameId) await loadPhotos();
       document.querySelector('#playback-status').textContent += ' Change saved; the frame will apply it on its next sync.';
     }
+    function slideshowControls() {
+      return [...document.querySelectorAll('#display-form button, #display-form input, #blur-background, #guest-display-next')];
+    }
     function renderSlideshowSettings(playback) {
+      const ready = Object.hasOwn(playback, 'slide_seconds');
+      const disabled = slideshowBusy || slideshowLoading || !ready;
+      slideshowControls().forEach(control => control.disabled = disabled);
       const mode = document.querySelector('#playback-mode');
-      mode.value = playback.playback_mode || 'fresh_prints';
-      mode.disabled = slideshowBusy || playback.viewer_supports_playback_modes !== true;
-      document.querySelector('#playback-mode-help').textContent = mode.disabled
+      for (const option of mode.querySelectorAll('input')) option.checked = ready && option.value === (playback.playback_mode || 'fresh_prints');
+      mode.disabled = disabled || playback.viewer_supports_playback_modes !== true;
+      document.querySelector('#playback-mode-help').textContent = !ready
+        ? 'Connect to load this frame’s slideshow settings.'
+        : playback.viewer_supports_playback_modes !== true
         ? 'Install the latest frame software to choose a playback style.'
-        : ({scenic_route: 'A shuffled round of the photos on your frame. Every photo gets a turn before repeats; progress is remembered.', fresh_prints: 'Cycle from newest uploads to oldest.', serendipity: 'A fresh random pick each time. Repeats and surprises are part of the fun.'}[mode.value]);
+        : 'Tap a style to save it for this frame.';
       const seconds = playback.slide_seconds || 12;
       document.querySelector('#slide-seconds').value = String(seconds);
-      document.querySelector('#slideshow-current').textContent = `Currently every ${seconds} seconds`;
-      for (const button of document.querySelectorAll('[data-slide-seconds]')) button.setAttribute('aria-pressed', String(Number(button.dataset.slideSeconds) === seconds));
-      document.querySelector('#other-slide-duration').setAttribute('aria-pressed', String(![5, 10, 20].includes(seconds)));
+      document.querySelector('#slideshow-current').textContent = ready ? `Currently every ${seconds} seconds` : '';
+      for (const button of document.querySelectorAll('[data-slide-seconds]')) button.setAttribute('aria-pressed', String(ready && Number(button.dataset.slideSeconds) === seconds));
+      document.querySelector('#other-slide-duration').setAttribute('aria-pressed', String(ready && ![5, 10, 20].includes(seconds)));
       document.querySelector('#other-slide-duration').setAttribute('aria-expanded', 'false');
       document.querySelector('#custom-slide-duration').hidden = true;
       document.querySelector('#blur-background').checked = playback.blur_background !== false;
       document.querySelector('#guest-display-next').checked = playback.guest_display_next === true;
-      document.querySelector('#guest-display-next').disabled = !Object.hasOwn(playback, 'guest_display_next');
+      document.querySelector('#guest-display-next').disabled = disabled || !Object.hasOwn(playback, 'guest_display_next');
     }
-    async function saveSlideshowSettings(payload) {
-      if (slideshowBusy) return;
-      slideshowBusy = true;
-      const controls = [...document.querySelectorAll('#display-form button, #display-form input, #display-form select, #blur-background, #guest-display-next')];
-      controls.forEach(control => control.disabled = true);
-      document.querySelector('#slideshow-feedback').textContent = 'Saving…';
+    async function loadSlideshowSettings({background = false} = {}) {
+      if (!photoFrame.value || slideshowBusy || slideshowLoading) return;
+      const frameId = photoFrame.value;
+      const request = ++slideshowRequest;
+      slideshowLoading = true;
+      if (!background) {
+        renderSlideshowSettings(slideshowPlayback);
+        document.querySelector('#retry-slideshow').hidden = true;
+        document.querySelector('#slideshow-feedback').textContent = 'Loading slideshow settings…';
+      }
       try {
-        await changePlayback(payload);
-        document.querySelector('#slideshow-feedback').textContent = 'Saved. Your frame will apply this on its next sync.';
-      } catch (error) {
-        renderSlideshowSettings(galleryPlayback);
-        document.querySelector('#blur-background').checked = galleryPlayback.blur_background !== false;
-        document.querySelector('#guest-display-next').checked = galleryPlayback.guest_display_next === true;
-        document.querySelector('#slideshow-feedback').textContent = 'Could not save. Please try again.';
+        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/playback`, {cache:'no-store'});
+        if (!response.ok) throw new Error('Could not load settings');
+        const playback = await response.json();
+        if (request !== slideshowRequest || frameId !== photoFrame.value) return;
+        slideshowPlayback = playback;
+        document.querySelector('#slideshow-feedback').textContent = '';
+      } catch (_) {
+        if (request !== slideshowRequest || frameId !== photoFrame.value) return;
+        document.querySelector('#slideshow-feedback').textContent = 'Could not load slideshow settings. Please try again.';
+        document.querySelector('#retry-slideshow').hidden = false;
       } finally {
-        slideshowBusy = false;
-        controls.forEach(control => control.disabled = false);
-        document.querySelector('#playback-mode').disabled = galleryPlayback.viewer_supports_playback_modes !== true;
-        document.querySelector('#guest-display-next').disabled = !Object.hasOwn(galleryPlayback, 'guest_display_next');
+        if (request === slideshowRequest && frameId === photoFrame.value) {
+          slideshowLoading = false;
+          if (!background || !document.querySelector('#slideshow-settings').contains(document.activeElement)) renderSlideshowSettings(slideshowPlayback);
+        }
       }
     }
+    async function saveSlideshowSettings(payload) {
+      if (slideshowBusy || !Object.hasOwn(slideshowPlayback, 'slide_seconds')) return;
+      const frameId = photoFrame.value;
+      const request = ++slideshowRequest;
+      slideshowLoading = false;
+      slideshowBusy = true;
+      slideshowControls().forEach(control => control.disabled = true);
+      document.querySelector('#slideshow-feedback').textContent = 'Saving…';
+      try {
+        const response = await fetch(`/api/beta/owner/frames/${encodeURIComponent(frameId)}/playback`, {
+          method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(payload)
+        });
+        if (!response.ok) throw new Error('Could not save settings');
+        const playback = await response.json();
+        if (request !== slideshowRequest || frameId !== photoFrame.value) return;
+        slideshowPlayback = playback;
+        document.querySelector('#slideshow-feedback').textContent = 'Saved. Your frame will apply this on its next sync.';
+      } catch (_) {
+        if (request !== slideshowRequest || frameId !== photoFrame.value) return;
+        document.querySelector('#slideshow-feedback').textContent = 'Could not save. Please try again.';
+      } finally {
+        if (request === slideshowRequest && frameId === photoFrame.value) {
+          slideshowBusy = false;
+          renderSlideshowSettings(slideshowPlayback);
+        }
+      }
+    }
+    document.querySelector('#retry-slideshow').addEventListener('click', () => loadSlideshowSettings());
+    function refreshSlideshowSettings() {
+      const panel = document.querySelector('#slideshow-settings');
+      if (!document.hidden && !document.querySelector('#device-settings').hidden && !panel.hidden && !panel.contains(document.activeElement)) loadSlideshowSettings({background:true});
+    }
+    document.addEventListener('visibilitychange', refreshSlideshowSettings);
+    setInterval(refreshSlideshowSettings, 15000);
     for (const button of document.querySelectorAll('[data-slide-seconds]')) button.addEventListener('click', () => saveSlideshowSettings({slide_seconds:Number(button.dataset.slideSeconds)}));
     document.querySelector('#other-slide-duration').addEventListener('click', () => {
       const custom = document.querySelector('#custom-slide-duration');
@@ -693,7 +783,9 @@
       if (!event.target.reportValidity()) return;
       saveSlideshowSettings({slide_seconds:Number(document.querySelector('#slide-seconds').value)});
     });
-    document.querySelector('#playback-mode').addEventListener('change', event => saveSlideshowSettings({playback_mode:event.target.value}));
+    document.querySelector('#playback-mode').addEventListener('change', event => {
+      if (event.target.matches('input[name="playback-mode"]:checked')) saveSlideshowSettings({playback_mode:event.target.value});
+    });
     document.querySelector('#blur-background').addEventListener('change', event => saveSlideshowSettings({blur_background:event.target.checked}));
     document.querySelector('#guest-display-next').addEventListener('change', event => saveSlideshowSettings({guest_display_next:event.target.checked}));
     document.querySelector('#resume-slideshow').addEventListener('click', async () => {
@@ -705,7 +797,6 @@
       if ((background && (galleryLoading || galleryExpanded)) || (append && (galleryLoading || !galleryCursor))) return;
       const request = ++photoRequest;
       galleryLoading = true;
-      if (!background) document.querySelector('#open-slideshow').disabled = true;
       const frameId = photoFrame.value;
       updateFrameContext();
       if (!background && !append) { galleryExpanded = false; galleryCursor = null; document.querySelector('#more-owner-photos').hidden = true; galleryVersion = ''; framePhotos.replaceChildren(); photoStatus.textContent = 'Loading photos…'; }
@@ -718,15 +809,13 @@
         const manifest = await response.json();
         if (request !== photoRequest) return;
         galleryLoading = false;
-        document.querySelector('#open-slideshow').disabled = false;
-        if (background && (photoDialog.open || slideshowDialog.open || photosPanel.hidden)) return;
+        if (background && (photoDialog.open || photosPanel.hidden)) return;
         const version = frameId + JSON.stringify(manifest);
         photoStatus.textContent = manifest.photos.length ? `${manifest.photos.length} photos available · Tap to view` : 'No photos on this frame yet.';
         if (background && version === galleryVersion) return;
         galleryVersion = version;
         const playback = manifest.playback || {};
         const seconds = playback.slide_seconds || 12;
-        renderSlideshowSettings(playback);
         document.querySelector('#resume-slideshow').disabled = !playback.pinned_photo_id;
         document.querySelector('#resume-slideshow').hidden = !playback.pinned_photo_id;
         document.querySelector('#playback-status').textContent = playback.pinned_photo_id
@@ -744,7 +833,6 @@
         photoStatus.textContent = galleryPhotos.length ? `${galleryPhotos.length} photos shown · Tap to view` : senderFilter ? 'No photos from this sender on this frame.' : 'No photos on this frame yet.';
         galleryPlayback = playback;
         galleryFrameId = frameId;
-        document.querySelector('#slideshow-destination strong').textContent = manifest.place_name;
         renderGallery();
         if (photoDialog.open) {
           if (!galleryPhotos.some(photo => photo.id === selectedPhotoId)) selectedPhotoId = galleryPhotos[Math.min(Math.max(previousIndex, 0), galleryPhotos.length - 1)]?.id;
@@ -754,7 +842,6 @@
         if (request === photoRequest) {
           document.querySelector('#more-owner-photos').disabled = false;
           galleryLoading = false;
-          document.querySelector('#open-slideshow').disabled = galleryFrameId !== frameId;
           photoStatus.textContent = 'Could not refresh photos. Check your connection; we’ll retry automatically.';
         }
       }
@@ -771,7 +858,6 @@
       photoFrame.hidden = !multiple;
       document.querySelector('#active-frame-name').hidden = multiple;
       document.querySelector('#active-frame-name').textContent = frameName(photoFrame.value);
-      document.querySelector('#slideshow-destination strong').textContent = frameName(photoFrame.value);
       sendDestinations.configure(ownerContext?.frames || [], photoFrame.value);
     }
     function senderLabel(sender) { return sender?.key === 'owner' ? 'Owner uploads' : sender?.label || 'Earlier uploads'; }
@@ -847,11 +933,6 @@
     document.querySelector('#add-photos').addEventListener('click', () => {
       location.hash = 'owner-send-panel';
     });
-    document.querySelector('#open-slideshow').addEventListener('click', () => {
-      document.querySelector('#slideshow-feedback').textContent = '';
-      renderSlideshowSettings(galleryPlayback);
-      slideshowDialog.showModal();
-    });
     function stepPhoto(direction) {
       if (photoActionBusy) return;
       const index = galleryPhotos.findIndex(photo => photo.id === selectedPhotoId);
@@ -919,20 +1000,21 @@
       const tile = [...framePhotos.querySelectorAll('.gallery-tile')].find(tile => tile.dataset.photoId === selectedPhotoId);
       if (!photosPanel.hidden) (tile || document.querySelector('#add-photos')).focus({preventScroll:true});
     });
-    window.addEventListener('hashchange', () => { photoDialog.close(); slideshowDialog.close(); });
+    window.addEventListener('hashchange', () => { photoDialog.close(); });
     photoFrame.addEventListener('change', () => {
       selectedFrameId = photoFrame.value;
       rememberFrame();
-      photoDialog.close(); slideshowDialog.close();
+      photoDialog.close();
       selectedPhotoId = null; pinDraftPhotoId = null; galleryVersion = ''; senderFilter = ''; galleryExpanded = false; galleryCursor = null;
       ++photoRequest; galleryLoading = false;
       framePhotos.replaceChildren(); galleryPhotos = []; galleryPlayback = {};
       updateFrameContext();
       renderDeviceSettings(ownerContext);
       if (!photosPanel.hidden) loadPhotos();
+      if (!document.querySelector('#device-settings').hidden) loadSlideshowSettings();
     });
     function refreshGallery() {
-      if (!document.hidden && !photosPanel.hidden && !photoDialog.open && !slideshowDialog.open && !photoActionBusy && !uploading && photoFrame.value) return loadPhotos({background:true});
+      if (!document.hidden && !photosPanel.hidden && !photoDialog.open && !photoActionBusy && !uploading && photoFrame.value) return loadPhotos({background:true});
     }
     document.addEventListener('visibilitychange', refreshGallery);
     setInterval(refreshGallery, 30000);

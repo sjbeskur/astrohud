@@ -73,9 +73,14 @@ fn spawn_sync(config: Config) -> Receiver<Playlist> {
             }
         };
 
+        let mut next_storage_report = Instant::now();
         loop {
+            maybe_report_storage(&client, &cache, &mut next_storage_report);
             match sync_once_with_updates(&client, &cache, |playlist| {
                 let _ = sender.try_send(playlist);
+                // A large first download must not postpone reporting for the
+                // entire backlog. Telemetry never runs on the rendering thread.
+                maybe_report_storage(&client, &cache, &mut next_storage_report);
             }) {
                 Ok(result) => {
                     for warning in result.warnings {
@@ -89,6 +94,20 @@ fn spawn_sync(config: Config) -> Receiver<Playlist> {
         }
     });
     receiver
+}
+
+fn maybe_report_storage(client: &ServerClient, cache: &CacheStore, next: &mut Instant) {
+    if Instant::now() < *next {
+        return;
+    }
+    let delay = match client.report_storage(cache) {
+        Ok(()) => 300,
+        Err(error) => {
+            eprintln!("storage report unavailable: {error}");
+            60
+        }
+    };
+    *next = Instant::now() + Duration::from_secs(delay);
 }
 
 fn load_device_credential(path: Option<&Path>) -> Result<Option<String>, BoxError> {

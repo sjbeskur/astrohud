@@ -3,6 +3,7 @@ pub mod config;
 pub mod model;
 pub mod order;
 pub mod prepared;
+pub mod storage;
 pub mod sync;
 
 use std::error::Error;

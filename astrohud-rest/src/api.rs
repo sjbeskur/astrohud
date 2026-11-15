@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-const SCHEMA_VERSION: i64 = 14;
+pub const SCHEMA_VERSION: i64 = 15;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
@@ -120,6 +120,11 @@ CREATE TABLE IF NOT EXISTS frame_playback (
     selection_revision INTEGER NOT NULL DEFAULT 0,
     pinned_photo_id TEXT REFERENCES photos(id) ON DELETE SET NULL,
     pinned_until INTEGER
+);
+CREATE TABLE IF NOT EXISTS frame_storage (
+    frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
+    report TEXT NOT NULL,
+    reported_unix INTEGER NOT NULL
 );
 CREATE TABLE IF NOT EXISTS frame_playback_modes (
     frame_id TEXT PRIMARY KEY REFERENCES frames(id) ON DELETE CASCADE,
@@ -396,6 +401,7 @@ pub struct FrameManifest {
 
 #[derive(Debug, Serialize)]
 pub struct Health {
+    storage_reporting_version: u8,
     playback_modes_version: u8,
     version: &'static str,
     database_schema: i64,
@@ -567,6 +573,7 @@ fn ensure_foreign_keys_are_valid(connection: &Connection) -> rusqlite::Result<()
 
 pub async fn health() -> web::Json<Health> {
     web::Json(Health {
+        storage_reporting_version: 1,
         playback_modes_version: 1,
         version: env!("CARGO_PKG_VERSION"),
         database_schema: SCHEMA_VERSION,

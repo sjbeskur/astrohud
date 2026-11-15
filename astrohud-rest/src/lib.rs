@@ -10,6 +10,7 @@ mod playback;
 mod recovery;
 mod reset;
 mod sender_actions;
+mod storage;
 mod updates;
 mod websocket;
 

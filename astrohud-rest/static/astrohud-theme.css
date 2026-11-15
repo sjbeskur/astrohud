@@ -186,7 +186,6 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .frame-photo, #display-photo { position: relative; z-index: 1; }
 .simulated-display-empty { position: relative; z-index: 2; }
 #device-settings summary { min-height: 44px; padding-block: 0.75rem; font-weight: 700; cursor: pointer; }
-#open-device-settings { min-height: 44px; margin-top: 1rem; }
 #device-settings { scroll-margin-top: 6rem; }
 #device-settings .instrument-copy { margin-top: 0.75rem; }
 .owner-recovery { margin-bottom: 1.5rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--hud-line); }
@@ -247,7 +246,6 @@ input::file-selector-button { margin-right: 0.8rem; border: 0; border-radius: 3p
 .owner-actions i { position: absolute; top: 50%; right: 1.25rem; transform: translateY(-50%); color: var(--hud-muted); font-size: 1.4rem; font-style: normal; }
 .owner-secondary { display: flex; justify-content: center; gap: 2rem; margin-top: 1rem; }
 .owner-secondary a, .owner-secondary button { display: inline-flex; min-height: 48px; align-items: center; gap: 0.4rem; margin: 0; padding: 0.5rem; border: 0; color: var(--hud-text); background: none; font-size: 0.95rem; text-decoration: none; }
-.owner-secondary #open-device-settings { margin-top: 0; }
 .owner-device-summary { margin: 1.5rem 0 0; color: var(--hud-muted); font-size: 0.85rem; text-align: center; overflow-wrap: anywhere; }
 .owner-recovery-reminder { margin: 1rem auto 0; max-width: 35ch; color: var(--hud-muted); font-size: 0.8rem; line-height: 1.6; text-align: center; }
 .owner-recovery-reminder button { min-height: 44px; margin: 0; padding: 0; border: 0; color: var(--hud-lavender); background: none; text-decoration: underline; text-underline-offset: 3px; }
@@ -378,16 +376,33 @@ body:has(dialog[open]) { overflow: hidden; }
 .owner-views h1[tabindex="-1"]:focus { outline: none; box-shadow: none; }
 
 /* Keep slideshow controls in the photo header; the gallery refreshes itself. */
-.owner-photo-heading { grid-template-columns: auto minmax(0, 1fr) 44px; }
-.owner-photo-heading #open-slideshow { width: 44px; height: 44px; flex-basis: 44px; }
+.owner-photo-heading { grid-template-columns: minmax(0, 1fr); }
 .gallery-context { display: flex; align-items: center; gap: 0.85rem; margin-bottom: 0.35rem; }
 .gallery-context .owner-back { flex-shrink: 0; margin: 0; font-size: 0.85rem; }
 .gallery-context .gallery-destination { font-size: 0.85rem; }
 
 #slide-duration-label { margin: 0; }
 #display-form { gap: 0.75rem; }
+#slideshow-settings .display-controls { padding:0; border:0; background:none; }
+#slideshow-settings h2 { margin-top:0; }
+#slideshow-settings [role="status"] { font-size:0.9rem; line-height:1.5; }
 .slide-presets [aria-pressed="true"] { color: var(--hud-amber); border-color: var(--hud-amber); background: #efb46a18; }
 .slideshow-background { margin-top: 1rem; }
+.playback-style { display:grid; gap:0.6rem; min-width:0; margin:0; padding:0; border:0; }
+.playback-style legend { margin-bottom:0.65rem; padding:0; font-size:0.95rem; font-weight:650; }
+.playback-choice { display:flex; align-items:flex-start; gap:0.75rem; min-height:44px; margin:0; padding:0.9rem; border:1px solid var(--hud-line); border-radius:12px; background:#0b0f18; cursor:pointer; }
+.playback-choice input { flex-shrink:0; width:1.1rem; height:1.1rem; min-height:0; margin:0.15rem 0 0; accent-color:var(--hud-amber); }
+.playback-choice-copy { display:grid; gap:0.3rem; min-width:0; }
+.playback-choice strong { display:flex; flex-wrap:wrap; align-items:baseline; gap:0.2rem 0.55rem; font-size:0.95rem; }
+.playback-choice small { color:var(--hud-muted); font-size:0.85rem; font-weight:400; line-height:1.45; }
+.playback-choice:has(input:checked) { border-color:var(--hud-amber); background:#efb46a12; }
+.playback-choice:has(input:checked) strong { color:var(--hud-amber); }
+.playback-choice:has(input:focus-visible) { outline:2px solid var(--hud-amber); outline-offset:3px; }
+.playback-selected { display:none; font-size:0.7rem; font-weight:500; }
+.playback-choice:has(input:checked) .playback-selected { display:inline; }
+.playback-style:disabled .playback-choice { cursor:default; opacity:0.65; }
+.playback-choice:has(input:disabled) { cursor:default; opacity:0.65; }
+.playback-style .field-help { margin:0.15rem 0 0; }
 
 .home-button { display: inline-flex; align-items: center; justify-content: center; gap: 0.35rem; min-height: 44px; padding: 0.55rem 0.65rem; border: 1px solid var(--hud-line); border-radius: 12px; color: var(--hud-text); background: var(--hud-surface); font-size: 0.85rem; text-decoration: none; white-space: nowrap; }
 .home-button:hover { border-color: var(--hud-text); }
@@ -408,7 +423,6 @@ body:has(dialog[open]) { overflow: hidden; }
 .owner-page .page-heading h1, .simple-page .page-heading h1 { min-width: 0; margin: 0; font-size: 1.5rem; line-height: 1.25; overflow-wrap: anywhere; }
 .page-heading .home-button { align-self: start; }
 .page-heading .photo-icon-button { width: 44px; height: 44px; flex-basis: 44px; }
-#connected-panel #open-device-settings { display: inline-flex; min-height: 44px; margin: 0; }
 .page-context { min-width: 0; margin: 0 0 1rem; line-height: 1.4; overflow-wrap: anywhere; }
 .context-name { display: block; margin: 0; color: var(--hud-amber); font-size: 1.15rem; font-weight: 650; line-height: 1.4; overflow-wrap: anywhere; }
 .simple-page .sender-intro > .page-context:last-child { margin: 0 0 1rem; }
@@ -495,5 +509,36 @@ body:has(> .site-footer) > .simulator-view { min-height: 0; }
 .owner-page .update-actions .update-install { width: 100%; min-height: 52px; color: #17120d; background: var(--hud-amber); font-weight: 750; }
 .owner-page .update-actions .update-install:hover { background: #f5c486; }
 
-.owner-home #open-device-settings { position: relative; overflow: visible; }
 .settings-update-badge { position: absolute; top: -7px; right: -7px; display: grid; place-items: center; width: 24px; height: 24px; border: 2px solid var(--hud-raised); border-radius: 50%; color: #fff; background: #dc2626; font-size: 12px; font-weight: 750; line-height: 1; pointer-events: none; }
+
+/* Keep the same labeled destinations available throughout the owner app. */
+.owner-topbar { position:sticky; top:0; z-index:30; padding-top:env(safe-area-inset-top, 0px); border-bottom:1px solid var(--hud-line); background:#0b0f18; }
+.owner-topbar[hidden] { display:none; }
+.owner-nav { display:grid; grid-template-columns:repeat(5, minmax(0, 1fr)); gap:0.25rem; width:min(560px, calc(100% - 24px)); margin-inline:auto; padding:0.4rem 0; }
+.owner-nav-link { display:grid; justify-items:center; align-content:center; gap:0.25rem; min-width:0; min-height:60px; padding:0.35rem 0.1rem; border:1px solid transparent; border-radius:10px; color:var(--hud-muted); font-size:0.75rem; font-weight:600; line-height:1.25; text-decoration:none; }
+.owner-nav-link:hover { color:var(--hud-text); background:var(--hud-raised); }
+.owner-nav-link[aria-current="page"] { color:var(--hud-amber); border-color:#efb46a60; background:#efb46a12; }
+.owner-nav-link svg { display:block; width:21px; height:21px; fill:none; stroke:currentColor; stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.owner-nav-icon { position:relative; width:21px; height:21px; }
+.owner-nav-icon .settings-update-badge { top:-7px; right:-12px; }
+.owner-page :focus-visible { scroll-margin-top:6rem; }
+
+/* Distinct surfaces and headings make settings groups easy to scan. */
+#device-settings > .settings-group { --settings-accent:var(--hud-amber); margin:1.5rem 0; padding:1rem; border:1px solid #3d495d; border-top:4px solid var(--settings-accent); border-radius:16px; background:var(--hud-surface); box-shadow:0 6px 20px #0002; }
+#device-settings > .settings-group > h2 { margin:0 0 1rem; padding-bottom:0.75rem; border-bottom:1px solid var(--hud-line); color:var(--settings-accent); font-size:1.15rem; font-weight:700; }
+#device-settings > #device-storage { --settings-accent:var(--hud-green); }
+#device-settings > #software-update { --settings-accent:var(--hud-blue); }
+#device-settings > #device-management { --settings-accent:var(--hud-salmon); }
+#device-settings > #owner-access-settings { --settings-accent:var(--hud-lavender); }
+
+/* Device storage: a full photo allowance is normal; disk pressure is separate. */
+.storage-meter { display:block; width:100%; height:0.7rem; margin:0.8rem 0; accent-color:#73aa92; }
+.storage-status { font-weight:600; color:#73aa92; }
+.storage-capacity { font-size:1.15rem; font-weight:600; overflow-wrap:anywhere; }
+.storage-updated { font-size:0.85rem; opacity:0.8; }
+[data-status="low"] .storage-status, [data-status="very_low"] .storage-status { color:#efb46a; }
+[data-status="low"] .storage-meter, [data-status="very_low"] .storage-meter { accent-color:#efb46a; }
+[data-status="very_low"] .storage-status { color:#e98c77; }
+[data-status="stale"] .storage-status, [data-status="unknown"] .storage-status { color:inherit; opacity:0.75; }
+.storage-notice { display:inline-block; margin:0 0 1rem; padding:0.4rem 0.75rem; border:1px solid #efb46a; border-radius:0.5rem; color:#efb46a; font-size:0.9rem; }
+.storage-notice[hidden] { display:none; }

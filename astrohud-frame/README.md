@@ -176,13 +176,50 @@ under `/etc/systemd/system`, then enable the timer. The optional bounded
 `deploy/astrohud-journald.conf` drop-in preserves up to 32 MiB or seven days of
 logs so the cause of a future outage survives a reboot.
 
+## Storage reporting and free-space reserve (v0.4.0)
+
+The viewer measures the filesystem hosting its photo cache and reports disk
+capacity/usage, space available to its unprivileged account, cached photo bytes
+and count, configured photo limit, viewer version, and a 512 MiB reserve. It
+reports on startup and about every five minutes (including during a download
+backlog); errors retry after a minute and do not interrupt rendering. Reports
+use the existing device credential and contain no paths, photo IDs or secrets.
+Older servers can reject the new endpoint while playback continues normally.
+
+The owner Storage card estimates additional photos from the smaller of remaining
+photo allowance and disk availability after the reserve, divided by average
+stored photo size plus 25%. The sample size floor is 64 KiB per photo. Empty
+collections have no estimate until a sample is available. The current 1 GiB
+default allowance is unchanged; a full allowance is normal cache management.
+
+Downloads fail closed if free-space measurement fails. Each temporary-file
+write is checked against the reserve; incomplete files are removed and cached
+photos remain available. Space freed later permits missing photos to retry.
+Other processes may still consume disk, so this is a photo-write safeguard,
+not a filesystem quota. Keep OS/log/update storage management in place.
+
+Local integration checks require a separately running disposable API:
+
+```sh
+# Local API defaults to http://127.0.0.1:18116; never use production test data.
+python3 astrohud-frame/scripts/test-storage-native.py
+PUPPETEER_MODULE=/path/to/puppeteer/lib/puppeteer/puppeteer.js \
+  node astrohud-frame/scripts/test-storage-web.mjs
+PUPPETEER_MODULE=/path/to/puppeteer/lib/puppeteer/puppeteer.js \
+  node astrohud-frame/scripts/test-owner-navigation.mjs
+```
+
+Both accept `STORAGE_TEST_URL` restricted to loopback. Native testing uses the
+debug viewer, SDL's dummy display, synthetic photos and temporary credentials.
+Physical Pi storage reporting and a signed v0.5.4 rollout remain pending.
+
 ## Deliberately deferred
 
 - Lightweight WebSocket/SSE change notifications
 - Automatic first-boot pairing and credential rotation
 - Checksums and byte sizes in the manifest
 - Server-created, resolution-aware display variants
-- Cache observability and remote diagnostics
+- Additional remote diagnostics (temperature, reboot reason, recovery events)
 - Cross-fades or other transitions
 
 ### Guest Display next
