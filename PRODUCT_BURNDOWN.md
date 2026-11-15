@@ -140,16 +140,20 @@ authorization, invitations, and the upload contract are stable. Native work
 should begin as a thin client for the proven journey, not as a second product
 specification.
 
-### Planned direction — November 8, 2026
+### Desktop draft underway — November 15, 2026
 
-Mobile implementation is deferred while we work through further usability
-enhancements to the current website and device experience. Tauri 2 is the
-proposed framework, subject to a practical iPhone and Android feasibility test.
-No mobile application has been scaffolded or built yet.
+The user approved starting Tauri client work and iterating on desktop before
+deploying to phones. `astrohud-app` now provides a working Linux Tauri 2 draft
+on `feature/tauri-client`, bundling the current owner/sender UI with a native
+HTTP/session layer. Local sample frames, protected galleries, file selection,
+owner/sender uploads, private-link connection and disconnect are validated in
+the actual native window. Preview sessions are memory-only and clear on close.
+Phone builds, secure persistent app sessions and real mobile feasibility tests
+remain pending; see [desktop draft instructions](astrohud-app/README.md).
 
 - Build one Memory Lane app for owners and invited senders. Preserve the
-  simple **Invite**, **Send photos**, and **Add a device** home, with Photos
-  and Settings as secondary actions. Senders only see actions they can use.
+  current Home/Photos/Send/Invite/Settings navigation and descriptive home
+  actions. Senders only see actions they can use.
 - Reuse the hosted service and its authorization rules. Bundle the app UI
   locally and share frontend components where practical; native integrations
   may require Swift on iOS and Kotlin on Android.
@@ -179,9 +183,9 @@ results rather than assume all required mobile integrations are ready-made.
 
 | ID | Priority | Size | Status | Outcome / acceptance evidence | Depends on |
 | --- | --- | --- | --- | --- | --- |
-| `M-101` | P0 | S | Later; Tauri 2 proposed | Run the phone feasibility milestone above before committing to Tauri. Record photo-library/HEIC, secure storage, deep-link, background-upload, share-extension, accessibility, and maintenance tradeoffs. | Draft hosted API contract; iPhone/Android test devices; hosted macOS build access |
+| `M-101` | P0 | S | Desktop draft working; phone feasibility pending | Linux Tauri draft reuses the proven UI and validates native transport, private-link access, file selection and owner/sender uploads. Next test photo-library/HEIC, secure storage, deep-link, background-upload and share-extension behavior on phones. | iPhone/Android test devices; hosted macOS build access |
 | `M-102` | P0 | M | Waiting | Publish and version the authentication, invitation, channel, upload, delivery, and error contracts; generate or share typed client models where useful. | `C-102` through `C-107` |
-| `M-103` | P0 | M | Waiting | Establish iOS and Android builds, CI, signing, environments, secure configuration, crash reporting, and a minimal navigation shell. Use hosted macOS/Xcode builds for iOS while no development Mac is available. | `M-101`; signing accounts and credentials |
+| `M-103` | P0 | M | Linux desktop build working; mobile builds pending | Desktop app has an isolated Rust workspace, Docker build, shared navigation, and native UI smoke tests. Establish iOS/Android builds, CI, signing and distribution after the phone feasibility milestone. | `M-101`; signing accounts and credentials |
 | `M-104` | P0 | M | Waiting | Implement sign-in, account recovery, invite acceptance, and safe credential storage with a complete logout/revocation path. | `C-102`, `C-107`, `M-103` |
 | `M-105` | P0 | L | Waiting | Select one or more photos, choose a human-readable destination/channel, upload with visible progress, and receive an honest success or failure state. | `C-105`, `M-102`, `M-104` |
 | `M-106` | P0 | S | Waiting | Show a clear per-send metadata control. Location remains off unless selected, and the user previews whether approximate location will appear. | `M-105`, location API contract |

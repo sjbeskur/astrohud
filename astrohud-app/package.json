@@ -1,0 +1,13 @@
+{
+  "name": "memory-lane-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build:ui": "node scripts/prepare-ui.mjs",
+    "tauri": "tauri",
+    "dev": "npm run build:ui && tauri dev",
+    "build": "npm run build:ui && tauri build"
+  },
+  "devDependencies": { "@tauri-apps/cli": "^2" }
+}

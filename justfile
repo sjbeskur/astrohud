@@ -9,6 +9,14 @@ export ASTROHUD_SERVER_URL := env("ASTROHUD_SERVER_URL", "https://app.astrohud.c
 default:
     @just --list
 
+# Build the Tauri desktop draft using isolated Linux development dependencies.
+client-build:
+    bash astrohud-app/scripts/build-desktop.sh
+
+# Run the desktop draft (requires client-build); defaults to the local API.
+client-run:
+    target/tauri-desktop/debug/memory-lane-app
+
 # Cross-compile the Pi applications and application updater using Docker.
 pi-build:
     bash astrohud-frame/scripts/build-pi-container.sh

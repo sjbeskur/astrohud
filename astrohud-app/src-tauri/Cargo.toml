@@ -1,0 +1,27 @@
+[package]
+name = "memory-lane-app"
+version = "0.1.0"
+edition = "2024"
+
+[lib]
+name = "memory_lane_app"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[workspace]
+
+[features]
+default = ["app"]
+app = ["dep:tauri"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", optional = true, features = [] }
+reqwest = { version = "0.12", default-features = false, features = ["rustls-tls", "cookies"] }
+serde = { version = "1", features = ["derive"] }
+base64 = "0.22"
+url = "2"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }

@@ -1,5 +1,83 @@
 # Memory Lane handoff
 
+## Web picker split from desktop draft — 2026-11-15
+
+User approved publishing the picker to the website while keeping
+feature/tauri-client for later desktop/mobile work. Web-only commit 892f84f
+contains REST/site v0.5.5, shared photo-picker.js, owner/sender markup and
+styles, asset cache hashes and a self-contained browser picker test at
+astrohud-rest/scripts/test-photo-picker.mjs. No schema or Pi/R2 change is
+required. Picker/slideshow/navigation browser checks and REST tests passed.
+The Tauri files, just recipes and app planning/docs are saved separately on
+feature/tauri-client; user screenshots under docs/device-images stay untouched.
+The production master branch receives only the web commit. Website deployment
+verification is the remaining rollout step at this checkpoint.
+
+## Large photo-picker card prototyped — 2026-11-15
+
+User observed a tester struggle to find the native file control and approved
+a large tappable photo card for review in the desktop client. Shared owner/
+sender forms now show Choose photos / Pick from your photo library, with a
+photo icon and lavender surface. The whole card opens the existing native
+picker. After selection it becomes Add more photos; previews have Remove
+controls and the final button names the count/destination. Adding preserves
+the queue, duplicate file picks are ignored, cancel preserves selected photos,
+and successful sends restore the initial card. File validation is unchanged.
+
+Added shared photo-picker.js and bundled it into the Tauri UI preparation.
+These are local source changes on feature/tauri-client, not deployed website
+changes. Native desktop was rebuilt. Browser tests passed actual chooser
+activation, add/remove/cancel/deduplication/destination labels/uploads for both
+roles at 320/390/1280px; native WebKit end-to-end checks also passed including
+hidden file-input selection and uploads. Preview screenshots are at
+/tmp/memory-lane-photo-picker.png and /tmp/memory-lane-native-photo-picker.png.
+A separate local native review window is open on Send photos with
+sample frames via visible driver 4449/native 4450. Keep the user's existing
+live-connected desktop app open: draft sessions clear on close. User-created
+screenshots under docs/device-images are unrelated and should be preserved.
+
+## Tauri desktop draft working — 2026-11-15
+
+User approved `feature/tauri-client` and explicitly requested desktop iteration
+before any phone deployment. Created that branch from production master.
+New astrohud-app is a standalone Tauri 2 workspace (v0.1.0), leaving Pi/server
+build dependencies and the deployed web assets unchanged. UI preparation copies
+the actual owner/sender HTML/CSS/JS, injects a native fetch bridge, converts
+protected image loads to native requests/blob URLs, and preserves hosted origins
+for invitation/recovery links. Current navigation, playback cards and grouped
+settings are reused rather than reimplemented.
+
+Rust transport uses a private in-memory reqwest cookie jar. It restricts API
+paths/origins/methods/content types/body sizes and disables redirects; cookies
+never go to JS or plaintext files. HTTPS is required except for loopback dev.
+Private owner activation/recovery and sender invitation links are accepted at
+the connection screen. Disconnect/server change/restart clear session access.
+The visible draft banner explains access clears on close. OS secure persistence,
+app-specific revocable sessions, deep-link registration, HEIC conversion,
+background uploads and share extensions remain future work; no phones/SDKs,
+production API changes or deployments were made.
+
+Linux build uses a Docker bookworm image with GTK/WebKit development packages;
+host runtime libraries already existed. `just client-build` prepares shared UI
+and builds target/tauri-desktop/debug/memory-lane-app. `just client-run` launches
+it against http://127.0.0.1:18116 by default. Existing isolated API there is still
+running with disposable sample data. Desktop windows were launched for review.
+See astrohud-app/README.md for connection/demo/run instructions.
+
+Validation: native transport tests passed for origin/path guards, cookie session
+isolation and refused redirects. Actual Tauri/WebKit tests passed sample-frame
+creation, protected gallery images, file picker/preview/owner upload, private
+owner recovery, sender invitation/upload, owner-role isolation and loss of
+access after restart. Screenshot: /tmp/memory-lane-tauri-draft.png. Tests use an
+isolated Xvfb display :99 and tauri-driver on 4447/native 4448, with tools kept
+under target/tauri-tools and target/tauri-driver; no test dev packages installed
+on the workstation. A separate visible test-driver window on 4445/native 4446
+was also opened earlier; leave user-facing windows alone while testing.
+
+Final desktop rebuild, Clippy, formatting and repeated native end-to-end checks
+passed. Work is not committed, tagged, pushed or released. Production v0.5.4 remains healthy on schema 15 and
+R2 channel sequence 3 (approved release completed before this branch began).
+
 ## v0.5.4 release build verified; R2 CLI setup in progress — 2026-11-14
 
 User requested build, commit, tag and R2 deployment, then asked to configure

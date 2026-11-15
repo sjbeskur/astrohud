@@ -22,6 +22,7 @@ The current delivery target is the three-household friendly beta described in
 - `astrohud-rest`: Actix API, owner/guest website, and opt-in demo WebSocket relay
 - `astrohud-client`: legacy command-line demo image sender
 - `astrohud-frame`: native SDL2 frame with an offline, size-bounded disk cache
+- `astrohud-app`: Tauri desktop client draft sharing the owner/sender UI; see [desktop build and run](astrohud-app/README.md)
 - `astrohud-provisioner`: native setup-AP and captive Wi-Fi provisioning service
 - `astroview_wasm`: browser display client
 
