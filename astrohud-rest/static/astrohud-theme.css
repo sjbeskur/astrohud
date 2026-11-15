@@ -542,3 +542,17 @@ body:has(> .site-footer) > .simulator-view { min-height: 0; }
 [data-status="stale"] .storage-status, [data-status="unknown"] .storage-status { color:inherit; opacity:0.75; }
 .storage-notice { display:inline-block; margin:0 0 1rem; padding:0.4rem 0.75rem; border:1px solid #efb46a; border-radius:0.5rem; color:#efb46a; font-size:0.9rem; }
 .storage-notice[hidden] { display:none; }
+
+/* The photo picker is the clear first action; sending follows review. */
+.photo-picker-card { display:flex; align-items:center; justify-content:center; gap:1rem; width:100%; min-height:156px; padding:1.5rem 1rem; border:2px solid var(--hud-lavender); border-radius:16px; color:var(--hud-text); background:linear-gradient(135deg,#ad96d82e,#70a9d614); text-align:left; cursor:pointer; }
+.photo-picker-card:hover { background:linear-gradient(135deg,#ad96d849,#70a9d624); }
+.photo-picker-card > svg { flex-shrink:0; width:48px; height:48px; fill:none; stroke:var(--hud-lavender); stroke-width:1.8; stroke-linecap:round; stroke-linejoin:round; }
+.photo-picker-card > span { display:grid; gap:0.4rem; min-width:0; }
+.photo-picker-card strong { font-size:1.3rem; font-weight:750; }
+.photo-picker-card small { font-size:0.9rem; line-height:1.5; color:#c3cad7; }
+.photo-picker-card[data-selected="true"] { min-height:84px; padding:0.85rem 1rem; border-width:1px; }
+.photo-picker-card[data-selected="true"] > svg { width:32px; height:32px; }
+.photo-picker-card[data-selected="true"] strong { font-size:1rem; }
+.photo-picker-card:disabled { opacity:0.55; cursor:default; }
+.upload-previews .photo-remove { display:block; width:100%; min-height:44px; margin-top:0.35rem; padding:0.35rem 0.2rem; font-size:0.75rem; }
+#owner-photo-form > button[type="submit"], #photo-form > button[type="submit"] { white-space:normal; overflow-wrap:anywhere; }

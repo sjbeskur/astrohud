@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=b24d14e66b30">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=863604a2e496">
 </head>
 <body class="owner-page">
   <header id="owner-navigation" class="owner-topbar" hidden>
@@ -71,9 +71,12 @@
         <form id="owner-photo-form">
           <fieldset id="owner-destinations" class="send-destinations" hidden></fieldset>
           <div class="owner-field">
-            <label for="owner-photo">Choose photos</label>
-            <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" multiple required>
-            <p class="field-help">JPEG or PNG, up to 20 MB each.</p>
+            <input id="owner-photo" name="photo" type="file" accept="image/jpeg,image/png" multiple hidden>
+            <button id="owner-choose-photos" class="photo-picker-card" type="button" aria-controls="owner-photo" aria-describedby="owner-photo-help">
+              <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="3" y="4" width="23" height="24" rx="4"/><circle cx="11" cy="12" r="2.5"/><path d="m4 25 9-9 6 6 3-3 4 4M27 2v10M22 7h10"/></svg>
+              <span><strong>Choose photos</strong><small data-picker-description>Pick from your photo library</small></span>
+            </button>
+            <p id="owner-photo-help" class="field-help">Choose one or more JPEG or PNG photos, up to 20 MB each.</p>
           </div>
           <div id="owner-preview-shell" class="upload-previews" aria-label="Selected photos" hidden></div>
           <details class="owner-help"><summary>Photo options</summary>
@@ -232,6 +235,7 @@
   </main>
 
   <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
+  <script src="/photo-picker.js?v=dd3961c16ca7"></script>
   <script src="/device-updates.js?v=25cd5d26b8ee"></script>
   <script src="/device-storage.js?v=6ea289b1ad4f"></script>
   <script>
@@ -274,8 +278,10 @@
     const invitationUrl = document.querySelector('#invitation-url');
     const status = document.querySelector('#status');
     const claimCodeInput = document.querySelector('#claim-code');
+    const ownerPhotoPicker = new MemoryLanePhotoPicker(document.querySelector('#owner-photo'), document.querySelector('#owner-choose-photos'));
     const sendDestinations = new MemoryLaneDestinations(document.querySelector('#owner-destinations'), () => {
       if (!document.querySelector('#owner-send-panel').hidden) document.querySelector('#active-frame-label').textContent = sendDestinations.mode === 'current' ? 'Sending to' : 'Frame';
+      renderUploadQueue();
     });
 
     function prefillClaimCode() {
@@ -613,21 +619,20 @@
         const card = document.createElement('figure');
         const image = document.createElement('img'); image.src = item.url; image.alt = item.file.name; image.loading = 'lazy';
         const caption = document.createElement('figcaption'); caption.textContent = item.error || item.file.name;
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button photo-remove'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${item.file.name}`); remove.disabled = uploading;
+        remove.addEventListener('click', () => { uploadQueue = uploadQueue.filter(next => next !== item); URL.revokeObjectURL(item.url); renderUploadQueue(); ownerPhotoPicker.button.focus({preventScroll:true}); });
+        caption.append(remove);
         if (item.error) card.className = 'upload-error';
         card.append(image, caption); return card;
       }));
       const pending = uploadQueue.filter(item => !item.invalid).length;
       const button = document.querySelector('#owner-photo-form button[type="submit"]');
-      button.textContent = pending ? `Send ${pending} ${pending === 1 ? 'photo' : 'photos'}` : 'Send photos';
-      button.disabled = !photoRoutingSupported || (uploadQueue.length > 0 && !pending);
+      ownerPhotoPicker.setCount(uploadQueue.length);
+      button.textContent = MemoryLanePhotoPicker.sendLabel(pending, sendDestinations.recipients);
+      button.disabled = uploading || !photoRoutingSupported || !pending || !sendDestinations.recipients.length;
     }
     document.querySelector('#owner-photo').addEventListener('change', event => {
-      uploadQueue.forEach(item => URL.revokeObjectURL(item.url));
-      uploadQueue = [...event.target.files].map(file => {
-        const error = file.size > 20 * 1024 * 1024 ? 'Over 20 MB — choose a smaller photo.'
-          : !['image/jpeg', 'image/png'].includes(file.type) ? 'Choose a JPEG or PNG photo.' : '';
-        return {file, url: URL.createObjectURL(file), error, invalid: Boolean(error)};
-      });
+      uploadQueue = MemoryLanePhotoPicker.append(uploadQueue, event.target.files);
       document.querySelector('#owner-send-status').textContent = '';
       document.querySelector('#upload-progress').hidden = true;
       renderUploadQueue();

@@ -1,5 +1,12 @@
 # Release notes
 
+## v0.5.5 — 2026-11-15
+
+- Owner and invited-sender uploads start with a large Choose photos card instead of the native file-input control.
+- Selected photos stay visible in previews with Add more photos and Remove controls. Cancelling keeps the selection; picking the same file again does not duplicate it.
+- Send buttons show the valid photo count and destination. Empty selections cannot be submitted.
+- Web-only release; schema 15 and Pi software remain unchanged. Tauri desktop work continues separately on feature/tauri-client.
+
 ## v0.5.4 — 2026-11-14
 
 - Slideshow controls now live directly in the main Settings page, followed by Storage and Software updates. Photos retains Show now, Pin and Resume slideshow; the separate slideshow gear/dialog is removed.

@@ -5,7 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="theme-color" content="#070910">
   <title>Send a photo with Memory Lane</title>
-  <link rel="stylesheet" href="/astrohud-theme.css?v=b24d14e66b30">
+  <link rel="stylesheet" href="/astrohud-theme.css?v=863604a2e496">
 </head>
 <body class="simple-page">
 
@@ -26,9 +26,12 @@
           <fieldset id="sender-destinations" class="send-destinations" hidden></fieldset>
           <div class="field-grid">
             <div>
-              <label for="photo">Choose photos</label>
-              <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" multiple required>
-              <p class="field-hint">Select one or more JPEG or PNG photos / Up to 20 MB each</p>
+              <input id="photo" name="photo" type="file" accept="image/jpeg,image/png" multiple hidden>
+              <button id="sender-choose-photos" class="photo-picker-card" type="button" aria-controls="photo" aria-describedby="sender-photo-help">
+                <svg viewBox="0 0 32 32" aria-hidden="true" focusable="false"><rect x="3" y="4" width="23" height="24" rx="4"/><circle cx="11" cy="12" r="2.5"/><path d="m4 25 9-9 6 6 3-3 4 4M27 2v10M22 7h10"/></svg>
+                <span><strong>Choose photos</strong><small data-picker-description>Pick from your photo library</small></span>
+              </button>
+              <p id="sender-photo-help" class="field-help">Choose one or more JPEG or PNG photos, up to 20 MB each.</p>
             </div>
             <div id="preview-shell" class="upload-previews" aria-label="Selected photos" hidden></div>
 
@@ -71,9 +74,11 @@
     <p id="sent-photo-date" class="field-help"></p>
   </dialog>
   <script src="/photo-destinations.js?v=2f2d622e3c91"></script>
+  <script src="/photo-picker.js?v=dd3961c16ca7"></script>
   <script>
     const form = document.querySelector('#photo-form');
     const photo = document.querySelector('#photo');
+    const photoPicker = new MemoryLanePhotoPicker(photo, document.querySelector('#sender-choose-photos'));
     const previewShell = document.querySelector('#preview-shell');
     const status = document.querySelector('#status');
     let uploadQueue = [];
@@ -92,6 +97,7 @@
     const sentDialog = document.querySelector('#sent-photo-dialog');
     const destinations = new MemoryLaneDestinations(document.querySelector('#sender-destinations'), () => {
       updateSenderContext();
+      renderUploadQueue();
     });
     document.querySelector('#sender-photo-options').addEventListener('click', () => document.querySelector('#sender-options-dialog').showModal());
     document.querySelector('#close-sender-options').addEventListener('click', () => document.querySelector('#sender-options-dialog').close());
@@ -128,22 +134,21 @@
         const image = document.createElement('img');
         image.src = item.url; image.alt = item.file.name; image.loading = 'lazy';
         const caption = document.createElement('figcaption'); caption.textContent = item.error || item.file.name;
+        const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'quiet-button photo-remove'; remove.textContent = 'Remove'; remove.setAttribute('aria-label', `Remove ${item.file.name}`); remove.disabled = uploading;
+        remove.addEventListener('click', () => { uploadQueue = uploadQueue.filter(next => next !== item); URL.revokeObjectURL(item.url); renderUploadQueue(); photoPicker.button.focus({preventScroll:true}); });
+        caption.append(remove);
         if (item.error) card.className = 'upload-error';
         card.append(image, caption); return card;
       }));
       const pending = uploadQueue.filter(item => !item.invalid).length;
       const button = form.querySelector('button[type="submit"]');
-      button.textContent = pending ? `Send ${pending} ${pending === 1 ? 'photo' : 'photos'}` : 'Send photos';
-      button.disabled = uploading || !photoRoutingSupported || !pending;
+      photoPicker.setCount(uploadQueue.length);
+      button.textContent = MemoryLanePhotoPicker.sendLabel(pending, destinations.recipients);
+      button.disabled = uploading || !photoRoutingSupported || !pending || !destinations.recipients.length;
     }
 
     photo.addEventListener('change', () => {
-      uploadQueue.forEach(item => URL.revokeObjectURL(item.url));
-      uploadQueue = [...photo.files].map(file => {
-        const error = file.size > 20 * 1024 * 1024 ? 'Over 20 MB — choose a smaller photo.'
-          : !['image/jpeg', 'image/png'].includes(file.type) ? 'Choose a JPEG or PNG photo.' : '';
-        return {file, url: URL.createObjectURL(file), error, invalid: Boolean(error)};
-      });
+      uploadQueue = MemoryLanePhotoPicker.append(uploadQueue, photo.files);
       document.querySelector('#sender-upload-progress').hidden = true;
       renderUploadQueue();
       setStatus(uploadQueue.length ? 'Review your photos, then send when ready.' : 'Choose photos and their destinations.');
