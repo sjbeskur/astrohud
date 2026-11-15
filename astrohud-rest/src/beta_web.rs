@@ -103,6 +103,7 @@ impl From<DeviceRegistration> for DeviceRegistrationResponse {
 
 pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
     crate::configure_update_routes(config);
+    crate::storage::configure(config);
     config
         .route(
             "/api/beta/owner/session",
@@ -145,9 +146,10 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
                 .route(web::get().to(get_owner_photos))
                 .route(web::post().to(upload_owner_photo)),
         )
-        .route(
-            "/api/beta/owner/frames/{frame_id}/playback",
-            web::post().to(set_owner_playback),
+        .service(
+            web::resource("/api/beta/owner/frames/{frame_id}/playback")
+                .route(web::get().to(get_owner_playback))
+                .route(web::post().to(set_owner_playback)),
         )
         .service(
             web::resource("/api/beta/owner/frames/{frame_id}/photos/{photo_id}")
@@ -480,6 +482,24 @@ async fn upload_owner_photo(
     )
     .await?;
     Ok(HttpResponse::Created().json(serde_json::json!({"status":"received","photo_id":photo.id})))
+}
+
+async fn get_owner_playback(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    frame: web::Path<String>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    crate::updates::owner_frame(&db, &token, &frame).map_err(beta_http_error)?;
+    let playback =
+        crate::playback::frame_playback(&db, &frame).map_err(error::ErrorInternalServerError)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(playback))
 }
 
 async fn set_owner_playback(
@@ -1009,6 +1029,45 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn slideshow_settings_can_be_read_without_loading_the_gallery_and_are_owner_scoped() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize_database(&db).unwrap();
+        let owner = create_household_owner(&mut db, "Home", "Owner").unwrap();
+        let other = create_household_owner(&mut db, "Other", "Owner").unwrap();
+        db.execute("INSERT INTO frames (id,household_id,place_name) VALUES ('settings-frame',?1,'Kitchen')",[&owner.household_id]).unwrap();
+        let app = test::init_service(
+            App::new()
+                .app_data(web::Data::new(AppState::new(db, "unused".into())))
+                .configure(configure_beta_routes),
+        )
+        .await;
+        let url = "/api/beta/owner/frames/settings-frame/playback";
+        let request = test::TestRequest::get().uri(url).to_request();
+        assert_eq!(
+            test::call_service(&app, request).await.status(),
+            StatusCode::UNAUTHORIZED
+        );
+        let request = test::TestRequest::get()
+            .uri(url)
+            .cookie(Cookie::new(OWNER_COOKIE, other.owner_token))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, request).await.status(),
+            StatusCode::NOT_FOUND
+        );
+        let request = test::TestRequest::get()
+            .uri(url)
+            .cookie(Cookie::new(OWNER_COOKIE, owner.owner_token))
+            .to_request();
+        let response = test::call_service(&app, request).await;
+        assert_eq!(response.status(), StatusCode::OK);
+        assert_eq!(response.headers().get("cache-control").unwrap(), "no-store");
+        let body: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(body["slide_seconds"], 12);
+        assert_eq!(body["viewer_supports_playback_modes"], false);
+    }
 
     #[actix_web::test]
     async fn sender_history_is_private_paginated_and_survives_link_replacement_and_frame_removal() {

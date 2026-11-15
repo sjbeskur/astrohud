@@ -469,13 +469,13 @@ or restore the previous application release. The frame checks automatically;
 installation requires owner confirmation. No keyboard or mouse is needed on
 the appliance. The local implementation includes a device agent, signed release
 verification, atomic viewer/provisioner switching, health checks and rollback.
-It has not been deployed. See [updater operations and process diagram](astrohud-updater/README.md).
+The v0.5.3 API/site and field update are deployed. See [updater operations and process diagram](astrohud-updater/README.md).
 
 This development release upgrades the server database to **schema 14** with a pre-upgrade
 snapshot. Deploy API and website together; v0.5.1 and older servers cannot open
 schema 14. Pi application rollback is independent of server/database rollback.
 
-## Playback styles (prepared v0.5.3)
+## Playback styles (v0.5.3)
 
 Under **Photos → Slideshow settings → Playback style**, updated frames support
 **The Scenic Route** (fair shuffle, default), **Fresh Prints** (newest first),
@@ -487,4 +487,32 @@ pins and guest requests retain priority. The catalogue limit rises from 200 to
 
 The matching API/site, schema-14 snapshot migration, R2 artifacts and manual
 field-Pi update are described in [the release guide](astrohud-frame/PLAYBACK_RELEASE.md).
-This code is prepared locally; production rollout has not yet happened.
+Production and the user-confirmed field update are deployed.
+
+## Device storage (prepared v0.5.4)
+
+The owner app keeps Home, Photos, Send, Invite and Settings visible in a
+sticky top menu, with the current section highlighted. Playback styles use
+visible selection cards with descriptions instead of a dropdown. Slideshow
+controls live directly under the main Settings gear, followed by Storage and
+Software updates. Photos retains its individual photo actions.
+
+The next release adds **Settings → Storage**, with disk usage, available space,
+downloaded photo count, photo storage usage/limit, and an estimate such as
+“Room for about 720 more photos.” It uses actual downloaded image sizes with
+a 25% margin, constrained by both the current photo allowance and a 512 MiB
+free-space reserve. A full photo allowance is normal cache management; only
+disk pressure produces a home-page warning. Readings show when they were
+reported and are marked stale after ten minutes.
+
+Viewer v0.4.0 reports through the existing device credential on startup and
+every five minutes. Downloads check space before starting and before each
+write, clean up partial files, and retry after space is available. This
+protects photo writes; it cannot reserve space against unrelated OS processes.
+No billing, paid tiers, or allowance changes are introduced. A future storage
+purchase could adjust the allowance through a separate entitlement design.
+
+API/site v0.5.4 requires schema 15, with the existing pre-upgrade snapshot.
+Deploy those first, then distribute the signed viewer update. Older viewers
+remain compatible and initially show a storage-reporting update hint. Existing
+updater agents need no upgrade. This feature is local and not yet deployed.

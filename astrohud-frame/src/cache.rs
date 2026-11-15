@@ -1,5 +1,6 @@
 use crate::BoxError;
 use crate::model::{CachedPhoto, FrameManifest, Photo, Playlist};
+use crate::storage::{self, SpaceReserved, StorageReport};
 use image::{ImageFormat, ImageReader};
 use std::collections::HashSet;
 use std::fs::{self, File};
@@ -7,7 +8,7 @@ use std::io::{self, BufReader, BufWriter, Read, Write};
 use std::path::{Path, PathBuf};
 
 const MANIFEST_FILE: &str = "manifest.json";
-const MAX_DOWNLOAD_BYTES: u64 = 25 * 1024 * 1024;
+pub(crate) const MAX_DOWNLOAD_BYTES: u64 = 25 * 1024 * 1024;
 // A malformed or unexpectedly huge source must not exhaust a 512 MiB Pi while
 // the image crate allocates its decoded pixel buffer.
 const MAX_DECODED_PIXELS: u64 = 20_000_000;
@@ -72,6 +73,17 @@ impl CacheStore {
     }
 
     pub fn install(&self, photo: &Photo, reader: impl Read) -> Result<PathBuf, BoxError> {
+        self.install_with_space(photo, reader, || {
+            storage::filesystem_space(&self.media_dir).map(|stats| stats.available)
+        })
+    }
+
+    fn install_with_space(
+        &self,
+        photo: &Photo,
+        reader: impl Read,
+        mut available: impl FnMut() -> io::Result<u64>,
+    ) -> Result<PathBuf, BoxError> {
         if !photo.is_supported() {
             return Err(format!("unsupported image type: {}", photo.mime_type).into());
         }
@@ -79,15 +91,13 @@ impl CacheStore {
         let destination = self.photo_path(photo)?;
         let temporary = destination.with_extension("part");
         let result = (|| -> Result<PathBuf, BoxError> {
-            let file = File::create(&temporary)?;
-            let mut writer = BufWriter::new(file);
-            let mut limited = reader.take(MAX_DOWNLOAD_BYTES + 1);
-            let bytes_written = io::copy(&mut limited, &mut writer)?;
-            if bytes_written > MAX_DOWNLOAD_BYTES {
-                return Err("downloaded image exceeds 25 MiB".into());
+            if available()? <= storage::RESERVE_BYTES {
+                return Err(SpaceReserved.into());
             }
-            writer.flush()?;
-            writer.get_ref().sync_all()?;
+            let file = File::create(&temporary)?;
+            let mut writer = file;
+            storage::copy_with_reserve(reader, &mut writer, MAX_DOWNLOAD_BYTES, available)?;
+            writer.sync_all()?;
             drop(writer);
 
             validate_image(&temporary)?;
@@ -109,6 +119,40 @@ impl CacheStore {
             }
         }
         Ok(total)
+    }
+
+    pub fn check_download_space(&self) -> Result<(), BoxError> {
+        if storage::filesystem_space(&self.media_dir)?.available <= storage::RESERVE_BYTES {
+            return Err(SpaceReserved.into());
+        }
+        Ok(())
+    }
+
+    pub fn remaining_photo_bytes(&self) -> Result<u64, BoxError> {
+        Ok(self.max_bytes.saturating_sub(self.total_bytes()?))
+    }
+
+    pub fn storage_report(&self) -> Result<StorageReport, BoxError> {
+        let stats = storage::filesystem_space(&self.media_dir)?;
+        let mut photo_bytes = 0_u64;
+        let mut photo_count = 0_u64;
+        for entry in fs::read_dir(&self.media_dir)? {
+            let entry = entry?;
+            if is_cached_image(&entry.path()) && entry.file_type()?.is_file() {
+                photo_bytes = photo_bytes.saturating_add(entry.metadata()?.len());
+                photo_count += 1;
+            }
+        }
+        Ok(StorageReport {
+            viewer_version: env!("CARGO_PKG_VERSION"),
+            disk_total_bytes: stats.total,
+            disk_available_bytes: stats.available,
+            disk_used_bytes: stats.used,
+            photo_bytes,
+            photo_count,
+            photo_limit_bytes: self.max_bytes,
+            reserve_bytes: storage::RESERVE_BYTES,
+        })
     }
 
     /// Keeps the newest photos that fit. The first photo is retained even when
@@ -265,6 +309,27 @@ mod tests {
             created_at: "2026-08-22 00:00:00".to_owned(),
             location_label: None,
         }
+    }
+
+    #[test]
+    fn disk_pressure_removes_partial_downloads_and_preserves_existing_photos() {
+        let directory = TestDirectory::new();
+        let store = CacheStore::open(&directory.0, 1024 * 1024).unwrap();
+        let photo = photo("kept");
+        let original = png_bytes(2, 2);
+        let path = store.install(&photo, Cursor::new(&original)).unwrap();
+        let mut space = [u64::MAX, u64::MAX, storage::RESERVE_BYTES].into_iter();
+        let error = store
+            .install_with_space(&photo, Cursor::new(vec![0; 128 * 1024]), || {
+                Ok(space.next().unwrap())
+            })
+            .unwrap_err();
+        assert!(error.is::<SpaceReserved>());
+        assert_eq!(fs::read(&path).unwrap(), original);
+        assert!(!path.with_extension("part").exists());
+        let report = store.storage_report().unwrap();
+        assert_eq!(report.photo_count, 1);
+        assert_eq!(report.photo_bytes, original.len() as u64);
     }
 
     #[test]

@@ -1,5 +1,149 @@
 # Memory Lane handoff
 
+## v0.5.4 release build verified; R2 CLI setup in progress — 2026-11-14
+
+User requested build, commit, tag and R2 deployment, then asked to configure
+AWS CLI for uploads. Final ARM64 Docker build passed. All 116 workspace Rust
+tests passed (six manual previews ignored), along with Clippy/format/diff checks
+and final playback/navigation/storage browser checks plus native-viewer storage
+integration. Private signing key was verified against the existing device trust;
+the published channel was verified as v0.5.3/sequence 2 before packaging.
+
+Signed and reverified v0.5.4/sequence 3 bundle is ready under ignored
+target/releases/v0.5.4/r2-upload/storage-0.5.4/. It contains frame v0.4.0
+(6,010,488 bytes), provisioner v0.1.1 (3,898,432 bytes), and stable.json.
+Channel promotion copy is r2-upload/updater-test-20261114/stable.json.
+Standalone binaries and SHA256SUMS are alongside r2-upload. Signing private
+key remains outside the repository; upload only release artifacts.
+
+Installed AWS CLI v2.40.3 for the user at ~/.local/share/aws-cli with binary
+~/.local/bin/aws, using the official AWS installer and verified archive
+signature. No R2 credentials existed in environment/home/repo profiles.
+User was instructed to create an Object Read & Write R2 token restricted to
+memorylane-nightly, then run `aws configure --profile memorylane-r2` privately
+with R2 Access Key ID/Secret Access Key, region auto, output json. Wait for
+the user to confirm setup; never request or print keys.
+
+Remaining release steps: commit/tag requested source, upload immutable
+storage-0.5.4 objects through AWS CLI, verify public bytes/signature, then
+promote the channel after matching API/site v0.5.4/schema 15 is healthy.
+The explicit deployment request named R2; origin/master auto-deploys the
+production API/site and schema migration, so coordinate that separately.
+No production or device changes have occurred for v0.5.4 yet.
+
+## Settings group separation refined — 2026-11-14
+
+User requested clearer distinction between groups. Slideshow, Storage,
+Software update, Your devices and Owner access now have separate raised
+cards with complete borders, stronger heading dividers, 24px gaps and subtle
+accent colors from the existing palette. Device/reset controls now share a
+labeled group container. Navigation/slideshow/storage browser checks passed
+at phone and desktop widths; the interactive simulator was refreshed.
+Also removed obsolete Settings-button ID spacing rules that displaced the
+new navigation item; icons, labels and button heights were verified aligned.
+
+## Slideshow consolidated into main Settings — 2026-11-14
+
+User approved making the main gear the single entry for device settings.
+Moved playback cards, timing, background and guest Display next controls into
+an inline Slideshow section at the top of Settings, followed by Storage and
+Software updates; device/reset and owner-access controls follow below. The
+selected-frame context stays above them. Removed the Photos slideshow gear
+and modal so persistent Home navigation remains usable. Photos keeps Show now,
+Pin and Resume slideshow.
+
+Added owner-scoped GET /api/beta/owner/frames/{frame_id}/playback with no-store
+responses so Settings loads independently of the gallery. Separate per-frame
+slideshow state and request generations discard stale load/save responses
+after switching frames. Failed loads disable unknown controls and offer retry;
+failed saves restore persisted choices. Settings refreshes playback capability
+in the background every 15 seconds without replacing an active form edit.
+
+Validation: all 52 REST library tests and Clippy passed, including GET auth/
+household scoping. Browser playback/settings checks passed for all modes,
+keyboard, failed saves, older-viewer gating, timing/background/guest saves,
+per-frame defaults, a held save completing after switching frames, failed
+load/retry, sticky navigation and storage at phone/desktop widths. This remains
+part of local prepared v0.5.4 on feature/device-storage, not deployed.
+
+## Persistent owner navigation included in v0.5.4 — 2026-11-14
+
+User observed a test owner struggling to return Home and requested a persistent
+top menu with buttons for other features. Added a sticky top-level navigation
+outside the scrolling main content with labeled Home, Photos, Send, Invite,
+and Settings destinations. Native anchors preserve Back/Forward behavior;
+the active section uses aria-current and amber styling. Selected frame stays
+unchanged. Settings retains the existing red update badge, now visible from
+every owner section. Removed the movable/duplicated heading Home links. The
+navigation is hidden before owner authorization; Add a device remains on Home.
+
+Browser test test-owner-navigation.mjs passed at 320/390/1280px: all routes,
+44px targets, no horizontal overflow, sticky/clickable Home after scrolling,
+selected-frame retention, update badge and browser Back. Playback-card and
+storage browser checks passed after the change. Preview:
+/tmp/memory-lane-owner-navigation.png. Changes remain local on
+feature/device-storage as part of the same prepared v0.5.4 release.
+
+## Playback cards included in storage release — 2026-11-14
+
+User confirmed the storage design and requested improving slideshow dropdowns
+in this same version. Storage remains on the main Settings page, scoped to
+the selected frame. Photos → Slideshow settings now uses three stacked native
+radio cards for The Scenic Route, Fresh Prints and Serendipity, each with its
+description visible. The selection has an amber border/tint and Selected label.
+Selections save immediately; unsupported viewers keep controls disabled and
+failed saves restore the persisted choice. Keyboard and accessible naming/
+descriptions use native radio/fieldset semantics. Updated browser checks cover
+keyboard selection, failed-save recovery, normal playback and capability
+gating/rollback at 320/390/1280px; storage browser checks also passed with the
+shared CSS change. Preview: /tmp/memory-lane-playback-modes.png. These UI
+changes are part of prepared v0.5.4 on feature/device-storage, still local.
+
+## Storage visibility and photo reserve implemented locally — 2026-11-14
+
+User approved Settings storage visibility and requested protection against
+filling the device plus an estimated photo count for nontechnical owners.
+One-off paid storage is a future idea; do not add billing or change allowances
+as part of this work. Branch feature/device-storage starts at 8a9486d.
+
+Prepared API/site v0.5.4/schema 15 and viewer v0.4.0. Owner Storage card shows
+disk used/total/available, photo bytes/count/limit and approximate additional
+photos. It uses remaining cache allowance vs disk available minus 512 MiB,
+whichever is smaller, divided by sampled mean photo bytes (+25%, minimum
+64 KiB base). Empty samples show a hint; fewer than five samples are labeled
+early estimates. Full cache allowance is normal, not a low-disk alarm. A quiet
+home warning appears only for fresh low/very-low readings; older than ten
+minutes or failed refreshes retain the last measurement with stale labels.
+
+Viewer reports authenticated numeric snapshots on startup/every five minutes;
+server retains only the latest report per frame. Owner/co-owner scope uses
+existing authorization, no paths/photo IDs/secrets are reported. Existing
+updater agent stays unchanged, so signed viewer updates can deliver this.
+Schema 15 adds frame_storage with the existing pre-migration snapshot; deploy
+API/site before viewer. Older viewers remain compatible; newer viewer on old
+server keeps playback while reporting fails with backoff.
+
+Photo downloads inspect available space before HTTP/download and each chunk
+write, fail closed on measurement errors, and remove partial files on failure.
+Existing photos remain. Fixed unchanged-manifest optimization so missing older
+photos retry after a space pause when allowance has room. The reserve bounds
+the viewer's writes, not unrelated OS/updater activity; no physical disk was
+filled to test it.
+
+Validation: all 115 workspace Rust tests passed (six previews ignored), plus
+Clippy/format checks. Tests cover reserve exhaustion during a write, partial
+cleanup/preserved photos, retrying missing history, estimates, auth/scoping,
+latest-only snapshots and schema-14 backup migration. Browser checks passed
+for estimates/empty and early samples/cache full/low and critical/stale/error/
+frame changes and 320/390/1280px layouts. Real native viewer passed against
+isolated API after download/restart, reporting actual filesystem/photo stats.
+Final ARM64 Docker build passed. Preview: /tmp/memory-lane-storage-preview.png.
+Local QA API runs at 127.0.0.1:18116 with disposable data only.
+
+Remaining: review local changes, commit, coordinate API/site deployment and
+signed R2 release, then validate the local Pi. No commit/push/tag/deployment,
+R2 publication or physical-device changes were performed for this feature.
+
 ## Field rollout confirmed; v0.5.3 release — 2026-11-14
 
 User reports the field unit "updated and deployed with little drama" after

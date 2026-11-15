@@ -229,7 +229,7 @@ mod tests {
             current
                 .pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
                 .unwrap(),
-            14
+            astrohud_rest::SCHEMA_VERSION
         );
         drop(current);
         drop(old);
