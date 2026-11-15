@@ -1,5 +1,23 @@
 # Memory Lane handoff
 
+## Web v0.5.5 deployed; desktop branch retained — 2026-11-15
+
+Completed the approved split and deployment. master/origin/master and tag
+v0.5.5 point to web-only commit 892f84f. Production health is v0.5.5/schema 15;
+live owner.html, send.html, photo-picker.js and astrohud-theme.css match the
+tested source byte-for-byte. The service recovered from a temporary 502 during
+rollout. No schema migration, Pi update or R2 channel change was required.
+Operational verification is saved under ignored
+target/releases/web-v0.5.5/deployment-status.json.
+
+feature/tauri-client is pushed and retained. Desktop implementation commit
+310a905 follows the shared web commit; Tauri files are absent from master.
+Workspace is back on feature/tauri-client for further app work. Browser tests
+passed picker, slideshow and navigation scenarios; REST tests passed (52
+library plus three admin tests). User screenshots under docs/device-images
+remain untracked and untouched. Refresh the live webpage for the new picker;
+desktop users continue with the already-built draft or just client-build/run.
+
 ## Web picker split from desktop draft — 2026-11-15
 
 User approved publishing the picker to the website while keeping
