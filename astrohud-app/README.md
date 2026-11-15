@@ -15,7 +15,8 @@ just client-build
 just client-run
 ```
 
-The API defaults to `http://127.0.0.1:18116`. If it isn't already running:
+Debug builds default to `http://127.0.0.1:18116`; packaged release builds
+default to `https://app.astrohud.com`. If the local API isn't already running:
 
 ```sh
 ASTROHUD_DATA_DIR=target/client-demo-data \
@@ -35,11 +36,27 @@ For an existing account, enter its server origin and paste the full owner
 activation, owner recovery, or sender invitation URL. The link must belong to
 the selected server. HTTPS is required except for loopback development.
 Connecting to a real service performs real actions with that access: this
-draft starts with the local server to keep iteration separate.
+debug build starts with the local server to keep iteration separate. Sample
+frames appear only when a loopback server is selected.
 
 `ASTROHUD_CLIENT_SERVER_URL` can select the initial server. Server changes and
 Disconnect discard the old session. The banner always identifies a desktop
 draft and the connected server. Your browser's cookies are not imported.
+
+## Package for Ubuntu testers
+
+Run `just client-package` to build an optimized amd64 `.deb` inside Ubuntu
+22.04 with its GTK/WebKit libraries. This avoids requiring a newer glibc on
+the tester's machine. Docker and Node are required on the build workstation;
+testers need neither Rust nor Node nor a development API.
+
+The shareable archive is
+`target/releases/Memory-Lane-Desktop-0.1.0-ubuntu22-amd64.tar.gz` and contains
+the installer, checksums and [tester instructions](TESTING.txt). Release builds
+open the live service by default. No private links, credentials or photos are
+bundled. `sudo apt install ./Memory\ Lane_0.1.0_amd64.deb` installs the runtime
+dependencies and an applications-menu entry. Automatic app updates are not
+part of this preview. This package is for Intel/AMD 64-bit, not ARM devices.
 
 ## Shared interface and native transport
 
@@ -84,6 +101,9 @@ It creates disposable demo data and covers sample setup, protected image
 rendering, file selection/preview/upload, owner recovery, invited sender
 upload, role isolation and clearing access after restart. It defaults to a
 driver on port 4447; set `TAURI_TEST_DRIVER` to another loopback driver.
+Set `TAURI_TEST_BINARY` to test an extracted release binary and set
+`ASTROHUD_CLIENT_SERVER_URL=http://127.0.0.1:18116` in the driver's environment
+so the release test uses disposable local data.
 Use an isolated display so automated checks do not interact with a user's
 desktop window. Test tools and screenshots live under ignored `target/` and
 `/tmp`; they are not application dependencies.

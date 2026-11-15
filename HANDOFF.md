@@ -1,5 +1,34 @@
 # Memory Lane handoff
 
+## Ubuntu desktop preview packaged — 2026-11-15
+
+On feature/tauri-client, packaged desktop preview 0.1.0 specifically for the
+tester's Ubuntu 22.04 amd64 system. `just client-package` uses the new isolated
+Dockerfile.ubuntu22 and writes a 4.3 MB shareable archive at
+target/releases/Memory-Lane-Desktop-0.1.0-ubuntu22-amd64.tar.gz containing the
+.deb, README.txt and SHA256SUMS. Debian package name is memory-lane; executable
+is memory-lane-app. Installer includes desktop entry/icon and GTK/WebKit runtime
+dependencies. Binary needs at most GLIBC_2.34; package declares libc6 >= 2.35.
+
+Release builds default to https://app.astrohud.com; debug builds keep the
+loopback API. Sample-frame controls appear only for loopback servers. No
+private access links, credentials or photos are bundled. Access still clears
+on exit; testers reconnect with their private link. A consumed activation link
+requires a fresh recovery link. TESTING.txt explains install/use/uninstall.
+
+All three native transport unit tests passed inside Ubuntu 22.04. The binary
+extracted from the installer passed actual Tauri/WebKit automation inside
+Ubuntu 22.04/Xvfb against disposable API data on port 18116: sample creation,
+multipart uploads, protected gallery images, file selection/preview, owner
+recovery, invited sender access/upload, role isolation and restart clearing.
+Formatting-only rebuild produced an identical extracted binary. The test
+container required writable XDG directories and forwarding
+TAURI_WEBVIEW_AUTOMATION=true; its sandbox override was test-only. No hosted
+deployment, Pi/R2 channel change, branch merge or tag was requested. User
+requested committing the packaging changes on feature/tauri-client at session
+close; the built tester archive remains under ignored target/releases/.
+User screenshots in docs/device-images remain untouched.
+
 ## Web v0.5.5 deployed; desktop branch retained — 2026-11-15
 
 Completed the approved split and deployment. master/origin/master and tag

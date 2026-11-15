@@ -2,6 +2,8 @@ addEventListener('DOMContentLoaded',async()=>{
   const info=await window.memoryLaneReady;
   const form=document.querySelector('#connect'),server=document.querySelector('#server'),status=document.querySelector('#connection-status');
   server.value=info.server;
+  const showDemo=()=>{try{document.querySelector('#demo-card').hidden=!['localhost','127.0.0.1','[::1]'].includes(new URL(server.value).hostname);}catch(_){document.querySelector('#demo-card').hidden=true;}};
+  showDemo();server.addEventListener('input',showDemo);
   document.querySelector('#demo').addEventListener('click',async()=>{
     try{
       const next=await window.memoryLaneInvoke('set_server',{server:server.value});
@@ -15,7 +17,7 @@ addEventListener('DOMContentLoaded',async()=>{
       if(owner.ok){location.href='/owner.html';return;}
       const sender=await fetch('/api/beta/sender');
       if(sender.ok){location.href='/send.html';return;}
-      status.textContent='Connect with a private link or open the sample frames first.';
+      status.textContent='Connect with your private link first.';
     }catch(_){status.textContent='Could not reach the server. Check the address and connection.';}
   });
   form.addEventListener('submit',async event=>{

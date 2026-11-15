@@ -13,6 +13,10 @@ default:
 client-build:
     bash astrohud-app/scripts/build-desktop.sh
 
+# Package an optimized amd64 desktop preview for Ubuntu 22.04 testers.
+client-package:
+    bash astrohud-app/scripts/package-ubuntu.sh
+
 # Run the desktop draft (requires client-build); defaults to the local API.
 client-run:
     target/tauri-desktop/debug/memory-lane-app

@@ -11,5 +11,13 @@
       "csp": "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; connect-src 'self' ipc: http://ipc.localhost; object-src 'none'; base-uri 'self'; form-action 'self'"
     }
   },
-  "bundle": { "active": false, "icon": ["icons/icon.png"] }
+  "bundle": {
+    "active": true,
+    "targets": ["deb"],
+    "category": "Photography",
+    "shortDescription": "Send photos to your Memory Lane frame",
+    "longDescription": "Memory Lane desktop preview. Connect with a private owner or invitation link to manage frames and send photos. Access clears when the app closes.",
+    "icon": ["icons/icon.png"],
+    "linux": { "deb": { "depends": ["ca-certificates", "libc6 (>= 2.35)"] } }
+  }
 }

@@ -43,8 +43,13 @@ mod app {
     }
     #[cfg_attr(mobile, tauri::mobile_entry_point)]
     pub fn run() {
-        let server = std::env::var("ASTROHUD_CLIENT_SERVER_URL")
-            .unwrap_or_else(|_| "http://127.0.0.1:18116".into());
+        let default_server = if cfg!(debug_assertions) {
+            "http://127.0.0.1:18116"
+        } else {
+            "https://app.astrohud.com"
+        };
+        let server =
+            std::env::var("ASTROHUD_CLIENT_SERVER_URL").unwrap_or_else(|_| default_server.into());
         let session = Session::new(&server).expect("valid client server origin");
         tauri::Builder::default()
             .manage(AppState(Mutex::new(session)))

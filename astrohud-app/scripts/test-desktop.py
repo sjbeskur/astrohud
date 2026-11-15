@@ -12,7 +12,7 @@ import zlib
 
 driver = os.environ.get("TAURI_TEST_DRIVER", "http://127.0.0.1:4447")
 assert driver.startswith("http://127.0.0.1:")
-binary = str(Path("target/tauri-desktop/debug/memory-lane-app").resolve())
+binary = str(Path(os.environ.get("TAURI_TEST_BINARY", "target/tauri-desktop/debug/memory-lane-app")).resolve())
 session = None
 
 

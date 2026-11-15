@@ -1,0 +1,39 @@
+Memory Lane desktop preview 0.1.0
+Ubuntu 22.04, Intel/AMD 64-bit (amd64)
+
+INSTALL
+Extract the archive, open a terminal in its folder, then run:
+  sudo apt update
+  sudo apt install ./Memory\ Lane_0.1.0_amd64.deb
+APT installs the required GTK/WebKit libraries. If your Ubuntu installation
+cannot find libwebkit2gtk-4.1-0, enable Ubuntu's Universe repository first:
+  sudo add-apt-repository universe
+  sudo apt update
+Then repeat the install command.
+
+Open Memory Lane from the applications menu (or run memory-lane-app).
+The server defaults to https://app.astrohud.com. Paste a complete private
+owner activation/recovery link or a sender invitation link and choose Connect.
+Obtain a private link through your existing Memory Lane owner/invitation flow.
+Keep the entire link, including the portion after #. Treat it like a password.
+
+TRY
+Choose photos, check their previews, add/remove photos, and send to your frame.
+Confirm the photos arrive. Owners can also try navigation and frame settings.
+This connects to the real service: sends and settings affect your actual frame.
+
+PREVIEW LIMITATIONS
+Access clears when you close the app. Keep your private link to reconnect;
+if a one-time activation link has been consumed, obtain a new recovery link.
+JPEG and PNG are the intended test formats. Mobile-specific features and
+automatic desktop app updates are not included in this preview.
+
+REPORT
+Include Ubuntu version, what you clicked, what you expected and what happened.
+Please remove private links and personal photos from screenshots/logs.
+
+UNINSTALL
+  sudo apt remove memory-lane
+
+OPTIONAL INTEGRITY CHECK (in the extracted folder)
+  sha256sum -c SHA256SUMS
