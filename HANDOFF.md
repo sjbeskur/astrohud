@@ -1,5 +1,22 @@
 # Memory Lane handoff
 
+## Selective production merge prepared; Tauri branch retained — 2026-11-15
+
+User requested moving the shared changes to the production branch while
+retaining desktop work. The production branch is master, not main. Local
+master ec95829 contains only shared portal commit 7184556 and account/API
+commit ec95829, cherry-picked without the Tauri app/packaging commits or
+Orange hardware. API/site is v0.5.6/schema 16; Pi binaries are not published.
+Shared commits merged back into feature/tauri-client to keep future work
+aligned. The master checkout is target/main-merge. Deployment push pending;
+pushing origin/master triggers the previously confirmed hosted auto-deploy.
+
+Production checkout passed 56 API library + 3 admin + 18 provisioner tests
+(4 manual previews ignored). Logs target/forget-merge/production-tests.log.
+Runtime preview and browser checks are being completed before requesting the
+final production push approval. Brochure/case files remain separate local work.
+Orange experiment remains preserved at cc0c2de; do not resume that hardware work.
+
 ## Forget reset devices implemented locally — 2026-11-15
 
 User reports no way to forget/delete a device after factory reset. Reset
