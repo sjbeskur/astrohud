@@ -93,3 +93,37 @@ back. Photos returned normally in observation mode, and the viewer stayed
 active. No positive standby signal was obtained, so automatic mode remains
 disabled on this test device. CPU savings and automatic-pause wake recovery
 have not been validated. A timeout is not treated as proof of standby.
+
+## Passive CEC investigation
+
+`scripts/capture-cec.py` is a temporary diagnostic for the reference Pi Zero
+2 W. Run it as root with `--seconds 180` (maximum 300). Wait for its JSONL
+`ready` event before toggling the TV. It opens a separate monitor handle,
+does not transmit or allocate logical addresses, and leaves the viewer running.
+Closing that handle ends monitoring; there is no persistent configuration.
+
+The adapter may support monitoring only traffic to/from this Pi and broadcasts,
+rather than every device's traffic. The `ready` event states that limitation.
+Power queries/replies from the existing viewer establish that capture works.
+Only selected power/routing messages are recorded; unrelated messages and remote
+key presses are omitted. `scripts/test-capture-cec.py` checks decoding, including
+the difference between an actual standby opcode and a feature-abort payload.
+
+Record the sender, destination, and receive status of any standby message.
+A standby command expresses an intention and is not by itself confirmation
+that the TV powered off. This diagnostic does not change the idle policy.
+
+### Attended passive capture, 2026-11-15
+
+The reference TV sent a received broadcast standby frame (`0f:36`) at
+monotonic time 654006.208. Subsequent power replies reported `03`
+(On to Standby) for approximately 30 seconds, rather than definite Standby.
+Replies returned to On after wake, and the user confirmed photos returned.
+HDMI remained connected throughout. Capture used local-and-broadcast monitoring.
+
+This establishes a TV-originated standby command correlated with the attended
+off action. It does not establish a definite standby power report or validate
+automatic idle, wake recovery from paused playback, or CPU savings. A future
+policy can investigate combining this command with transition reports and a
+bounded fail-open timeout; transitions alone must not create indefinite idle.
+The installed viewer remains in observe mode with its existing policy.
