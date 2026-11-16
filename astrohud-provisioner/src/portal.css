@@ -1,0 +1,33 @@
+/* Use the app's shared theme, with only offline setup layout adjustments. */
+.portal-header { border-bottom: 1px solid var(--hud-line); background: #0b0f18; padding-top: env(safe-area-inset-top, 0px); }
+.portal-header-row { display: flex; align-items: center; justify-content: space-between; gap: 1rem; width: min(560px, calc(100% - 40px)); min-height: 60px; margin: auto; }
+.portal-brand { color: var(--hud-amber); font-size: 1rem; font-weight: 700; }
+.portal-header small { color: var(--hud-muted); font-size: 0.8rem; }
+.portal-page main { padding-bottom: max(1.5rem, env(safe-area-inset-bottom, 0px)); }
+.portal-page h1 { margin: 0 0 0.75rem; font-size: 1.6rem; font-weight: 650; letter-spacing: -0.035em; line-height: 1.25; }
+.portal-page h2 { margin: 0 0 0.5rem; font-size: 1.2rem; letter-spacing: -0.02em; }
+.portal-page .step-copy, .message-panel > p { color: var(--hud-muted); font-size: 0.95rem; line-height: 1.6; overflow-wrap: anywhere; }
+.portal-page label { margin-top: 1rem; font-weight: 650; letter-spacing: 0; }
+.portal-page form, .portal-page section { min-width: 0; }
+.network-select { position: relative; min-width: 0; }
+.network-select::after { content: ''; position: absolute; right: 1.15rem; top: 50%; width: 8px; height: 8px; margin-top: -6px; border-right: 2px solid var(--hud-muted); border-bottom: 2px solid var(--hud-muted); transform: rotate(45deg); pointer-events: none; }
+.portal-page select { display: block; appearance: none; -webkit-appearance: none; width: 100%; max-width: 100%; min-width: 0; min-height: 56px; border-radius: 12px; padding: 0.9rem 2.8rem 0.9rem 1rem; font-size: 16px; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; overflow: hidden; }
+.portal-page input:not([type="checkbox"]) { min-width: 0; max-width: 100%; font-size: 16px; }
+.portal-page .signal-button { display: inline-flex; align-items: center; justify-content: space-between; gap: 0.75rem; text-decoration: none; }
+.portal-page .full-width, .message-panel .signal-button { width: 100%; }
+.wizard-actions { display: flex; align-items: center; gap: 0.75rem; margin-top: 0.75rem; }
+.wizard-actions .full-width { flex: 1; width: auto; min-width: 0; margin: 0; }
+.wizard-actions .secondary { flex-shrink: 0; }
+.field-help { margin: 0.5rem 0 0; color: var(--hud-muted); font-size: 0.85rem; line-height: 1.5; }
+.checkbox-label { display: flex; align-items: center; gap: 0.65rem; }
+.portal-page .checkbox-label { font-size: 0.9rem; }
+.checkbox-label input { flex-shrink: 0; width: 20px; height: 20px; min-height: 20px; margin: 0; accent-color: var(--hud-amber); }
+.fine { color: var(--hud-muted); font-size: 0.8rem; line-height: 1.5; }
+.setup-link { margin-top: 1.5rem; overflow-wrap: anywhere; }
+.notice { margin: 1rem 0; padding: 0.9rem 1rem; border: 1px solid var(--hud-danger); border-radius: 12px; color: var(--hud-danger); line-height: 1.5; }
+.setup-progress ol { display: flex; gap: 0.5rem; margin: 0.5rem 0 1.5rem; padding: 0; list-style: none; }
+.setup-progress li { display: flex; flex: 1; flex-wrap: wrap; min-width: 0; align-items: center; gap: 0.4rem; color: var(--hud-muted); font-size: 0.8rem; }
+.step-number { display: grid; place-items: center; flex-shrink: 0; width: 26px; height: 26px; border: 1px solid var(--hud-line); border-radius: 50%; }
+.setup-progress [aria-current="step"] { color: var(--hud-amber); font-weight: 650; }
+.setup-progress [aria-current="step"] .step-number { color: #17120d; border-color: var(--hud-amber); background: var(--hud-amber); }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { transition: none !important; } }

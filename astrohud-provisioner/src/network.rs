@@ -94,7 +94,7 @@ impl NetworkManager {
         Self { paths }
     }
 
-    pub fn scan(&self) -> Result<Vec<WifiNetwork>, String> {
+    fn scan() -> Result<Vec<WifiNetwork>, String> {
         let output = nmcli_output([
             "--wait",
             "8",
@@ -121,7 +121,7 @@ impl NetworkManager {
         // Scan while the radio is still in station mode. An image's first boot
         // has no cached results, and the radio may not scan once it hosts the AP.
         // Complete this bounded scan before advertising the setup QR.
-        let networks = match self.scan() {
+        let networks = match Self::scan() {
             Ok(networks) => networks,
             Err(error) => {
                 eprintln!("nearby Wi-Fi scan failed; manual entry remains available: {error}");
@@ -210,6 +210,12 @@ impl NetworkManager {
 }
 
 fn connect_candidate(ssid: &str, password: &str) -> Result<(), String> {
+    // The AP has been stopped by apply_candidate. Its scan cache may have
+    // expired while hosting setup; wifi connect alone can fail immediately
+    // before NetworkManager's background scan discovers the household AP.
+    // Wait for a fresh scan in station mode before asking nmcli to find it.
+    NetworkManager::scan().map_err(|error| format!("Wi-Fi discovery failed: {error}"))?;
+    eprintln!("household Wi-Fi discovery completed; starting connection");
     let mut command = Command::new("nmcli");
     if !password.is_empty() {
         command.arg("--ask");
@@ -392,6 +398,79 @@ fn atomic_copy(source: &Path, destination: &Path) -> io::Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn household_connection_waits_for_scan_and_keeps_password_off_arguments() {
+        const CASE: &str = "MEMORY_LANE_JOIN_TEST_CASE";
+        if let Ok(case) = std::env::var(CASE) {
+            let result = connect_candidate("Example household", "test-fixture-secret");
+            if case == "scan-fails" {
+                assert!(result.unwrap_err().contains("Wi-Fi discovery failed"));
+            } else if case == "connect-fails" {
+                assert!(result.unwrap_err().contains("fixture connection failed"));
+            } else {
+                result.unwrap();
+            }
+            return;
+        }
+        // Execute the real command path in an isolated child so fake nmcli
+        // never changes PATH for other tests or touches the host's network.
+        let directory =
+            std::env::temp_dir().join(format!("astrohud-join-test-{}", std::process::id()));
+        fs::create_dir_all(&directory).unwrap();
+        let stub = directory.join("nmcli");
+        fs::write(
+            &stub,
+            r#"#!/bin/sh
+set -eu
+case " $* " in
+  *test-fixture-secret*) exit 90 ;;
+esac
+case " $* " in
+  *" device wifi list "*)
+    case " $* " in *" --rescan yes "*) ;; *) exit 91 ;; esac
+    printf 'scan\n' >> "$MEMORY_LANE_JOIN_TEST_TRACE"
+    if [ "$MEMORY_LANE_JOIN_TEST_CASE" = scan-fails ]; then
+      echo 'fixture scan failed' >&2; exit 3
+    fi
+    printf 'Example household:80:WPA2\n'
+    ;;
+  *" device wifi connect "*)
+    printf 'connect\n' >> "$MEMORY_LANE_JOIN_TEST_TRACE"
+    IFS= read -r secret
+    [ "$secret" = test-fixture-secret ]
+    if [ "$MEMORY_LANE_JOIN_TEST_CASE" = connect-fails ]; then
+      echo 'fixture connection failed' >&2; exit 4
+    fi
+    ;;
+  *) exit 92 ;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&stub, fs::Permissions::from_mode(0o755)).unwrap();
+        for case in ["success", "scan-fails", "connect-fails"] {
+            let trace = directory.join(case);
+            let result = Command::new(std::env::current_exe().unwrap())
+                .args(["--exact", "network::tests::household_connection_waits_for_scan_and_keeps_password_off_arguments", "--nocapture"])
+                .env("PATH", format!("{}:{}", directory.display(), std::env::var("PATH").unwrap_or_default()))
+                .env(CASE, case)
+                .env("MEMORY_LANE_JOIN_TEST_TRACE", &trace)
+                .output().unwrap();
+            assert!(
+                result.status.success(),
+                "{case}: {}",
+                String::from_utf8_lossy(&result.stderr)
+            );
+            let expected = if case == "scan-fails" {
+                "scan\n"
+            } else {
+                "scan\nconnect\n"
+            };
+            assert_eq!(fs::read_to_string(trace).unwrap(), expected);
+        }
+        fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn scan_parser_handles_escaped_ssids_and_duplicates() {

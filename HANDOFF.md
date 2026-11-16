@@ -1,5 +1,16 @@
 # Memory Lane handoff
 
+## Shared portal improvements retained — 2026-11-15
+
+Cherry-picked the hardware-independent portal improvements from the desktop
+branch: embedded app theme, compact layout, full-width SSID chooser, local
+DNS answers for AAAA/HTTPS/SVCB, fresh station scan before household joining,
+and fixed-label request/response timing logs. These source improvements are
+available for future Pi builds; deploying API/site does not update Pi binaries.
+The Orange Pi experiment is shelved on feature/orange-pi-experimental after
+a tester-TV failure. No Orange board, driver or reset-reboot code is included.
+Tauri app and packaging work remains on feature/tauri-client.
+
 ## v0.5.4 release build verified; R2 CLI setup in progress — 2026-11-14
 
 User requested build, commit, tag and R2 deployment, then asked to configure
