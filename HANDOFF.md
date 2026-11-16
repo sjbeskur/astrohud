@@ -1,5 +1,40 @@
 # Memory Lane handoff
 
+## API/site v0.5.6 prepared: forget reset devices — 2026-11-15
+
+User reports no way to forget/delete a device after factory reset. Reset
+remained listed until reconnect/receipt completion; completed entries also
+had no removal action. Added owner-authenticated DELETE
+/api/beta/owner/resets/{reset_id} with confirm_name. Pending resets are refused;
+after acceptance, Forget device releases old account pairing and hides the
+entry without needing device reconnect. Completed history uses Remove from
+list. Other devices and household photos remain. No physical-wipe claim is
+made by account removal. Receipts remain stored privately: a lost acceptance
+response can retry using receipt, and later completion is idempotent even
+after reclaim by a new owner. Tests verify old-owner retries cannot delete
+new-owner pairing. Normal completion still behaves as before.
+
+Schema 16 adds device_resets.forgotten_at, with additive migration and normal
+pre-upgrade snapshot; dismissed rows excluded from owner history. Existing
+reset records preserved. API owner context adds reset_forget_version=1 so
+new UI hides actions against older hosted API (important for desktop app).
+Polling generations prevent stale requests resurrecting forgotten entries;
+another owner's removal also triggers full owner context refresh.
+
+All 56 library + 3 admin tests passed. Browser test in
+astrohud-rest/scripts/test-forget-device.mjs passed pending/accepted/completed
+states, cancel, delayed stale poll, old API capability, last-device removal
+and 320/390/1280px layouts. Screenshot target/forget-device-preview.png uses
+sample accounts only. Isolated local API at 127.0.0.1:18119, shell session
+13027, uses target/forget-device-preview; production data untouched. Browser
+run shell 91564 exited 0. Library test log target/forget-device-tests.log.
+API and site must deploy together; older server cannot open schema 16.
+
+API/site changes are cherry-picked onto master for deployment; Tauri and
+packaging work stays on feature/tauri-client. Production push is still pending. Original image/brochure files untouched;
+Orange hardware remains shelved on feature/orange-pi-experimental. No live
+device, hosted API, master push or R2 deployment performed for this feature.
+
 ## Shared portal improvements retained — 2026-11-15
 
 Cherry-picked the hardware-independent portal improvements from the desktop

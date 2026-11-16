@@ -1,11 +1,12 @@
 # Memory Lane
 
-Current hosted release: **v0.5.1**. The server reports its package version at
+API/site version: **v0.5.6**. The server reports its package version at
 `/api/health`; Pi software is versioned independently.
 
-This release hardens photo uploads and device setup, with viewer v0.2.2 and
-provisioner v0.1.1. Schema 12 is unchanged from v0.5.0; older schema-11 releases
-cannot open the database. See [the release review](RELEASE_REVIEW.md) for details.
+This version adds forgetting devices after an accepted factory reset and
+removing completed reset entries. Schema 16 preserves reset receipts and
+creates a pre-upgrade database snapshot. Deploy API and website together;
+older servers cannot open the upgraded database. Pi binaries are unchanged.
 
 Memory Lane (formerly AstroHUD) is a shared digital picture frame, with a
 mobile-friendly owner and guest website, a hosted Rust API, and a native
@@ -257,6 +258,19 @@ Wi-Fi disconnects the appliance, **complete** is confirmed after it has joined
 a network again. Household photos and other devices remain intact. The device
 must run the updated provisioner and systemd units; old software leaves the
 request pending rather than reporting a wipe that did not happen.
+
+Once a device has accepted its reset, **Forget device** removes it from the
+household even if it is offline and has not reconnected to confirm cleanup.
+This releases the account pairing; it does not assert that a powered-off
+device has finished erasing its local data. Its reset receipt remains valid
+so interrupted cleanup and later setup can complete. Completed reset entries
+have **Remove from list**. Requests still waiting for device acceptance cannot
+be forgotten. Saved household photos and other devices are preserved.
+
+This API/site change uses schema 16, adding a nullable reset-history dismissal
+timestamp. Startup takes the usual pre-upgrade database snapshot. Deploy the
+matching API and website together; older servers cannot open schema 16.
+The website advertises these actions only when the API reports support.
 
 For a local test, keep the device simulator tab open, request a reset on the
 owner page, and confirm that the simulator returns to onboarding. The simulator

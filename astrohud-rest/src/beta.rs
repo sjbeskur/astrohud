@@ -106,6 +106,7 @@ pub struct OwnerContext {
     pub frames: Vec<OwnerFrame>,
     pub invitations: Vec<OwnerInvitation>,
     pub resets: Vec<crate::DeviceReset>,
+    pub reset_forget_version: u8,
     pub recovery: Option<crate::RecoveryStatus>,
 }
 
@@ -709,6 +710,7 @@ pub fn owner_context(
         frames,
         invitations,
         resets: crate::owner_resets(connection, &household.0)?,
+        reset_forget_version: 1,
         recovery: crate::recovery_status(connection, &household.0)?,
     })
 }

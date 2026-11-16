@@ -17,7 +17,7 @@ const MAX_IMAGE_BYTES: usize = 20 * 1024 * 1024;
 // time and blur on the Pi's software renderer for no visible benefit.
 const MAX_PHOTO_LONG_EDGE: u32 = 1600;
 const PHOTO_JPEG_QUALITY: u8 = 87;
-pub const SCHEMA_VERSION: i64 = 15;
+pub const SCHEMA_VERSION: i64 = 16;
 pub const PHOTO_ROUTING_VERSION: u8 = 1;
 pub const PHOTO_HISTORY_VERSION: u8 = 1;
 pub const DEMO_FRAME_ID: &str = "demo-frame";
@@ -200,7 +200,8 @@ CREATE TABLE IF NOT EXISTS device_resets (
     receipt_hash BLOB,
     next_credential_hash BLOB,
     requested_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    completed_at TEXT
+    completed_at TEXT,
+    forgotten_at TEXT
 );
 CREATE UNIQUE INDEX IF NOT EXISTS device_resets_active
 ON device_resets(frame_id) WHERE state != 'complete';
@@ -427,6 +428,12 @@ pub fn initialize_database(connection: &Connection) -> rusqlite::Result<()> {
         };
     connection.execute_batch("PRAGMA foreign_keys = ON;")?;
     initialization?;
+    if !table_columns(connection, "device_resets")?
+        .iter()
+        .any(|name| name == "forgotten_at")
+    {
+        connection.execute("ALTER TABLE device_resets ADD COLUMN forgotten_at TEXT", [])?;
+    }
 
     connection.execute(
         "INSERT OR IGNORE INTO households (id, name) VALUES (?1, ?2)",

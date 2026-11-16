@@ -165,7 +165,7 @@
           <div id="software-update" class="owner-recovery settings-group" hidden></div>
           <section id="device-management" class="owner-recovery settings-group" aria-labelledby="device-management-title">
           <h2 id="device-management-title">Your devices</h2>
-          <p class="instrument-copy">Factory reset clears a device's photos, Wi-Fi, and pairing. Other devices and your saved photos stay available.</p>
+          <p class="instrument-copy">Factory reset clears a device's photos, Wi-Fi, and pairing. Once it accepts the reset, you can forget it from this account. Other devices and your saved photos stay available.</p>
           <div id="device-controls" class="connection-summary"></div>
           <div id="reset-history" class="connection-summary" role="status"></div>
           </section>
@@ -248,6 +248,7 @@
     try { selectedFrameId = localStorage.getItem('memory-lane-selected-frame') || ''; } catch (_) {}
     let photoRequest = 0;
     let resetTimer;
+    let resetGeneration = 0;
     const softwareUpdates = new MemoryLaneUpdates(document.querySelector('#software-update'));
     const deviceStorage = new MemoryLaneStorage(document.querySelector('#device-storage'), document.querySelector('#home-storage-notice'));
     let recoveryExists = false;
@@ -418,6 +419,7 @@
         ownerContext = null;
         softwareUpdates.setFrame(null, false);
         clearTimeout(resetTimer);
+        ++resetGeneration;
         setStatus('');
         showOwnerView();
         return;
@@ -492,6 +494,7 @@
 
     function renderDeviceSettings(context) {
       clearTimeout(resetTimer);
+      const generation = ++resetGeneration;
       const resets = context.resets || [];
       const updateFrame = context.frames.find(frame => frame.frame_id === selectedFrameId);
       softwareUpdates.setFrame(updateFrame, resets.some(reset => reset.frame_id === selectedFrameId && reset.state !== 'complete'));
@@ -539,6 +542,7 @@
         const stage = stages.indexOf(reset.state);
         const card = document.createElement('div');
         card.className = 'reset-progress-card';
+        card.dataset.resetId = reset.reset_id;
         card.dataset.state = reset.state;
         const title = document.createElement('strong');
         title.textContent = `${reset.place_name} / ${stage >= 0 ? `Step ${stage + 1} of 3` : 'Checking status'}`;
@@ -570,6 +574,15 @@
           detail.textContent += ' Keep the device powered on. Scan the setup QR on the television to reconnect it to Wi-Fi.';
         }
         card.append(title, progress, steps, detail);
+        if (context.reset_forget_version === 1 && (reset.state === 'resetting' || reset.state === 'complete')) {
+          const forget = document.createElement('button');
+          forget.type = 'button';
+          forget.className = 'quiet-button danger';
+          forget.textContent = reset.state === 'complete' ? 'Remove from list' : 'Forget device';
+          forget.setAttribute('aria-label', `${forget.textContent}: ${reset.place_name}`);
+          forget.addEventListener('click', () => forgetResetDevice(reset, forget));
+          card.append(forget);
+        }
         return card;
       }));
       if (resets.some(reset => reset.state !== 'complete')) {
@@ -578,14 +591,15 @@
             const response = await fetch('/api/beta/owner', {cache: 'no-store'});
             if (!response.ok) throw new Error('Could not check reset status');
             const next = await response.json();
+            if (generation !== resetGeneration) return;
             const activeIds = resets.filter(reset => reset.state !== 'complete').map(reset => reset.reset_id);
-            if ((next.resets || []).some(reset => activeIds.includes(reset.reset_id) && reset.state === 'complete')) {
+            if (activeIds.some(id => !(next.resets || []).some(reset => reset.reset_id === id)) || (next.resets || []).some(reset => activeIds.includes(reset.reset_id) && reset.state === 'complete')) {
               render(next);
             } else {
               renderDeviceSettings(next);
             }
           } catch (_) {
-            resetTimer = setTimeout(pollReset, 5000);
+            if (generation === resetGeneration) resetTimer = setTimeout(pollReset, 5000);
           }
         }, 5000);
       }
@@ -609,6 +623,29 @@
       } catch (error) {
         setStatus(`Reset request failed / ${error.message}`, 'error');
         button.disabled = false;
+      }
+    }
+
+    async function forgetResetDevice(reset, button) {
+      const message = reset.state === 'complete'
+        ? `Remove “${reset.place_name}” from this list? Your saved photos and other devices stay available.`
+        : `Forget “${reset.place_name}” from this account? It has accepted the factory reset, but clearing the device still needs to finish on the device. Your saved photos and other devices stay available.`;
+      if (!confirm(message)) return;
+      clearTimeout(resetTimer);
+      ++resetGeneration;
+      button.disabled = true;
+      try {
+        const response = await fetch(`/api/beta/owner/resets/${encodeURIComponent(reset.reset_id)}`, {
+          method: 'DELETE', headers: {'content-type': 'application/json'},
+          body: JSON.stringify({confirm_name: reset.place_name})
+        });
+        if (!response.ok) throw new Error(await response.text());
+        await loadOwner();
+        setStatus('Device removed from your list.', 'success');
+      } catch (error) {
+        setStatus(`Could not forget device / ${error.message}`, 'error');
+        button.disabled = false;
+        if (ownerContext) renderDeviceSettings(ownerContext);
       }
     }
 
