@@ -17,8 +17,8 @@ pub struct DeviceReset {
 pub(crate) fn owner_resets(db: &Connection, household: &str) -> rusqlite::Result<Vec<DeviceReset>> {
     db.prepare(
         "SELECT id, frame_id, place_name, state, requested_at, completed_at
-                FROM device_resets WHERE household_id = ?1 AND (state != 'complete' OR id IN
-                (SELECT id FROM device_resets WHERE household_id = ?1 AND state = 'complete'
+                FROM device_resets WHERE household_id = ?1 AND forgotten_at IS NULL AND (state != 'complete' OR id IN
+                (SELECT id FROM device_resets WHERE household_id = ?1 AND state = 'complete' AND forgotten_at IS NULL
                  ORDER BY requested_at DESC, rowid DESC LIMIT 50))
                 ORDER BY requested_at DESC, rowid DESC",
     )?
@@ -135,7 +135,8 @@ pub fn accept_device_reset(
     }
     let retry: bool = db.query_row(
         "SELECT EXISTS(SELECT 1 FROM device_resets WHERE id = ?1
-        AND state = 'resetting' AND receipt_hash = ?2 AND next_credential_hash = ?3)",
+        AND (state = 'resetting' OR (state = 'complete' AND forgotten_at IS NOT NULL))
+        AND receipt_hash = ?2 AND next_credential_hash = ?3)",
         params![id, receipt_hash.as_slice(), next_hash.as_slice()],
         |row| row.get(0),
     )?;
@@ -151,34 +152,82 @@ pub fn complete_device_reset(
     id: &str,
     receipt: &str,
 ) -> Result<(), BetaError> {
-    let receipt_hash = hash_secret(receipt);
     let tx = db.transaction()?;
-    let (enrollment, frame, state, next_hash): (String, String, String, Vec<u8>) = tx
+    let authorized: bool = tx.query_row(
+        "SELECT EXISTS(SELECT 1 FROM device_resets WHERE id=?1 AND receipt_hash=?2
+         AND state IN ('resetting','complete'))",
+        params![id, hash_secret(receipt)],
+        |row| row.get(0),
+    )?;
+    if !authorized {
+        return Err(BetaError::Unauthorized);
+    }
+    finish_reset(&tx, id)?;
+    tx.commit()?;
+    Ok(())
+}
+
+/// Remove an accepted reset device from its old household, even while offline.
+/// Keep its receipt so interrupted acceptance/cleanup can resume afterwards.
+/// A completed historical reset must never touch a later owner's pairing.
+pub fn forget_reset_device(
+    db: &mut Connection,
+    owner: &str,
+    id: &str,
+    confirm_name: &str,
+) -> Result<(), BetaError> {
+    let tx = db.transaction()?;
+    let household = owner_household_id(&tx, owner)?;
+    let (state, place): (String, String) = tx
+        .query_row(
+            "SELECT state, place_name FROM device_resets WHERE id=?1 AND household_id=?2",
+            params![id, household],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?
+        .ok_or(BetaError::NotFound)?;
+    if place != confirm_name {
+        return Err(BetaError::InvalidInput(
+            "confirm the device's place name to forget it",
+        ));
+    }
+    if state == "pending" {
+        return Err(BetaError::InvalidInput(
+            "the device must accept its factory reset before it can be forgotten",
+        ));
+    }
+    finish_reset(&tx, id)?;
+    tx.execute("UPDATE device_resets SET forgotten_at=COALESCE(forgotten_at,CURRENT_TIMESTAMP) WHERE id=?1", [id])?;
+    tx.commit()?;
+    Ok(())
+}
+
+fn finish_reset(db: &Connection, id: &str) -> Result<(), BetaError> {
+    let (enrollment, frame, state, next_hash): (String, String, String, Vec<u8>) = db
         .query_row(
             "SELECT enrollment_id, frame_id, state, next_credential_hash FROM device_resets
-         WHERE id = ?1 AND receipt_hash = ?2 AND state IN ('resetting', 'complete')",
-            params![id, receipt_hash.as_slice()],
+         WHERE id=?1 AND state IN ('resetting','complete')",
+            [id],
             |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
         )
         .optional()?
-        .ok_or(BetaError::Unauthorized)?;
+        .ok_or(BetaError::NotFound)?;
     if state == "complete" {
         return Ok(());
     }
-    tx.execute(
+    db.execute(
         "DELETE FROM device_bootstraps WHERE enrollment_id = ?1",
         [&enrollment],
     )?;
-    let changed = tx.execute("UPDATE device_enrollments SET status = 'pending', household_id = NULL, frame_id = NULL,
+    let changed = db.execute("UPDATE device_enrollments SET status = 'pending', household_id = NULL, frame_id = NULL,
         credential_hash = ?1, claim_code = ?2, claimed_at = NULL, expires_at = datetime('now', '+15 minutes')
         WHERE id = ?3 AND status = 'claimed' AND frame_id = ?4",
         params![next_hash, random_claim_code(), enrollment, frame])?;
     if changed != 1 {
         return Err(BetaError::NotFound);
     }
-    tx.execute("DELETE FROM frames WHERE id = ?1", [&frame])?;
-    tx.execute("UPDATE device_resets SET state = 'complete', completed_at = CURRENT_TIMESTAMP WHERE id = ?1", [id])?;
-    tx.commit()?;
+    db.execute("DELETE FROM frames WHERE id = ?1", [&frame])?;
+    db.execute("UPDATE device_resets SET state = 'complete', completed_at = CURRENT_TIMESTAMP WHERE id = ?1", [id])?;
     Ok(())
 }
 
@@ -186,6 +235,159 @@ pub fn complete_device_reset(
 mod tests {
     use super::*;
     use crate::*;
+
+    #[test]
+    fn forgetting_an_accepted_reset_preserves_retry_and_other_household_data() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize_database(&db).unwrap();
+        let original = "forget-original-credential-abcdefghijklmnopqrstuvwxyz";
+        let next = "forget-next-credential-abcdefghijklmnopqrstuvwxyz";
+        let bootstrap = "forget-bootstrap-abcdefghijklmnopqrstuvwxyz";
+        let receipt = "forget-receipt-abcdefghijklmnopqrstuvwxyz";
+        let id = Uuid::new_v4().to_string();
+        register_bootstrap_device(&db, &id, "AB23CD", original, bootstrap).unwrap();
+        let claim = claim_bootstrap_device(&mut db, bootstrap, "Kitchen").unwrap();
+        let other = create_household_owner(&mut db, "Other", "Owner").unwrap();
+        let channel: String = db
+            .query_row(
+                "SELECT id FROM channels WHERE household_id=?1",
+                [&claim.frame.household_id],
+                |r| r.get(0),
+            )
+            .unwrap();
+        db.execute("INSERT INTO photos(id,channel_id,storage_key,mime_type) VALUES('saved-photo',?1,'photo.jpg','image/jpeg')", [&channel]).unwrap();
+        db.execute(
+            "INSERT INTO frames(id,household_id,place_name) VALUES('other-frame',?1,'Den')",
+            [&claim.frame.household_id],
+        )
+        .unwrap();
+        let reset = request_device_reset(&db, &claim.owner_token, &id, "Kitchen").unwrap();
+        assert!(matches!(
+            forget_reset_device(&mut db, &other.owner_token, &reset.reset_id, "Kitchen"),
+            Err(BetaError::NotFound)
+        ));
+        assert!(matches!(
+            forget_reset_device(&mut db, &claim.owner_token, &reset.reset_id, "Kitchen"),
+            Err(BetaError::InvalidInput(_))
+        ));
+        accept_device_reset(&db, original, &reset.reset_id, receipt, next).unwrap();
+        assert!(
+            forget_reset_device(&mut db, &claim.owner_token, &reset.reset_id, "wrong").is_err()
+        );
+        forget_reset_device(&mut db, &claim.owner_token, &reset.reset_id, "Kitchen").unwrap();
+        let context = owner_context(&db, &claim.owner_token).unwrap();
+        assert!(context.resets.is_empty());
+        assert_eq!(context.frames.len(), 1);
+        assert_eq!(context.frames[0].frame_id, "other-frame");
+        assert_eq!(
+            db.query_row(
+                "SELECT COUNT(*) FROM photos WHERE id='saved-photo'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            1
+        );
+        assert!(claimed_device_access(&db, original).is_err());
+        // Acceptance response may have been lost before owner forgot the device.
+        accept_device_reset(&db, receipt, &reset.reset_id, receipt, next).unwrap();
+        assert!(accept_device_reset(&db, receipt, &reset.reset_id, receipt, original).is_err());
+        complete_device_reset(&mut db, &reset.reset_id, receipt).unwrap();
+        let fresh_bootstrap = "forget-fresh-bootstrap-abcdefghijklmnopqrstuvwxyz";
+        register_bootstrap_device(&db, &id, "AB23CD", next, fresh_bootstrap).unwrap();
+        let new_owner = claim_bootstrap_device(&mut db, fresh_bootstrap, "New home").unwrap();
+        // Old owner retries cannot delete a later owner's pairing.
+        forget_reset_device(&mut db, &claim.owner_token, &reset.reset_id, "Kitchen").unwrap();
+        complete_device_reset(&mut db, &reset.reset_id, receipt).unwrap();
+        assert_eq!(
+            claimed_device_access(&db, next).unwrap().household_id,
+            new_owner.frame.household_id
+        );
+        let new_reset = request_device_reset(&db, &new_owner.owner_token, &id, "New home").unwrap();
+        assert_eq!(
+            pending_device_reset(&db, next).unwrap().unwrap().reset_id,
+            new_reset.reset_id
+        );
+    }
+
+    #[test]
+    fn forgetting_completed_history_does_not_touch_a_reclaimed_device() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize_database(&db).unwrap();
+        let old = "history-old-credential-abcdefghijklmnopqrstuvwxyz";
+        let next = "history-next-credential-abcdefghijklmnopqrstuvwxyz";
+        let bootstrap = "history-bootstrap-abcdefghijklmnopqrstuvwxyz";
+        let receipt = "history-receipt-abcdefghijklmnopqrstuvwxyz";
+        let id = Uuid::new_v4().to_string();
+        register_bootstrap_device(&db, &id, "AB23CD", old, bootstrap).unwrap();
+        let claim = claim_bootstrap_device(&mut db, bootstrap, "Kitchen").unwrap();
+        let reset = request_device_reset(&db, &claim.owner_token, &id, "Kitchen").unwrap();
+        accept_device_reset(&db, old, &reset.reset_id, receipt, next).unwrap();
+        complete_device_reset(&mut db, &reset.reset_id, receipt).unwrap();
+        let fresh = "history-fresh-bootstrap-abcdefghijklmnopqrstuvwxyz";
+        register_bootstrap_device(&db, &id, "AB23CD", next, fresh).unwrap();
+        let new_owner = claim_bootstrap_device(&mut db, fresh, "Bedroom").unwrap();
+        forget_reset_device(&mut db, &claim.owner_token, &reset.reset_id, "Kitchen").unwrap();
+        assert!(
+            owner_context(&db, &claim.owner_token)
+                .unwrap()
+                .resets
+                .is_empty()
+        );
+        assert_eq!(
+            claimed_device_access(&db, next).unwrap().household_id,
+            new_owner.frame.household_id
+        );
+    }
+
+    #[test]
+    fn schema_15_upgrade_preserves_reset_and_creates_a_backup() {
+        let directory = std::env::temp_dir().join(format!("forget-migration-{}", Uuid::new_v4()));
+        std::fs::create_dir_all(&directory).unwrap();
+        let path = directory.join("state.sqlite3");
+        let mut db = Connection::open(&path).unwrap();
+        initialize_database(&db).unwrap();
+        let bootstrap = "migration-reset-bootstrap-abcdefghijklmnopqrstuvwxyz";
+        let credential = "migration-reset-credential-abcdefghijklmnopqrstuvwxyz";
+        let id = Uuid::new_v4().to_string();
+        register_bootstrap_device(&db, &id, "AB23CD", credential, bootstrap).unwrap();
+        let claim = claim_bootstrap_device(&mut db, bootstrap, "Kitchen").unwrap();
+        let reset = request_device_reset(&db, &claim.owner_token, &id, "Kitchen").unwrap();
+        db.execute_batch(
+            "ALTER TABLE device_resets DROP COLUMN forgotten_at; PRAGMA user_version=15;",
+        )
+        .unwrap();
+        let backup = initialize_database_with_backup(&db, &path)
+            .unwrap()
+            .unwrap();
+        let old = Connection::open(backup).unwrap();
+        assert_eq!(
+            old.pragma_query_value(None, "user_version", |r| r.get::<_, i64>(0))
+                .unwrap(),
+            15
+        );
+        assert_eq!(
+            old.query_row(
+                "SELECT count(*) FROM pragma_table_info('device_resets') WHERE name='forgotten_at'",
+                [],
+                |r| r.get::<_, i64>(0)
+            )
+            .unwrap(),
+            0
+        );
+        assert_eq!(
+            owner_context(&db, &claim.owner_token).unwrap().resets[0],
+            reset
+        );
+        assert!(
+            initialize_database_with_backup(&db, &path)
+                .unwrap()
+                .is_none()
+        );
+        drop(old);
+        drop(db);
+        std::fs::remove_dir_all(directory).unwrap();
+    }
 
     #[test]
     fn reset_is_scoped_durable_and_cannot_be_replayed_against_a_new_owner() {

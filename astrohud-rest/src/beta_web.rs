@@ -132,6 +132,10 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
             "/api/beta/owner/frames/{frame_id}/reset",
             web::post().to(request_reset),
         )
+        .route(
+            "/api/beta/owner/resets/{reset_id}",
+            web::delete().to(forget_reset),
+        )
         .route("/api/beta/device/reset", web::get().to(get_reset))
         .route(
             "/api/beta/device/resets/{reset_id}/accept",
@@ -412,6 +416,24 @@ async fn request_reset(
     Ok(HttpResponse::Accepted()
         .insert_header((header::CACHE_CONTROL, "no-store"))
         .json(reset))
+}
+
+async fn forget_reset(
+    state: web::Data<AppState>,
+    request: HttpRequest,
+    id: web::Path<String>,
+    body: web::Json<ResetRequest>,
+) -> Result<HttpResponse> {
+    let token = owner_token(&request)?;
+    let mut db = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    crate::forget_reset_device(&mut db, &token, &id, &body.confirm_name)
+        .map_err(beta_http_error)?;
+    Ok(HttpResponse::NoContent()
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .finish())
 }
 
 async fn get_reset(state: web::Data<AppState>, request: HttpRequest) -> Result<HttpResponse> {
@@ -1772,6 +1794,95 @@ mod tests {
         assert_eq!(
             test::call_service(&app, still_signed_in).await.status(),
             StatusCode::OK
+        );
+    }
+
+    #[actix_web::test]
+    async fn forgetting_reset_requires_owner_and_preserves_device_receipt() {
+        let mut db = Connection::open_in_memory().unwrap();
+        initialize_database(&db).unwrap();
+        let credential = "forget-http-credential-abcdefghijklmnopqrstuvwxyz";
+        let bootstrap = "forget-http-bootstrap-abcdefghijklmnopqrstuvwxyz";
+        let next = "forget-http-next-credential-abcdefghijklmnopqrstuvwxyz";
+        let receipt = "forget-http-receipt-abcdefghijklmnopqrstuvwxyz";
+        let device = Uuid::new_v4().to_string();
+        register_bootstrap_device(&db, &device, "AB23CD", credential, bootstrap).unwrap();
+        let claim = claim_bootstrap_device(&mut db, bootstrap, "Kitchen").unwrap();
+        let other = crate::create_household_owner(&mut db, "Other", "Other").unwrap();
+        let reset =
+            crate::request_device_reset(&db, &claim.owner_token, &device, "Kitchen").unwrap();
+        let data = web::Data::new(AppState::new(db, PathBuf::from("unused")));
+        let app =
+            test::init_service(App::new().app_data(data).configure(configure_beta_routes)).await;
+        let uri = format!("/api/beta/owner/resets/{}", reset.reset_id);
+        for (token, name, status) in [
+            (None, "Kitchen", StatusCode::UNAUTHORIZED),
+            (
+                Some(other.owner_token.as_str()),
+                "Kitchen",
+                StatusCode::NOT_FOUND,
+            ),
+            (
+                Some(claim.owner_token.as_str()),
+                "Kitchen",
+                StatusCode::BAD_REQUEST,
+            ),
+        ] {
+            let mut request = test::TestRequest::delete()
+                .uri(&uri)
+                .set_json(serde_json::json!({"confirm_name":name}));
+            if let Some(token) = token {
+                request = request.cookie(Cookie::new(OWNER_COOKIE, token.to_owned()));
+            }
+            assert_eq!(
+                test::call_service(&app, request.to_request())
+                    .await
+                    .status(),
+                status
+            );
+        }
+        let accept = test::TestRequest::post()
+            .uri(&format!(
+                "/api/beta/device/resets/{}/accept",
+                reset.reset_id
+            ))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {credential}")))
+            .set_json(serde_json::json!({"receipt":receipt,"next_credential":next}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, accept).await.status(),
+            StatusCode::NO_CONTENT
+        );
+        for (name, status) in [
+            ("wrong", StatusCode::BAD_REQUEST),
+            ("Kitchen", StatusCode::NO_CONTENT),
+            ("Kitchen", StatusCode::NO_CONTENT),
+        ] {
+            let request = test::TestRequest::delete()
+                .uri(&uri)
+                .cookie(Cookie::new(OWNER_COOKIE, claim.owner_token.clone()))
+                .set_json(serde_json::json!({"confirm_name":name}))
+                .to_request();
+            assert_eq!(test::call_service(&app, request).await.status(), status);
+        }
+        let request = test::TestRequest::get()
+            .uri("/api/beta/owner")
+            .cookie(Cookie::new(OWNER_COOKIE, claim.owner_token))
+            .to_request();
+        let response = test::call_service(&app, request).await;
+        let context: serde_json::Value = test::read_body_json(response).await;
+        assert_eq!(context["frames"], serde_json::json!([]));
+        assert_eq!(context["resets"], serde_json::json!([]));
+        let complete = test::TestRequest::post()
+            .uri(&format!(
+                "/api/beta/device/resets/{}/complete",
+                reset.reset_id
+            ))
+            .insert_header((header::AUTHORIZATION, format!("Bearer {receipt}")))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, complete).await.status(),
+            StatusCode::NO_CONTENT
         );
     }
 
