@@ -84,3 +84,12 @@ viewer to the prototype, independently of the signed release pointer.
    Do not claim savings from observation mode or from unmatched short samples.
 5. Test an unsupported monitor and CEC disabled: Unknown must keep playback
    working. Test HDMI unplug/replug separately from the screen's power button.
+
+## First local TV result
+
+In the attended test, HDMI stayed connected when the TV was switched off. The
+power probe changed from On to Unknown, then returned to On when the TV came
+back. Photos returned normally in observation mode, and the viewer stayed
+active. No positive standby signal was obtained, so automatic mode remains
+disabled on this test device. CPU savings and automatic-pause wake recovery
+have not been validated. A timeout is not treated as proof of standby.

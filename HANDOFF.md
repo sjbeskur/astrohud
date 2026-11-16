@@ -1,5 +1,22 @@
 # Memory Lane handoff
 
+## Attended TV off/on observation — 2026-11-15
+
+User turned the TV off, then back on and confirmed photos returned. Observer
+stayed active. HDMI remained connected throughout both captures. Power state
+changed to Unknown / cec_no_definite_power_reply at uptime ~653576.90 and back
+to On / cec_power_status at ~653675.68. No Standby observation was recorded.
+Files in root target/: display-idle-tv-off-test.json and
+ display-idle-tv-wake-test.json. Read sessions 87692 and 73043 exited 0.
+
+This confirms on-state detection and normal slideshow picture recovery in
+OBSERVE mode; it does not validate automatic idle or CPU savings. Keep mode
+observe. The current query-only path cannot positively classify this TV's off
+state; do not treat a CEC timeout as standby or enable auto speculatively.
+Possible next investigation is TV-originated CEC standby messages if the TV
+sends them; a schedule is an independent fallback. No claim of unsupported TV
+hardware is justified from this polling result alone.
+
 ## Display-idle branch and local observation deployment — 2026-11-15
 
 User requested a new branch and authorized local Pi deployment. Created
