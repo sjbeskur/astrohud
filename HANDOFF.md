@@ -1,5 +1,59 @@
 # Memory Lane handoff
 
+## Display-idle branch and local observation deployment — 2026-11-15
+
+User requested a new branch and authorized local Pi deployment. Created
+feature/display-idle from deployed master ec95829 in the isolated worktree
+/home/sbeskur/repos/adm/astro-hud/target/display-idle. Root workspace stays on
+feature/tauri-client; its local brochure notes and images are untouched.
+Orange Pi remains shelved and no Orange code is carried into this branch.
+
+Initially .57 SSH host key differed from old known_hosts record. User was
+unsure about reimaging, then identified target as the sole Pi Zero. Discovery
+matched its previously recorded Wi-Fi MAC 88:a2:9e:bb:9d:99 at 192.168.50.57.
+Used a separate pinned host-key file target/display-idle-pi-known-hosts in the
+root workspace, leaving global known_hosts unchanged; read-only login confirmed
+Raspberry Pi Zero 2 W Rev 1.0, kernel 6.18.60+rpt-rpi-v8, /dev/cec0 root:video,
+and astrohud group membership. Do not reconnect to shelved Orange .10.
+
+Implemented native Linux CEC power query, HDMI hotplug fallback, conservative
+Unknown/stale handling, five-second off debounce, modes off/observe/auto and
+--display-status. Default off, windowed previews disable hardware detection.
+Probe worker stays off render thread. Auto mode freezes slide advancement,
+decoding/prefetch and unseen selection receipts while sync stays alive; wake
+redraws current image and preserves remaining slide time. Settings changes
+received idle reschedule that remaining time. Never sends TV wake/standby/input
+commands. It claims a playback CEC logical address if none is configured.
+Single-output/adapter scope; missing boot-time display initialization still
+needs work. See astrohud-frame/DISPLAY_IDLE.md for exact limits and rollback.
+
+36 frame tests passed (2 manual previews ignored), Clippy -D warnings passed,
+ARM64 cross-build passed. First native hardware probe exposed an incorrect
+CEC_ADAP_G_CAPS direction; corrected to IOWR and checked all ioctl constants
+against Linux UAPI. Final tests rerun successfully. Build/test logs in root
+workspace target/display-idle-build-arm64.log and target/display-idle-tests.log.
+
+Pi's installed signed release is 3-0.5.4. Short preliminary CPU baseline was
+10.29% of one core over 10s; do not use as a validated idle saving. Staged
+prototype alongside it under /opt/memory-lane/local-tests/display-idle using
+scripts/local-display-idle.py. Current service override is observation mode,
+not automatic pause; signed binary, identity, Wi-Fi and updater state unchanged.
+Local report in root target/display-idle-local-report.json, prototype SHA:
+bd0fbbd5fdf361a564c0580a6cf7b9ccaa74ec6c87dcaf0dbb9031d7a56d0698.
+Initial one-shot query returned Unknown / cec_no_definite_power_reply. The
+subsequent running observer positively reported On / cec_power_status. This
+confirms on-state communication; off/standby and wake recovery remain untested.
+
+User cannot perform the screen off/on test right now. Leave observation mode
+running, auto disabled; physical detection, wake recovery and CPU savings are
+pending. Passive 45s HDMI/log observation shell 71412 exited 0, output root
+target/display-idle-observation-test.json. HDMI stayed connected, viewer active,
+observer reported On / cec_power_status with would_idle=false. No off cycle
+occurred because user could not perform it now.
+No API/site push, R2 publish or field-Pi update. Next test is the user's normal
+screen off/on cycle while Pi remains powered, then inspect observations. Use
+rollback helper if any slideshow issue occurs; don't enable auto speculatively.
+
 ## API/site v0.5.6 prepared: forget reset devices — 2026-11-15
 
 User reports no way to forget/delete a device after factory reset. Reset
