@@ -53,6 +53,9 @@ The connecting page polls the local status endpoint and displays a returned
 failure with a retry link. It never redirects merely because a timer elapsed:
 losing the setup AP does not prove that the household connection succeeded.
 The setup AP disables Wi-Fi power saving, as the saved household profile does.
+After stopping the setup AP, a fresh station-mode scan completes before the
+household connection attempt, avoiding an immediate network-not-found error
+from an expired scan cache. Discovery failures return to setup as before.
 
 To cancel setup locally and restore the protected household profile:
 
@@ -108,6 +111,27 @@ sudo install -m 0644 deploy/astrohud-captive-dns.conf \
 sudo systemctl daemon-reload
 sudo systemctl enable --now astrohud-provisioner.service
 ```
+
+The setup-only DNS configuration resolves IPv4 names to the portal and marks
+all names local. This also answers IPv6, HTTPS and SVCB lookups locally,
+avoiding upstream DNS timeouts while the phone is on the offline setup AP.
+It applies only to NetworkManager's shared-mode DNS instance; household DNS
+is unaffected. This is required with dnsmasq 2.86 and later; see the
+[dnsmasq address option](https://thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html).
+Run `python3 scripts/test-captive-dns.py` to exercise the actual dnsmasq with
+an unresponsive upstream on loopback high ports. It requires dnsmasq and
+local socket access, and does not change the workstation's DNS or DHCP.
+
+Portal pages embed the app's shared `astrohud-theme.css` at build time and
+use `src/portal.css` for setup-specific layout. They need no online assets.
+The network chooser uses full-width, 56px controls with 16px text and short
+SSID-only option labels. The native phone picker handles the option list.
+For a local visual preview, run
+`ASTROHUD_PORTAL_PREVIEW_DIR=/absolute/output/path cargo test -p astrohud-provisioner web::tests::write_portal_preview -- --ignored`.
+Request logs identify discovery redirects and page responses with elapsed
+send time, without logging URLs, submitted credentials or tokens. Compare
+the first discovery request against DHCPACK to investigate automatic portal
+opening separately from page response time.
 
 Enabling the service on an already provisioned device is non-disruptive: it
 ensures device identity exists, adopts a matching legacy frame credential when

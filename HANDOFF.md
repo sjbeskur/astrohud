@@ -1,5 +1,32 @@
 # Memory Lane handoff
 
+## Retained portal improvements; Orange Pi experiment paused — 2026-11-15
+
+The tester's TV failed completely with the Orange Pi, despite repeated success
+on the development monitor. The failure mode is not diagnosed. User requested
+shelving hardware support; do not describe Orange Pi as ready for field use.
+The board-specific work is preserved separately on feature/orange-pi-experimental.
+
+Retained on feature/tauri-client: offline portal embeds the shared app theme,
+compact layout and full-width 56px/16px SSID control with name-only labels;
+manual entry and no-JS fallback remain available. DNS answers AAAA/HTTPS/SVCB
+locally during setup; a real dnsmasq regression reproduced old upstream
+timeouts and verified the fix. Household joining waits for a station scan
+once AP is stopped; isolated command tests cover discovery and connect failures
+and keep the password off argv. Fixed-label portal request/response timing
+logs avoid credentials, tokens and query strings. Preview output directory is
+configurable with ASTROHUD_PORTAL_PREVIEW_DIR.
+
+Prior browser checks passed 320/375/390/430/768/1280px, long names, navigation,
+manual entry, no-JS fallback and no external assets. An iPhone took 10–15s to
+show its sign-in window; this delay is not resolved. Latest recorded DHCPACK
+~49.11s and first HTTP probe ~50.73s were only 1.62s apart; response sends <1ms.
+Do not attribute the entire perceived delay to an iOS probe timer.
+
+No board image/driver/reset-reboot changes are retained on this branch. No
+production, R2 or device deployment is part of shelving. User brochure work
+and original case images remain separate local work.
+
 ## Ubuntu desktop preview packaged — 2026-11-15
 
 On feature/tauri-client, packaged desktop preview 0.1.0 specifically for the
