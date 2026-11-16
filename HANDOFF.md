@@ -1,5 +1,70 @@
 # Memory Lane handoff
 
+## Session closed: passive TV standby capture — 2026-11-15
+
+Resume display-idle work in `target/display-idle` on `feature/display-idle`.
+Diagnostics and results committed locally as `e6263e3`; branch not pushed.
+Root checkout remains `feature/tauri-client`; preserve its existing HANDOFF.md
+changes and untracked brochure/docs assets. Orange work remains shelved.
+
+Attended passive CEC capture succeeded: TV broadcast standby `0f:36` at
+monotonic 654006.208, then replied `03` (On to Standby) until returning On
+at 654039.556. HDMI stayed connected. User confirmed photos returned. Capture
+finished automatically at 654071.936; no monitor needs stopping. Raw filtered
+JSONL: `target/display-idle-cec-passive.jsonl` in the root checkout. Diagnostic
+scripts and detailed findings are in the feature worktree's
+`astrohud-frame/DISPLAY_IDLE.md`; all three Python decoder tests passed.
+
+This is evidence of a TV-originated standby command, not a definite Standby
+power reply. No new idle policy was installed. Local Pi remains in OBSERVE
+mode, auto pause disabled, normal photo sync/playback running. Next session:
+design a conservative, bounded policy using the standby event plus transition
+reports, keep Unknown fail-open, then conduct an attended automatic-pause/wake
+test and matched CPU measurements. Neither auto wake nor savings is validated.
+No deployment/publishing/merge to production is authorized by this handoff.
+
+Access: local reference Zero 2 W `192.168.50.57`, MAC `88:a2:9e:bb:9d:99`,
+SSH user `astrohud-support`, pinned host key `target/display-idle-pi-known-hosts`.
+Use BatchMode and StrictHostKeyChecking=yes. Prototype stays pinned by
+`/etc/systemd/system/astrohud-frame.service.d/99-local-display-idle.conf`.
+Before normal updates, run `astrohud-frame/scripts/local-display-idle.py rollback`
+as root on the Pi (or feed script through SSH to `sudo python3 - rollback`).
+Signed installed release remains 3-0.5.4; prototype binary hash is
+`bd0fbbd5fdf361a564c0580a6cf7b9ccaa74ec6c87dcaf0dbb9031d7a56d0698`.
+No Pi shutdown or reboot requested; leave it displaying photos.
+
+## Local Pi running display-idle observer — 2026-11-15
+
+Development Pi Zero 2 W at 192.168.50.57 currently runs the unpublished
+feature/display-idle viewer through 99-local-display-idle.conf. Worktree:
+target/display-idle, prototype commit 2e3b747. Signed release 3-0.5.4 is intact.
+Observation mode only; auto pause disabled. TV off kept HDMI connected and
+produced Unknown power state; TV on returned On via CEC and user confirmed
+photos returned. Automatic idle/CPU savings not validated. Before using the
+normal Pi updater, remove the local override using the rollback helper in
+that worktree; it otherwise pins runtime to the prototype. Root target holds
+pinned SSH key, local report and off/wake observation logs. Orange remains
+shelved. No production API, R2 or field-device changes for this experiment.
+
+## v0.5.6 pushed and live; desktop branch preserved — 2026-11-15
+
+User explicitly approved pushing both branches. origin/master is ec95829;
+origin/feature/tauri-client is 4d9bb5a. Auto-deploy completed: live
+https://app.astrohud.com/api/health reports status ok, version 0.5.6 and schema
+16. Live owner.html verified matching Forget device / Remove from list,
+API capability gate and stale-poll protection. No real account was changed
+as part of verification. Deployment report:
+target/forget-merge/deployment/status.json; merge review:
+target/forget-merge/merge-review.json. All 77 active API/admin/provisioner
+tests plus production-checkout browser workflow passed before push.
+
+Current workspace remains on feature/tauri-client, synced with master and
+ready for desktop work. Orange experiment remains shelved at cc0c2de.
+No tag, Pi update, R2 publication or device installation performed. Brochure
+notes, marketing files and original images remain local and untouched.
+Temporary clean production worktree and isolated test servers are cleaned up.
+The production branch is named master; no separate main branch was created.
+
 ## Selective production merge prepared; Tauri branch retained — 2026-11-15
 
 User requested moving the shared changes to the production branch while
@@ -78,6 +143,39 @@ Do not attribute the entire perceived delay to an iOS probe timer.
 No board image/driver/reset-reboot changes are retained on this branch. No
 production, R2 or device deployment is part of shelving. User brochure work
 and original case images remain separate local work.
+
+## Care-community brochure drafted — 2026-11-15
+
+Created docs/marketing/memory-lane-brochure/Memory-Lane-Brochure.pdf, a two-page
+US Letter overview with the headline "Turn any TV into a family picture frame."
+It uses copies of the user's aluminium enclosure images, actual Home/Send web
+app screenshots with example frame names, and an explicitly labelled generated
+family photograph inside a CSS TV illustration. Contact supplied by user:
+sam@advanceddatamachines.com. Includes setup steps, HDMI/power/Wi-Fi/input
+requirements, offline cached playback and an invitation to discuss a small
+care-community pilot. No pricing, clinical claims or future app features.
+
+Editable HTML, local assets, page previews, render.mjs and image-source/prompt
+notes are in the same directory. Chrome rendering checks passed for both pages:
+all images loaded and no out-of-page content. PDF verified as two Letter pages.
+Original device-images files remain unchanged. Brochure work is not committed
+or published; user is reviewing the first draft.
+
+User also requested versions featuring a Black family and an Indian family.
+The renderer now accepts `black indian` to export separate PDFs and page
+previews using additional generated grandmother/grandchild photos; original
+brochure assets stay intact. Exact variant image prompts are recorded in
+docs/marketing/memory-lane-brochure/variant-image-prompts.json.
+Both family versions passed the two-page Letter PDF/image/bounds checks.
+User then requested a playful Big Lebowski edition: render.mjs `dude` uses
+an original generated character illustration and a themed opening sentence,
+with an unofficial-concept image caption. Prompt is recorded separately in
+the-dude-image-prompt.json. All brochures retain the actual app/hardware
+images and the user's supplied demonstration email.
+User refined the Dude concept to include his child with a resemblance to
+Julianne Moore. A separate `dude-family` render variant preserves the first
+Dude edition and uses a reference-image edit depicting him beside his young
+red-haired daughter. Its prompt and asset are saved beside the other variants.
 
 ## Ubuntu desktop preview packaged — 2026-11-15
 

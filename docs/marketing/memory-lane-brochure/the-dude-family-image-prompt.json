@@ -1,0 +1,5 @@
+{
+  "tool": "Built-in image generation, reference-image edit",
+  "source": "assets/the-dude.png",
+  "output": "assets/the-dude-family.png"
+}
