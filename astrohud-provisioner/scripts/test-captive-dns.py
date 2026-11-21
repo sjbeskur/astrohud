@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Exercise setup DNS against a real dnsmasq and an unresponsive upstream.
 
-Requires dnsmasq and permission to bind loopback UDP sockets; uses high ports
-and never changes workstation DNS, DHCP, routes or network interfaces.
+Requires dnsmasq, loopback sockets and permission to bind a private loopback
+address on port 53 for the simulated upstream. Does not change system DNS,
+DHCP, routes or network interfaces. The tested resolver uses a high port.
 """
 import os
 from pathlib import Path
@@ -11,6 +12,7 @@ import socket
 import struct
 import subprocess
 import time
+import tempfile
 import unittest
 
 CONFIG = Path(os.environ.get('MEMORY_LANE_CAPTIVE_DNS_CONFIG',
@@ -22,16 +24,26 @@ class CaptiveDnsTests(unittest.TestCase):
         if not shutil.which('dnsmasq'):
             self.skipTest('dnsmasq is required')
         self.upstream = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.upstream.bind(('127.0.0.1', 0))
         self.addCleanup(self.upstream.close)
+        try:
+            self.upstream.bind(('127.233.47.1', 53))
+        except OSError as error:
+            self.fail(f'cannot reserve isolated upstream port; run with suitable privileges: {error}')
+        temporary = tempfile.TemporaryDirectory(prefix='memory-lane-dns-test-')
+        self.addCleanup(temporary.cleanup)
+        os.chmod(temporary.name, 0o755)
+        resolv = Path(temporary.name) / 'resolv.conf'
+        resolv.write_text('nameserver 127.233.47.1\n')
         with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as reservation:
             reservation.bind(('127.0.0.1', 0))
             self.port = reservation.getsockname()[1]
         self.daemon = subprocess.Popen([
             'dnsmasq', '--no-daemon', '--conf-file='+str(CONFIG),
             '--port='+str(self.port), '--listen-address=127.0.0.1',
-            '--bind-interfaces', '--no-hosts', '--no-resolv', '--pid-file=',
-            '--server=127.0.0.1#'+str(self.upstream.getsockname()[1]),
+            '--bind-interfaces', '--no-hosts', '--no-poll', '--pid-file=',
+            # A command-line --server explicitly overrides catch-all --local.
+            # Model system resolver discovery instead of overriding the policy.
+            '--resolv-file='+str(resolv),
             '--log-facility=-',
         ], stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
         self.addCleanup(self.stop_daemon)

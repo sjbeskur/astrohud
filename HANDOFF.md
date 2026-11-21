@@ -1,5 +1,49 @@
 # Memory Lane handoff
 
+## Photo reset fix live; setup DNS corrected on .57 — 2026-11-20
+
+User repeated reset: photos reappeared, two QR scans still needed, initial
+portal slow. Latest provisioner hash d9a480... verified running. Identity
+rotated at 06:24:32 UTC and current cached photos were written from 06:25:40:
+the server downloaded old photos again. Hosted legacy channel subscriptions
+caused this. v0.5.8 adds frame-local exclusions on re-enrollment of a device
+with completed reset history, for BOTH bootstrap/QR and manual-code claims.
+The reset device's TV manifest and owner gallery start empty; household photo
+rows and other devices remain intact. Later deliveries still work. Changes
+apply at the NEXT claim, not retroactively to the currently claimed device.
+Do not delete the household library or automatically reset the Pi.
+
+61 API/admin tests passed in isolated production checkout, including a new
+regression covering both claim paths, gallery/manifest parity, old credential
+rejection, other-device preservation and new deliveries. Production master
+6c831ea pushed and merged back to release/0.2.x. Live health verified v0.5.8,
+schema 16/status ok, and onboarding bytes match. Verification changed no
+accounts. Report target/reset-library-deployment.json; tests
+/tmp/astrohud-reset-library-production-tests.log. Brief rollout 502s recovered.
+
+Portal timing: last setup AP ready 06:24:35 UTC, DHCPACK 06:24:48, first HTTP
+06:24:49; response sends <1 ms. This does not measure phone rendering or prove
+the whole pre-DHCP interval was network delay rather than user interaction.
+Found actual Pi config lacked repository local=/#/. Inherited system DNS also
+overrides that catch-all when upstream exists. Added no-resolv to the shared
+setup-only config. Installed /etc/NetworkManager/dnsmasq-shared.d/astrohud-captive.conf
+SHA256 3b5f5bc9da72d23d43080951f3331562cc15b0db757f53b817e378cd05d7d588.
+Effective NEXT setup AP; no current network restart. Isolated tests on .57
+reproduced old timeouts and verified installed A/AAAA/SVCB/HTTPS replies in
+0.3–0.4 ms with no upstream forwarding. Actual phone speed remains unmeasured.
+
+DNS test now simulates resolv.conf upstream instead of forcing a command-line
+server, and requires binding isolated loopback 127.233.47.1:53. Test and
+configuration were checked together. Failed wildcard candidates were not
+activated; final uses address=/#/, local=/#/, no-resolv. Rollback backup
+/opt/memory-lane/local-tests/release-0.2/astrohud-captive.before-trial.conf;
+installed local-release-trial.py now restores DNS on rollback too.
+
+One-scan captive-window flow is STILL unreliable: confirmed phone returns to
+Camera when the AP closes. These fixes do not stop that. Normal Safari-tab
+workaround has not been confirmed successful by the user. Keep the TV QR as
+fallback; do not describe one-scan onboarding as completed.
+
 ## iPhone captive window closed; handoff policy fix installed — 2026-11-20
 
 User reported the phone returned to Camera after submitting household Wi-Fi,

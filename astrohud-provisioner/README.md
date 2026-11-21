@@ -148,8 +148,13 @@ It applies only to NetworkManager's shared-mode DNS instance; household DNS
 is unaffected. This is required with dnsmasq 2.86 and later; see the
 [dnsmasq address option](https://thekelleys.org.uk/dnsmasq/docs/dnsmasq-man.html).
 Run `python3 scripts/test-captive-dns.py` to exercise the actual dnsmasq with
-an unresponsive upstream on loopback high ports. It requires dnsmasq and
-local socket access, and does not change the workstation's DNS or DHCP.
+an unresponsive upstream loaded through a simulated system resolver file.
+It requires dnsmasq and permission to bind an isolated loopback address on
+port 53; the tested resolver itself uses a high port. It does not change
+system DNS, DHCP or network interfaces. `no-resolv` prevents the offline
+setup resolver inheriting household nameservers, which otherwise override the
+catch-all local rule and reintroduce timeouts. The .57 hardware test verified
+local A/AAAA/SVCB/HTTPS replies with this policy.
 
 Portal pages embed the app's shared `astrohud-theme.css` at build time and
 use `src/portal.css` for setup-specific layout. They need no online assets.

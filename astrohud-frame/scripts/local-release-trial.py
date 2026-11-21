@@ -20,6 +20,8 @@ NAMES = ['astrohud-frame', 'astrohud-provisioner', 'astrohud-wifi-guard']
 UNITS = [name + '.service' for name in NAMES]
 DROPINS = [Path('/etc/systemd/system') / (unit + '.d') / '99-local-release-trial.conf' for unit in UNITS]
 MARKER = '# Memory Lane release/0.2.x local trial\n'
+DNS_CONFIG = Path('/etc/NetworkManager/dnsmasq-shared.d/astrohud-captive.conf')
+DNS_BACKUP = ROOT / 'astrohud-captive.before-trial.conf'
 
 
 def systemctl(*arguments):
@@ -48,6 +50,8 @@ def atomic(path, data, mode):
 
 def restore():
     previous = json.loads(RECORD.read_text())
+    if DNS_BACKUP.exists():
+        atomic(DNS_CONFIG, DNS_BACKUP.read_bytes(), 0o644)
     for path in DROPINS:
         if path.exists():
             assert path.read_text().startswith(MARKER), 'Unrecognized service override'
@@ -68,6 +72,18 @@ def main():
     if sys.argv[1:] == ['rollback']:
         restore()
         print(json.dumps({'trial': 'rolled_back', 'previous_viewer_and_provisioner_active': True}))
+        return
+    if len(sys.argv) == 3 and sys.argv[1] == 'install-dns':
+        assert RECORD.exists(), 'Install the local service trial first'
+        data = Path('/tmp/memory-lane-release-trial/astrohud-captive.conf').read_bytes()
+        assert hashlib.sha256(data).hexdigest() == sys.argv[2], 'DNS config checksum mismatch'
+        assert all(rule in data for rule in [b'address=/#/10.42.0.1', b'local=/#/', b'no-resolv']), 'Unexpected setup DNS policy'
+        assert DNS_CONFIG.is_file(), 'Expected existing setup DNS config'
+        if not DNS_BACKUP.exists():
+            atomic(DNS_BACKUP, DNS_CONFIG.read_bytes(), 0o600)
+        atomic(ROOT / 'local-release-trial.py', Path(__file__).read_bytes(), 0o755)
+        atomic(DNS_CONFIG, data, 0o644)
+        print(json.dumps({'setup_dns_updated': True, 'takes_effect': 'next_setup_ap', 'network_not_restarted': True}))
         return
     assert len(sys.argv) == 5 and sys.argv[1] == 'install', 'Expected install plus three SHA256 hashes, or rollback'
     state = Path('/opt/memory-lane/state.json')
