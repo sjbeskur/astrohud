@@ -1,5 +1,19 @@
 # Memory Lane handoff
 
+## Attended reset confirmed empty frame and quicker portal — 2026-11-20
+
+The user confirmed old photos stayed gone after re-enrollment and the portal
+felt quicker. On .57 the manifest and on-disk photo cache both had zero
+photos. On the latest setup the first portal response was logged 0.33 seconds
+after DHCP acknowledgment. That measures the Pi response, rather than the
+full time from camera scan to the page appearing on the phone.
+
+The user still needed two scans and confirmed entering the home Wi-Fi password
+in the setup window opened from Camera. The prior attempt showed the iPhone
+closing that window on the Wi-Fi switch. The second QR remains the recovery
+path after the phone closes its setup page. A regular Safari tab has yet to be
+tested in an attended run.
+
 ## Photo reset fix live; setup DNS corrected on .57 — 2026-11-20
 
 User repeated reset: photos reappeared, two QR scans still needed, initial
