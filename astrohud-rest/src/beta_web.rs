@@ -105,6 +105,13 @@ pub fn configure_beta_routes(config: &mut web::ServiceConfig) {
     crate::configure_update_routes(config);
     crate::storage::configure(config);
     config
+        .service(
+            web::resource("/api/beta/bootstrap/handoff")
+                .route(
+                    web::method(actix_web::http::Method::OPTIONS).to(bootstrap_handoff_preflight),
+                )
+                .route(web::post().to(bootstrap_handoff)),
+        )
         .route(
             "/api/beta/owner/session",
             web::post().to(create_owner_session),
@@ -674,6 +681,53 @@ async fn get_bootstrap_status(
     Ok(HttpResponse::Ok().json(status))
 }
 
+// Only the offline setup portal may read readiness across origins. This route
+// accepts a device-bound bootstrap token, never browser cookies, and cannot
+// claim a frame or reveal household access. Other API routes remain unchanged.
+const SETUP_ORIGIN: &str = "http://10.42.0.1";
+
+fn check_setup_origin(request: &HttpRequest) -> Result<()> {
+    if request
+        .headers()
+        .get(header::ORIGIN)
+        .and_then(|value| value.to_str().ok())
+        != Some(SETUP_ORIGIN)
+    {
+        return Err(error::ErrorForbidden("setup portal origin required"));
+    }
+    Ok(())
+}
+
+async fn bootstrap_handoff_preflight(request: HttpRequest) -> Result<HttpResponse> {
+    check_setup_origin(&request)?;
+    Ok(HttpResponse::NoContent()
+        .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, SETUP_ORIGIN))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_METHODS, "POST"))
+        .insert_header((header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type"))
+        .insert_header((header::VARY, "Origin"))
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .finish())
+}
+
+async fn bootstrap_handoff(
+    state: web::Data<AppState>,
+    http_request: HttpRequest,
+    request: web::Json<BootstrapTokenRequest>,
+) -> Result<HttpResponse> {
+    check_setup_origin(&http_request)?;
+    let database = state
+        .database
+        .lock()
+        .map_err(|_| error::ErrorInternalServerError("database lock poisoned"))?;
+    let status =
+        device_bootstrap_status(&database, request.token.trim()).map_err(beta_http_error)?;
+    Ok(HttpResponse::Ok()
+        .insert_header((header::ACCESS_CONTROL_ALLOW_ORIGIN, SETUP_ORIGIN))
+        .insert_header((header::VARY, "Origin"))
+        .insert_header((header::CACHE_CONTROL, "no-store"))
+        .json(status))
+}
+
 async fn claim_bootstrap(
     state: web::Data<AppState>,
     request: web::Json<BootstrapClaimRequest>,
@@ -1051,6 +1105,124 @@ mod tests {
     use rusqlite::Connection;
     use std::path::PathBuf;
     use uuid::Uuid;
+
+    #[actix_web::test]
+    async fn setup_handoff_is_origin_limited_read_only_and_token_scoped() {
+        let database = Connection::open_in_memory().unwrap();
+        initialize_database(&database).unwrap();
+        let state = web::Data::new(AppState::new(database, PathBuf::from("unused")));
+        let app = test::init_service(
+            App::new()
+                .app_data(state.clone())
+                .configure(configure_beta_routes),
+        )
+        .await;
+        for origin in [
+            None,
+            Some("https://untrusted.example"),
+            Some("http://10.42.0.1.evil.example"),
+        ] {
+            let mut request = test::TestRequest::default()
+                .method(actix_web::http::Method::OPTIONS)
+                .uri("/api/beta/bootstrap/handoff");
+            if let Some(origin) = origin {
+                request = request.insert_header((header::ORIGIN, origin));
+            }
+            let response = test::call_service(&app, request.to_request()).await;
+            assert_eq!(response.status(), StatusCode::FORBIDDEN);
+            assert!(
+                !response
+                    .headers()
+                    .contains_key(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+            );
+        }
+        let preflight = test::TestRequest::default()
+            .method(actix_web::http::Method::OPTIONS)
+            .uri("/api/beta/bootstrap/handoff")
+            .insert_header((header::ORIGIN, SETUP_ORIGIN))
+            .to_request();
+        let response = test::call_service(&app, preflight).await;
+        assert_eq!(response.status(), StatusCode::NO_CONTENT);
+        assert_eq!(
+            response
+                .headers()
+                .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                .unwrap(),
+            SETUP_ORIGIN
+        );
+        assert!(
+            !response
+                .headers()
+                .contains_key(header::ACCESS_CONTROL_ALLOW_CREDENTIALS)
+        );
+        let token = "handoff-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789";
+        let device_id = Uuid::new_v4().to_string();
+        for expected in ["waiting", "ready", "expired"] {
+            if expected == "ready" {
+                let db = state.database.lock().unwrap();
+                register_bootstrap_device(
+                    &db,
+                    &device_id,
+                    "ABC2D3",
+                    "handoff-device-credential-abcdefghijklmnopqrstuvwxyz",
+                    token,
+                )
+                .unwrap();
+            }
+            if expected == "expired" {
+                state
+                    .database
+                    .lock()
+                    .unwrap()
+                    .execute(
+                        "UPDATE device_bootstraps SET expires_at=datetime('now','-1 second')",
+                        [],
+                    )
+                    .unwrap();
+            }
+            let request = test::TestRequest::post()
+                .uri("/api/beta/bootstrap/handoff")
+                .insert_header((header::ORIGIN, SETUP_ORIGIN))
+                .set_json(serde_json::json!({"token": token}))
+                .to_request();
+            let response = test::call_service(&app, request).await;
+            assert_eq!(response.status(), StatusCode::OK);
+            assert_eq!(
+                response
+                    .headers()
+                    .get(header::ACCESS_CONTROL_ALLOW_ORIGIN)
+                    .unwrap(),
+                SETUP_ORIGIN
+            );
+            assert_eq!(
+                response.headers().get(header::CACHE_CONTROL).unwrap(),
+                "no-store"
+            );
+            assert!(response.response().cookies().next().is_none());
+            let body: serde_json::Value = test::read_body_json(response).await;
+            assert_eq!(body["status"], expected);
+            assert!(body.get("household_name").is_none());
+        }
+        let denied = test::TestRequest::post()
+            .uri("/api/beta/bootstrap/handoff")
+            .insert_header((header::ORIGIN, "https://untrusted.example"))
+            .set_json(serde_json::json!({"token": token}))
+            .to_request();
+        assert_eq!(
+            test::call_service(&app, denied).await.status(),
+            StatusCode::FORBIDDEN
+        );
+        let db = state.database.lock().unwrap();
+        let grants: i64 = db
+            .query_row("SELECT COUNT(*) FROM owner_access_grants", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(
+            grants, 0,
+            "readiness must not claim a frame or create access"
+        );
+    }
 
     #[actix_web::test]
     async fn slideshow_settings_can_be_read_without_loading_the_gallery_and_are_owner_scoped() {

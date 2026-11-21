@@ -29,6 +29,11 @@
         <h2 id="place-title">Where is this frame?</h2>
         <p class="instrument-copy">This name is shown to friends and family before they send a photo.</p>
         <form id="place-form">
+          <p id="household-summary" class="instrument-copy"></p>
+          <label id="household-confirmation" hidden>
+            <input id="confirm-household" type="checkbox">
+            Add this device to the household shown above.
+          </label>
           <label for="place-name">Place name</label>
           <input id="place-name" name="place_name" maxlength="80" placeholder="Mom's living room" required>
           <button class="signal-button full-width" type="submit">Finish setup</button>
@@ -58,6 +63,14 @@
     const form = document.querySelector('#place-form');
     let pollTimer;
     let addingToOwner = false;
+    let householdName = '';
+
+    async function checkHousehold() {
+      const owner = await fetch('/api/beta/owner', {cache: 'no-store'});
+      if (!owner.ok && owner.status !== 401) throw new Error('Could not check owner access');
+      const context = owner.ok ? await owner.json() : null;
+      return context ? context.household_name : null;
+    }
 
     function setStatus(message, state = 'ready') {
       status.textContent = message;
@@ -92,9 +105,14 @@
           return;
         }
         if (result.status === 'ready') {
-          const owner = await fetch('/api/beta/owner', {cache: 'no-store'});
-          if (!owner.ok && owner.status !== 401) throw new Error('Could not check owner access');
-          addingToOwner = owner.ok;
+          const household = await checkHousehold();
+          addingToOwner = household !== null;
+          householdName = household || '';
+          document.querySelector('#household-summary').textContent = addingToOwner
+            ? `Your browser has access to “${householdName}”. This device will join that household. Existing household photos may appear on it.`
+            : 'This will create a new household with private owner access on this browser.';
+          document.querySelector('#household-confirmation').hidden = !addingToOwner;
+          document.querySelector('#confirm-household').required = addingToOwner;
           form.querySelector('button').textContent = addingToOwner ? 'Add device' : 'Finish setup';
           waitingPanel.hidden = true;
           errorPanel.hidden = true;
@@ -122,10 +140,20 @@
 
     form.addEventListener('submit', async event => {
       event.preventDefault();
+      if (addingToOwner && !document.querySelector('#confirm-household').checked) {
+        setStatus('Confirm the household before adding this device.', 'error');
+        return;
+      }
       const button = form.querySelector('button');
       button.disabled = true;
       setStatus('Connecting / Creating your private owner access…', 'sending');
       try {
+        const household = await checkHousehold();
+        if ((household !== null) !== addingToOwner || (household || '') !== householdName) {
+          document.querySelector('#confirm-household').checked = false;
+          await checkFrame();
+          throw new Error('Browser access changed. Review the household and try again.');
+        }
         const placeName = new FormData(form).get('place_name');
         const response = await fetch(addingToOwner ? '/api/beta/owner/devices/claim' : '/api/beta/bootstrap/claim', {
           method: 'POST',
