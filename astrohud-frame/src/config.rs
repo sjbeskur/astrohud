@@ -1,4 +1,4 @@
-use crate::BoxError;
+use crate::{BoxError, display::IdleMode};
 use std::env;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -20,6 +20,7 @@ pub struct Config {
     pub sync_interval: Duration,
     pub slide_interval: Duration,
     pub windowed: bool,
+    pub display_idle: IdleMode,
 }
 
 impl Config {
@@ -49,6 +50,9 @@ impl Config {
                 DEFAULT_SLIDE_SECONDS,
             )?),
             windowed: false,
+            display_idle: env::var("ASTROHUD_DISPLAY_IDLE")
+                .unwrap_or_else(|_| "off".into())
+                .parse()?,
         };
 
         Self::parse_args(defaults, env::args().skip(1))
@@ -94,6 +98,9 @@ impl Config {
                         &required_value(&mut args, "--slide-seconds")?,
                         "--slide-seconds",
                     )?);
+                }
+                "--display-idle" => {
+                    config.display_idle = required_value(&mut args, "--display-idle")?.parse()?
                 }
                 "--windowed" => config.windowed = true,
                 "--help" | "-h" => return Err(usage().into()),
@@ -148,6 +155,8 @@ pub fn usage() -> &'static str {
        --cache-mib N         Cache size in MiB (default: 1024)\n\
        --sync-seconds N      Manifest refresh interval (default: 5)\n\
        --slide-seconds N     Time per photo (default: 12)\n\
+       --display-idle MODE   off (default), observe or auto\n\
+       --display-status      Print one HDMI/CEC observation and exit\n\
        --windowed            Open a resizable development window\n\
        -h, --help            Print this help\n\
      \n\
@@ -155,7 +164,7 @@ pub fn usage() -> &'static str {
      ASTROHUD_FRAME_ID, ASTROHUD_DEVICE_CREDENTIAL_FILE,\n\
      ASTROHUD_FRAME_CACHE_DIR, ASTROHUD_SETUP_SCREEN,\n\
      ASTROHUD_CACHE_MIB,\n\
-     ASTROHUD_SYNC_SECONDS, and ASTROHUD_SLIDE_SECONDS."
+     ASTROHUD_SYNC_SECONDS, ASTROHUD_SLIDE_SECONDS and ASTROHUD_DISPLAY_IDLE."
 }
 
 #[cfg(test)]
@@ -173,6 +182,7 @@ mod tests {
             sync_interval: Duration::from_secs(DEFAULT_SYNC_SECONDS),
             slide_interval: Duration::from_secs(DEFAULT_SLIDE_SECONDS),
             windowed: false,
+            display_idle: IdleMode::Off,
         }
     }
 
@@ -208,6 +218,24 @@ mod tests {
             PathBuf::from("/tmp/astrohud-setup.ppm")
         );
         assert!(config.windowed);
+    }
+
+    #[test]
+    fn display_modes_are_explicit_and_default_off() {
+        assert_eq!(defaults().display_idle, IdleMode::Off);
+        for (value, mode) in [
+            ("off", IdleMode::Off),
+            ("observe", IdleMode::Observe),
+            ("auto", IdleMode::Auto),
+        ] {
+            assert_eq!(
+                Config::parse_args(defaults(), ["--display-idle", value])
+                    .unwrap()
+                    .display_idle,
+                mode
+            );
+        }
+        assert!(Config::parse_args(defaults(), ["--display-idle", "always-off"]).is_err());
     }
 
     #[test]

@@ -1,5 +1,32 @@
 # Memory Lane handoff
 
+## Release branch consolidation and one-scan setup — 2026-11-20
+
+User selected `release/0.2.x` for consolidated development and explicitly
+abandoned Orange Pi support. Release branch combines existing Tauri work,
+Raspberry Pi display-idle prototype (default Off; local Pi still Observe), and
+the changes below. Production master remains ec95829; branch naming does not
+change package versions. Orange Pi code must stay excluded. Keep its archive
+tag only for historical reference; do not revive it as active device support.
+
+One-scan prototype: local portal polls hosted bootstrap/handoff for at most
+five minutes, omits browser credentials, and automatically opens the private
+onboarding link only after a positive ready response. CORS applies solely to
+that read-only endpoint and exact setup origin http://10.42.0.1. Manual Continue
+and second TV QR remain fallbacks. Both hosted API/site and provisioner changes
+are needed; actual captive-window survival on iPhone/Android is unvalidated.
+Onboarding names the remembered household and requires explicit confirmation
+before adding the device. This does not replace the broader account/session
+security hardening discussed with the user; that remains future work.
+
+User clarified the Wi-Fi overlay should be ONLY a symbol. New viewer briefly
+shows a small top-right Wi-Fi icon at photo changes: green connected, amber
+slashed offline, gray unknown; local link only, not internet health/strength.
+No probe runs network commands. Decoded photo is retained for three seconds to
+remove the symbol without another decode; setup and idle suppress the overlay.
+Wi-Fi guard fix below is included. No hosted push, Pi install, R2 publication,
+factory reset or Wi-Fi disruption has been performed for these changes.
+
 ## Local Pi Wi-Fi failure and post-reset photos investigated — 2026-11-20
 
 User power-cycled to recover Wi-Fi, then reported old photos in both TV and app

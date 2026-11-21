@@ -20,6 +20,8 @@ ExecStart=/usr/local/bin/astrohud-frame
 # Escape is an intentional maintenance exit; restart only after a crash.
 Restart=on-failure
 RestartSec=3
+StandardOutput=journal
+StandardError=journal
 StandardInput=tty
 TTYPath=/dev/tty1
 TTYReset=yes

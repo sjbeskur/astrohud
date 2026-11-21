@@ -1,6 +1,7 @@
 use astrohud_frame::BoxError;
 use astrohud_frame::cache::CacheStore;
 use astrohud_frame::config::{Config, usage};
+use astrohud_frame::display::{DisplayWatch, IdleMode, PauseTimer, Probe};
 use astrohud_frame::model::Playlist;
 use astrohud_frame::order::PlaybackOrder;
 use astrohud_frame::prepared::{Prefetcher, PreparedImage};
@@ -40,6 +41,10 @@ fn main() -> Result<(), BoxError> {
     }
     if env::args().any(|argument| argument == "--version") {
         println!("astrohud-frame {}", env!("CARGO_PKG_VERSION"));
+        return Ok(());
+    }
+    if env::args().any(|a| a == "--display-status") {
+        println!("{}", serde_json::to_string(&Probe::default().read())?);
         return Ok(());
     }
     let config = Config::from_env_and_args()?;
@@ -174,6 +179,13 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
     let mut next_setup_check = Instant::now();
     let mut setup_revision = None;
     let mut setup_active = false;
+    // Desktop windows do not describe the appliance's physical HDMI output.
+    let mut display = DisplayWatch::new(if config.windowed {
+        IdleMode::Off
+    } else {
+        config.display_idle
+    });
+    let mut pause_timer = PauseTimer::default();
     let mut running = true;
     let mut photo_indicator: Option<PhotoIndicator> = None;
 
@@ -199,8 +211,11 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                         .map(|p| p.id.clone());
                     redraw |= playlist.playback.blur_background != update.playback.blur_background;
                     if playlist.playback.slide_seconds != update.playback.slide_seconds {
-                        next_slide = Instant::now()
-                            + Duration::from_secs(update.playback.slide_seconds.clamp(5, 3600));
+                        let interval =
+                            Duration::from_secs(update.playback.slide_seconds.clamp(5, 3600));
+                        if !pause_timer.reschedule_if_paused(interval) {
+                            next_slide = Instant::now() + interval;
+                        }
                     }
                     playlist = update;
                     order.reconcile(
@@ -208,10 +223,10 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                         playlist.playback.playback_mode,
                         playlist.photos.iter().map(|p| p.id.clone()).collect(),
                     );
-                    seen_revision = order.owner_revision();
+                    // Consume display commands only after actually showing them.
                     current =
                         current_id.and_then(|id| playlist.photos.iter().position(|p| p.id == id));
-                    if current.is_none() {
+                    if current.is_none() && !pause_timer.reschedule_if_paused(Duration::ZERO) {
                         next_slide = Instant::now();
                     }
                     let _ = canvas
@@ -224,6 +239,20 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
         }
 
         let now = Instant::now();
+        if display.paused() {
+            photo_indicator = None;
+            pause_timer.pause(next_slide, now);
+            // Keep sync/control alive, but do not decode, advance order, render,
+            // or acknowledge an unseen owner/guest selection while asleep.
+            thread::sleep(Duration::from_secs(1));
+            continue;
+        }
+        if let Some(deadline) = pause_timer.resume(now) {
+            next_slide = deadline;
+            // Redraw the current photo after a disconnect/standby transition.
+            redraw |= current.is_some();
+            setup_revision = None;
+        }
         if now >= next_setup_check {
             let detected_revision = setup_screen_revision(&config.setup_screen);
             match detected_revision {

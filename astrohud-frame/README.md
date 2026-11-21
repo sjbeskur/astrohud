@@ -144,6 +144,19 @@ sudo systemctl start getty@tty1.service
 
 ## Wi-Fi recovery guard
 
+Photos show a small Wi-Fi symbol in the top-right corner for three seconds
+after each change: green for a connected wireless link, amber with a slash
+for offline, and gray when the state cannot be read. This indicates the local
+Wi-Fi link, not internet/service availability or signal strength. The symbol
+does not appear over provisioning screens. Its removal reuses the decoded
+photo; it does not download or decode it again, advance playback, or consume
+an owner/guest display request. Desktop hosts without a wireless interface
+report unknown.
+
+The guard writes diagnostics to stderr for systemd's journal, without requiring
+the optional `logger` executable. Run `python3 scripts/test-wifi-guard.py` from
+this directory for isolated reconnect/provisioning regression checks.
+
 For an unattended frame, store its NetworkManager profile under the connection
 ID `astrohud-wifi`, set it to reconnect indefinitely, and keep a root-only
 backup outside NetworkManager's profile directory. The deployment includes a
