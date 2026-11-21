@@ -144,6 +144,16 @@ sudo systemctl start getty@tty1.service
 
 ## Wi-Fi recovery guard
 
+The reference Pi's local release trial can be rolled back with
+`sudo python3 /opt/memory-lane/local-tests/release-0.2/local-release-trial.py rollback`.
+The helper installs separate viewer/provisioner/guard service overrides and
+checks artifact hashes, architecture and unchanged identity/network/update
+state. Signed release files remain intact. Rollback restores the preceding
+runtime configuration, which may still include the older display-idle
+observer override. Remove that observer override with its own rollback helper
+before returning to normal signed application updates. Factory reset does not
+remove these local service overrides.
+
 Photos show a small Wi-Fi symbol in the top-right corner for three seconds
 after each change: green for a connected wireless link, amber with a slash
 for offline, and gray when the state cannot be read. This indicates the local

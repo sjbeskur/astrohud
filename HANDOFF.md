@@ -1,5 +1,39 @@
 # Memory Lane handoff
 
+## Local Pi release trial installed; hosted v0.5.7 live — 2026-11-20
+
+User explicitly authorized installation on .57 for an attended factory-reset
+test and then authorized deploying the hosted changes too. Remote branch is
+master (no main). Production d0f229f contains ONLY hosted handoff/household
+confirmation, API version 0.5.7 and release notes; schema remains 16. Pushed
+origin/master, triggering auto-deploy. It is merged back into release/0.2.x.
+Live health verified status ok, version 0.5.7, schema 16. Hosted onboarding
+bytes match local source; setup-origin POST/OPTIONS pass, foreign origin is
+403 with no CORS access and no credentialed CORS support. Verification used
+an unknown synthetic token and changed no accounts. Report:
+target/hosted-onboarding-deployment.json. Brief rollout 502s recovered before
+verification completed. User told both sides are ready for their reset test.
+
+Pi 192.168.50.57 runs the built trial frame and provisioner from
+/opt/memory-lane/local-tests/release-0.2, with the tested Wi-Fi guard script
+from the same directory. All three units have 99-local-release-trial.conf
+overrides; original signed release and older display-idle override remain.
+Viewer and provisioner active; guard run returned Result=success/status 0;
+wlan0 connected. Installer verified signed artifacts, identity, Wi-Fi and
+updater state unchanged. Display-idle remains OBSERVE, automatic pause off.
+The user will perform the reset; no reset or Wi-Fi disconnect was initiated
+by the agent. Overrides survive factory reset, so new provisioning is tested.
+
+Rollback: sudo python3
+/opt/memory-lane/local-tests/release-0.2/local-release-trial.py rollback
+restores PRE-TRIAL runtime (older observer), not the signed viewer directly.
+Then use the display-idle helper rollback before normal signed updates.
+New source helper: astrohud-frame/scripts/local-release-trial.py.
+The automatic handoff still needs an attended phone test; a closing captive
+window can require the backup QR. Same-household setup can download existing
+hosted photos again; the new page explicitly identifies that household and
+requires confirmation. Broader account security changes remain outstanding.
+
 ## Release branch consolidation and one-scan setup — 2026-11-20
 
 User selected `release/0.2.x` for consolidated development and explicitly
