@@ -13,11 +13,12 @@ frame. On an unprovisioned device, or after an explicit local reset, it:
 6. stops the AP and tests the selected household network;
 7. atomically commits both the NetworkManager profile and protected backup; or
 8. restores the setup AP when the candidate connection fails;
-9. asks the owner to reconnect their phone to the internet and tap **Continue
-   setup** once the TV confirms Wi-Fi was saved, carrying a private device-bound
-   setup link onto the owner's phone; creates a
+9. keeps a private device-bound setup link on the phone while it reconnects to
+   the internet; continues automatically only when the hosted service reports
+   this frame ready, or offers **Continue setup** as a manual path; creates a
    unique device ID and credential locally, and enrolls with the server;
-10. asks the owner to name the place as soon as the server sees the frame; and
+10. asks the owner to confirm any existing household remembered by the browser
+    and name the place as soon as the server sees the frame; and
 11. removes the setup screen automatically after the owner claims the frame.
 
 The setup suffix uses uppercase characters without `0/O` or `1/I/L`. The
@@ -33,6 +34,23 @@ sent in the URL fragment, stored only as a hash by the server, expires with the
 pending enrollment, and can claim exactly one frame. The television retains a
 short claim code as an attended support fallback; normal onboarding does not
 ask the owner to type it or obtain a separate activation link.
+
+The TV's second QR is a backup for phones that close their captive setup
+window. If the page stays open, a second scan is unnecessary. Automatic
+continuation polls for at most five minutes, omits cookies, and sends the
+bootstrap token in a POST body. The hosted `/api/beta/bootstrap/handoff` route
+allows cross-origin readiness reads only from `http://10.42.0.1`; it does not
+claim devices, grant owner access or enable cross-origin access to other API
+routes. Missing internet, an older hosted API or failed Wi-Fi leave the manual
+button/fallback available. Losing the AP alone never triggers navigation.
+Both provisioner and hosted changes are needed for automatic continuation;
+the manual link remains compatible with the previous hosted API.
+
+After generating portal previews, run `node scripts/test-onboarding-handoff.mjs`
+with `PUPPETEER_MODULE` pointing to an installed Puppeteer module. It uses
+synthetic devices and intercepts all requests; it does not configure real Wi-Fi
+or claim an appliance. Actual iPhone/Android captive-window behavior still
+requires an attended test.
 
 The service skips Wi-Fi setup when a persistent household profile or its
 recovery backup exists. Once claimed, it stays running and checks for owner

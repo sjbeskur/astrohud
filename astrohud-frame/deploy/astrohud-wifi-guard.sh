@@ -8,7 +8,9 @@ profile="/etc/NetworkManager/system-connections/astrohud-wifi.nmconnection"
 provisioning_marker="/var/lib/astrohud/provisioning-required"
 
 log() {
-    logger -t astrohud-wifi-guard -- "$1"
+    # systemd captures stderr in the journal. Minimal appliance images may not
+    # include logger; diagnostics must never prevent the reconnect below.
+    printf '%s\n' "astrohud-wifi-guard: $1" >&2
 }
 
 # Setup mode intentionally owns wlan0. The provisioner removes this marker only

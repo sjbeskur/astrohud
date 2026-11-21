@@ -5,6 +5,7 @@ pub mod order;
 pub mod prepared;
 pub mod storage;
 pub mod sync;
+pub mod wifi;
 
 use std::error::Error;
 

@@ -5,6 +5,7 @@ use astrohud_frame::model::Playlist;
 use astrohud_frame::order::PlaybackOrder;
 use astrohud_frame::prepared::{Prefetcher, PreparedImage};
 use astrohud_frame::sync::{ServerClient, sync_once_with_updates};
+use astrohud_frame::wifi::{self, WifiState};
 use font8x8::{BASIC_FONTS, UnicodeFonts};
 use sdl2::event::Event;
 use sdl2::keyboard::Keycode;
@@ -174,6 +175,7 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
     let mut setup_revision = None;
     let mut setup_active = false;
     let mut running = true;
+    let mut photo_indicator: Option<PhotoIndicator> = None;
 
     while running {
         for event in events.poll_iter() {
@@ -248,6 +250,23 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
         }
 
         prefetch.poll();
+        if setup_active {
+            photo_indicator = None;
+        } else if photo_indicator
+            .as_ref()
+            .is_some_and(|overlay| now >= overlay.until)
+        {
+            if let Some(overlay) = photo_indicator.take() {
+                render_prepared(
+                    &mut canvas,
+                    &overlay.image,
+                    Some(&overlay.id),
+                    overlay.label.as_deref(),
+                    overlay.blur,
+                    None,
+                )?;
+            }
+        }
         if !setup_active {
             let epoch = SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)
@@ -312,7 +331,13 @@ fn run_viewer(config: &Config) -> Result<(), BoxError> {
                             }
                         });
                     if Some(target) != current || redraw {
-                        current = show_photo(&mut canvas, &playlist, target, &mut prefetch);
+                        current = show_photo(
+                            &mut canvas,
+                            &playlist,
+                            target,
+                            &mut prefetch,
+                            &mut photo_indicator,
+                        );
                     }
                     if let Some(index) = current {
                         order.shown(&playlist.photos[index].id);
@@ -384,12 +409,22 @@ fn setup_screen_revision(path: &Path) -> Option<SetupScreenRevision> {
     })
 }
 
+struct PhotoIndicator {
+    image: PreparedImage,
+    id: String,
+    label: Option<String>,
+    blur: bool,
+    until: Instant,
+}
+
 fn show_photo(
     canvas: &mut Canvas<Window>,
     playlist: &Playlist,
     target: usize,
     prefetch: &mut Prefetcher,
+    indicator: &mut Option<PhotoIndicator>,
 ) -> Option<usize> {
+    *indicator = None;
     for offset in 0..playlist.photos.len() {
         let index = (target + offset) % playlist.photos.len();
         let photo = &playlist.photos[index];
@@ -404,7 +439,16 @@ fn show_photo(
                 Some(&photo.id),
                 photo.location_label.as_deref(),
                 playlist.playback.blur_background,
-            )
+                Some(wifi::current()),
+            )?;
+            *indicator = Some(PhotoIndicator {
+                image,
+                id: photo.id.clone(),
+                label: photo.location_label.clone(),
+                blur: playlist.playback.blur_background,
+                until: Instant::now() + Duration::from_secs(3),
+            });
+            Ok::<(), BoxError>(())
         }) {
             Ok(()) => return Some(index),
             Err(error) => eprintln!("could not display photo: {error}"),
@@ -450,7 +494,7 @@ fn render_image(
     location_label: Option<&str>,
 ) -> Result<(), BoxError> {
     let image = PreparedImage::load(path)?;
-    render_prepared(canvas, &image, chrome_seed, location_label, false)
+    render_prepared(canvas, &image, chrome_seed, location_label, false, None)
 }
 
 fn copy_pixels(
@@ -476,6 +520,7 @@ fn render_prepared(
     chrome_seed: Option<&str>,
     location_label: Option<&str>,
     blur: bool,
+    wifi: Option<WifiState>,
 ) -> Result<(), BoxError> {
     let (w, h) = canvas.output_size().map_err(other)?;
     let destination = if chrome_seed.is_some() {
@@ -496,7 +541,50 @@ fn render_prepared(
     if let (Some(seed), Some(label)) = (chrome_seed, location_label) {
         render_location_tab(canvas, destination, seed, label)?;
     }
+    if let Some(state) = wifi {
+        render_wifi_indicator(canvas, state)?;
+    }
     canvas.present();
+    Ok(())
+}
+
+fn render_wifi_indicator(canvas: &mut Canvas<Window>, state: WifiState) -> Result<(), BoxError> {
+    let (width, _) = canvas.output_size().map_err(other)?;
+    let x = width.saturating_sub(54) as i32;
+    canvas.set_draw_color(HUD_SURFACE);
+    canvas.fill_rect(Rect::new(x, 8, 46, 38)).map_err(other)?;
+    canvas.set_draw_color(match state {
+        WifiState::Connected => Color::RGB(105, 213, 155),
+        WifiState::Offline => HUD_AMBER,
+        WifiState::Unknown => Color::RGB(153, 166, 184),
+    });
+    let (cx, cy) = (x + 23, 39);
+    for radius in [9, 15, 21] {
+        for thickness in 0..2 {
+            let points: Vec<_> = (210..=330)
+                .step_by(3)
+                .map(|degrees| {
+                    let angle = f64::from(degrees).to_radians();
+                    let r = f64::from(radius - thickness);
+                    sdl2::rect::Point::new(
+                        cx + (r * angle.cos()).round() as i32,
+                        cy + (r * angle.sin()).round() as i32,
+                    )
+                })
+                .collect();
+            canvas.draw_lines(points.as_slice()).map_err(other)?;
+        }
+    }
+    canvas
+        .fill_rect(Rect::new(cx - 2, cy - 2, 4, 4))
+        .map_err(other)?;
+    if state == WifiState::Offline {
+        for offset in 0..2 {
+            canvas
+                .draw_line((cx - 16 + offset, cy + 2), (cx + 16 + offset, cy - 26))
+                .map_err(other)?;
+        }
+    }
     Ok(())
 }
 
@@ -830,6 +918,61 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "renders SDL preview artifacts; run with SDL_VIDEODRIVER=dummy"]
+    fn wifi_badge_can_be_removed_without_changing_the_photo() {
+        let directory = env::var_os("ASTROHUD_WIFI_PREVIEW_DIR")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir);
+        fs::create_dir_all(&directory).unwrap();
+        let image = PreparedImage {
+            foreground: image::RgbaImage::from_pixel(900, 600, image::Rgba([45, 70, 95, 255])),
+            backdrop: image::RgbaImage::from_pixel(60, 40, image::Rgba([20, 30, 40, 255])),
+        };
+        let sdl = sdl2::init().unwrap();
+        let video = sdl.video().unwrap();
+        let window = video
+            .window("Wi-Fi preview", 1280, 720)
+            .hidden()
+            .build()
+            .unwrap();
+        let mut canvas = window.into_canvas().software().build().unwrap();
+        render_prepared(&mut canvas, &image, Some("wifi-preview"), None, false, None).unwrap();
+        let baseline = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
+        for (name, state) in [
+            ("connected", WifiState::Connected),
+            ("offline", WifiState::Offline),
+            ("unknown", WifiState::Unknown),
+        ] {
+            render_prepared(
+                &mut canvas,
+                &image,
+                Some("wifi-preview"),
+                None,
+                false,
+                Some(state),
+            )
+            .unwrap();
+            let pixels = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
+            assert_ne!(pixels, baseline);
+            let center = (360 * 1280 + 640) * 3;
+            assert_eq!(&pixels[center..center + 3], &baseline[center..center + 3]);
+            image::save_buffer(
+                directory.join(format!("wifi-{name}.png")),
+                &pixels,
+                1280,
+                720,
+                image::ColorType::Rgb8,
+            )
+            .unwrap();
+            render_prepared(&mut canvas, &image, Some("wifi-preview"), None, false, None).unwrap();
+            assert_eq!(
+                canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap(),
+                baseline
+            );
+        }
+    }
+
+    #[test]
     #[ignore = "renders a manual photo preview; run with SDL_VIDEODRIVER=dummy"]
     fn write_background_preview() {
         let path = env::var_os("ASTROHUD_PREVIEW_PHOTO")
@@ -844,9 +987,9 @@ mod tests {
             .build()
             .unwrap();
         let mut canvas = window.into_canvas().software().build().unwrap();
-        render_prepared(&mut canvas, &image, Some("preview"), None, false).unwrap();
+        render_prepared(&mut canvas, &image, Some("preview"), None, false, None).unwrap();
         let without = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
-        render_prepared(&mut canvas, &image, Some("preview"), None, true).unwrap();
+        render_prepared(&mut canvas, &image, Some("preview"), None, true, None).unwrap();
         let with = canvas.read_pixels(None, PixelFormatEnum::RGB24).unwrap();
         let center = (360 * 1280 + 640) * 3;
         assert_eq!(&with[center..center + 3], &without[center..center + 3]);

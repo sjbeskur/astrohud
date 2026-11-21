@@ -54,7 +54,7 @@ pub fn write_waiting(path: &Path) -> Result<(), String> {
         path,
         "WI-FI SAVED",
         "FINISHING SETUP",
-        "KEEP YOUR PHONE ONLINE / WAITING FOR THE SERVICE",
+        "KEEP THE SETUP PAGE OPEN ON YOUR PHONE / WAITING FOR THE SERVICE",
     )
 }
 
@@ -190,7 +190,7 @@ fn render_connecting(identity: &DeviceIdentity, wifi_ssid: &str) -> Vec<u8> {
         86,
         637,
         1,
-        "KEEP YOUR PHONE OPEN / SETUP CONTINUES AUTOMATICALLY",
+        "KEEP THE SETUP PAGE OPEN / RECONNECT YOUR PHONE TO THE INTERNET",
         GREEN,
     );
     canvas.pixels
@@ -222,17 +222,17 @@ fn render_claim(
         &format!("FRAME / {}", identity.device_code),
         AMBER,
     );
-    canvas.text(86, 215, 5, "FINISH FRAME", TEXT);
-    canvas.text(86, 270, 5, "SETUP", LAVENDER);
+    canvas.text(86, 215, 5, "CONTINUE ON", TEXT);
+    canvas.text(86, 270, 5, "YOUR PHONE", LAVENDER);
 
-    canvas.text(86, 378, 2, "1  YOUR PHONE SHOULD CONTINUE", MUTED);
-    canvas.text(86, 420, 2, "2  IF NOT, SCAN THIS QR", MUTED);
-    canvas.text(86, 462, 2, "3  NAME THIS PLACE", MUTED);
+    canvas.text(86, 378, 2, "1  RETURN TO YOUR SETUP PAGE", MUTED);
+    canvas.text(86, 420, 2, "2  TAP CONTINUE SETUP IF NEEDED", MUTED);
+    canvas.text(86, 462, 2, "PAGE CLOSED? SCAN BACKUP QR", MUTED);
 
     canvas.fill_rect(700, 142, 470, 438, RAISED);
     canvas.fill_rect(700, 142, 8, 438, SALMON);
     canvas.qr_code(780, 160, 330, claim_url)?;
-    canvas.text(770, 498, 1, "CLAIM CODE / MANUAL ENTRY", MUTED);
+    canvas.text(770, 498, 1, "BACKUP QR / MANUAL CLAIM CODE", MUTED);
     canvas.text(770, 532, 4, claim_code, TEXT);
 
     canvas.fill_rect(72, 606, 1096, 39, RAISED);

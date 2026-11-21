@@ -1,5 +1,30 @@
 # Memory Lane handoff
 
+## Local Pi Wi-Fi failure and post-reset photos investigated — 2026-11-20
+
+User power-cycled to recover Wi-Fi, then reported old photos in both TV and app
+after factory reset/reinitialization; whether setup rejoined the same household
+is unclear. Read-only SSH succeeded at the pinned reference Pi 192.168.50.57.
+Previous boot's wifi-guard repeatedly exited 127 (`logger: command not found`)
+before `nmcli connection up`. Local script now logs through printf to stderr;
+four isolated regression checks in scripts/test-wifi-guard.py pass (missing
+logger, failed reconnect, already connected, provisioning mode), plus shell
+syntax and diff checks. Patch is NOT installed on the Pi or published.
+
+Pi reset rotated device credentials at 20:23:26 MST November 20; all 13 current
+cached images have post-reconnect modification timestamps starting 20:27:38.
+Reset journal is gone. Evidence points to photos downloaded again after setup,
+not surviving files. Same-household bootstrap claims subscribe the new frame
+to the existing Family channel; legacy photos without photo_delivery_plans
+remain channel-visible, unlike newer per-frame photos. This can explain the
+subset, but household identity and legacy status of these specific photos have
+not been confirmed. No hosted data, photo routing or reset code changed.
+
+Live updater agent and check timer are enabled and active. Viewer remains
+pinned to the display-idle prototype by 99-local-display-idle.conf, Observe
+mode; the override is not equivalent to disabling the updater. No service
+restart, device installation, reset, network change or update was performed.
+
 ## Session closed: passive TV standby capture — 2026-11-15
 
 Resume display-idle work in `target/display-idle` on `feature/display-idle`.

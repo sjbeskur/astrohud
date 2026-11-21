@@ -451,13 +451,43 @@ fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
               <p>The frame is testing <strong>{}</strong>. This can take about 35 seconds.</p>
               <p id="connection-result" role="status">Watch your television for the result. Your phone may disconnect from the temporary setup network during this test.</p>
               <div id="connection-next">
-                <p>When the television shows <strong>Wi-Fi saved</strong> or <strong>Finishing setup</strong>, connect your phone to home Wi-Fi or cellular service, then continue below.</p>
-                <p><a id="continue-setup" class="signal-button" href="{}">Continue setup <span aria-hidden="true">→</span></a></p>
+                <p>Keep this page open. Once your phone has internet access and the frame is ready, setup continues here automatically.</p>
+                <p>When the television shows <strong>Wi-Fi saved</strong> or <strong>Finishing setup</strong>, reconnect your phone to home Wi-Fi or cellular service if needed.</p>
+                <p><a id="continue-setup" class="signal-button" rel="noreferrer" href="{}">Continue setup <span aria-hidden="true">→</span></a></p>
+                <p>No second scan is needed if this page stays open. If your phone closes the setup window, scan the TV's backup QR to resume.</p>
               </div>
               <p>If the television shows the setup QR again, rejoin that setup network and return below to check the network name and password.</p>
               <p><a id="retry-setup" href="http://10.42.0.1/">Return to Wi-Fi setup</a></p>
             </section>
             <script>
+              const continuation = new URL(document.querySelector('#continue-setup').href);
+              const handoffEndpoint = new URL('/api/beta/bootstrap/handoff', continuation);
+              const handoffDeadline = Date.now() + 5 * 60 * 1000;
+              let connectionFailed = false;
+              async function continueWhenReady() {{
+                if (connectionFailed || Date.now() >= handoffDeadline) return;
+                const controller = new AbortController();
+                const timeout = setTimeout(() => controller.abort(), 4000);
+                try {{
+                  const response = await fetch(handoffEndpoint.href, {{
+                    method: 'POST', credentials: 'omit', cache: 'no-store',
+                    referrerPolicy: 'no-referrer', signal: controller.signal,
+                    headers: {{'Content-Type': 'application/json'}},
+                    body: JSON.stringify({{token: continuation.hash.slice(1)}})
+                  }});
+                  if (response.ok) {{
+                    const status = await response.json();
+                    if (!connectionFailed && status.status === 'ready') {{
+                      location.replace(continuation.href);
+                      return;
+                    }}
+                  }}
+                }} catch (_) {{
+                  // Offline, a closed captive window or an older hosted API
+                  // leaves the manual button and TV fallback available.
+                }} finally {{ clearTimeout(timeout); }}
+                setTimeout(continueWhenReady, 3000);
+              }}
               async function checkConnection() {{
                 const controller = new AbortController();
                 const timeout = setTimeout(() => controller.abort(), 3000);
@@ -466,6 +496,7 @@ fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
                   if (!response.ok) throw new Error('Setup connection unavailable');
                   const status = await response.json();
                   if (status.state === 'failed' || status.state === 'ready') {{
+                    connectionFailed = true;
                     document.querySelector('#connection-title').textContent = 'Try connecting again';
                     document.querySelector('#connection-result').textContent = status.state === 'failed'
                       ? status.message
@@ -486,6 +517,7 @@ fn connecting_page(ssid: &str, onboarding_url: &str) -> String {
                 setTimeout(checkConnection, 2000);
               }}
               setTimeout(checkConnection, 1500);
+              setTimeout(continueWhenReady, 1500);
             </script>"#,
             escape_html(ssid),
             escape_html(onboarding_url),
