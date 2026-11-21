@@ -109,7 +109,7 @@
           addingToOwner = household !== null;
           householdName = household || '';
           document.querySelector('#household-summary').textContent = addingToOwner
-            ? `Your browser has access to “${householdName}”. This device will join that household. Existing household photos may appear on it.`
+            ? `Your browser has access to “${householdName}”. This device will join that household. A factory-reset device starts empty; household photos remain saved.`
             : 'This will create a new household with private owner access on this browser.';
           document.querySelector('#household-confirmation').hidden = !addingToOwner;
           document.querySelector('#confirm-household').required = addingToOwner;
