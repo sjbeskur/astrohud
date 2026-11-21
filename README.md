@@ -1,14 +1,14 @@
 # Memory Lane
 
-API/site version: **v0.5.7**. The server reports its package version at
+API/site version: **v0.5.8**. The server reports its package version at
 `/api/health`; Pi software is versioned independently.
 
-This version adds automatic continuation from the local Wi-Fi setup portal
-when the hosted service sees the frame ready, plus explicit confirmation of
-the household remembered by the browser. Deploy API and website together.
-Schema remains 16; no database migration or household/photo deletion occurs.
-Automatic handoff also requires the matching Pi provisioner. Manual Continue
-and TV QR remain available on older devices.
+This version makes a factory-reset device start empty when claimed again,
+including older channel-based photos that previously downloaded again on
+rejoining a household. The household library and other devices retain their
+photos. Both QR/bootstrap and manual-code claims enforce the fresh start.
+Schema remains 16; no migration or household photo deletion occurs. Existing
+claims are unchanged; the rule applies when a reset device is claimed again.
 
 Memory Lane (formerly AstroHUD) is a shared digital picture frame, with a
 mobile-friendly owner and guest website, a hosted Rust API, and a native

@@ -237,6 +237,132 @@ mod tests {
     use crate::*;
 
     #[test]
+    fn reclaiming_a_reset_frame_starts_empty_without_deleting_household_photos() {
+        for manual_code in [false, true] {
+            let mut db = Connection::open_in_memory().unwrap();
+            initialize_database(&db).unwrap();
+            let id = Uuid::new_v4().to_string();
+            let old = "reset-library-old-credential-abcdefghijklmnopqrstuvwxyz";
+            let next = "reset-library-next-credential-abcdefghijklmnopqrstuvwxyz";
+            let bootstrap = "reset-library-bootstrap-abcdefghijklmnopqrstuvwxyz";
+            register_bootstrap_device(&db, &id, "AB23CD", old, bootstrap).unwrap();
+            let claim = claim_bootstrap_device(&mut db, bootstrap, "Kitchen").unwrap();
+            let household = &claim.frame.household_id;
+            let channel: String = db
+                .query_row(
+                    "SELECT id FROM channels WHERE household_id=?1",
+                    [household],
+                    |r| r.get(0),
+                )
+                .unwrap();
+            for photo in ["legacy-photo", "targeted-photo"] {
+                db.execute("INSERT INTO photos(id,channel_id,storage_key,mime_type) VALUES(?1,?2,?3,'image/jpeg')",
+                    rusqlite::params![photo, channel, format!("{photo}.jpg")]).unwrap();
+            }
+            db.execute(
+                "INSERT INTO photo_delivery_plans(photo_id) VALUES('targeted-photo')",
+                [],
+            )
+            .unwrap();
+            db.execute(
+                "INSERT INTO photo_frame_deliveries(photo_id,frame_id) VALUES('targeted-photo',?1)",
+                [&id],
+            )
+            .unwrap();
+            assert_eq!(
+                protected_manifest_for_household(&db, household, &id)
+                    .unwrap()
+                    .unwrap()
+                    .photos
+                    .len(),
+                2
+            );
+            // Never-reset devices retain existing behavior, and keep their photos.
+            let other = Uuid::new_v4().to_string();
+            let other_bootstrap = "reset-library-other-bootstrap-abcdefghijklmnopqrstuvwxyz";
+            register_bootstrap_device(
+                &db,
+                &other,
+                "BC23DE",
+                "reset-library-other-credential-abcdefghijklmnopqrstuvwxyz",
+                other_bootstrap,
+            )
+            .unwrap();
+            claim_bootstrap_device_for_owner(&mut db, other_bootstrap, "Den", &claim.owner_token)
+                .unwrap();
+            assert_eq!(
+                protected_manifest_for_household(&db, household, &other)
+                    .unwrap()
+                    .unwrap()
+                    .photos
+                    .len(),
+                1
+            );
+            let reset = request_device_reset(&db, &claim.owner_token, &id, "Kitchen").unwrap();
+            let receipt = "reset-library-receipt-abcdefghijklmnopqrstuvwxyz";
+            accept_device_reset(&db, old, &reset.reset_id, receipt, next).unwrap();
+            complete_device_reset(&mut db, &reset.reset_id, receipt).unwrap();
+            let fresh_bootstrap = "reset-library-fresh-bootstrap-abcdefghijklmnopqrstuvwxyz";
+            let registration =
+                register_bootstrap_device(&db, &id, "AB23CD", next, fresh_bootstrap).unwrap();
+            if manual_code {
+                let DeviceEnrollmentState::Pending { claim_code, .. } = registration.state else {
+                    panic!("expected pending")
+                };
+                claim_device(&mut db, &claim.owner_token, &claim_code, "Kitchen again").unwrap();
+            } else {
+                claim_bootstrap_device_for_owner(
+                    &mut db,
+                    fresh_bootstrap,
+                    "Kitchen again",
+                    &claim.owner_token,
+                )
+                .unwrap();
+            }
+            assert!(
+                protected_manifest_for_household(&db, household, &id)
+                    .unwrap()
+                    .unwrap()
+                    .photos
+                    .is_empty()
+            );
+            assert!(
+                owner_gallery_page(&db, household, &id, None, None)
+                    .unwrap()
+                    .unwrap()
+                    .photos
+                    .is_empty()
+            );
+            assert_eq!(
+                protected_manifest_for_household(&db, household, &other)
+                    .unwrap()
+                    .unwrap()
+                    .photos
+                    .len(),
+                1
+            );
+            let count: i64 = db
+                .query_row("SELECT COUNT(*) FROM photos", [], |r| r.get(0))
+                .unwrap();
+            assert_eq!(count, 2, "reset must not delete the household library");
+            assert!(claimed_device_access(&db, old).is_err());
+            // A subsequent delivery still reaches the newly claimed frame.
+            db.execute("INSERT INTO photos(id,channel_id,storage_key,mime_type) VALUES('fresh-photo',?1,'fresh.jpg','image/jpeg')", [&channel]).unwrap();
+            let photos = protected_manifest_for_household(&db, household, &id)
+                .unwrap()
+                .unwrap()
+                .photos;
+            assert_eq!(photos.len(), 1);
+            assert_eq!(photos[0].id, "fresh-photo");
+            let gallery = owner_gallery_page(&db, household, &id, None, None)
+                .unwrap()
+                .unwrap();
+            assert_eq!(gallery.photos.len(), 1);
+            assert_eq!(gallery.photos[0].id, "fresh-photo");
+        }
+    }
+
+    #[test]
     fn forgetting_an_accepted_reset_preserves_retry_and_other_household_data() {
         let mut db = Connection::open_in_memory().unwrap();
         initialize_database(&db).unwrap();

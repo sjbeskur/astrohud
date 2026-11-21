@@ -475,6 +475,13 @@ fn claim_bootstrap_device_with_owner(
         "INSERT INTO frame_subscriptions (frame_id, channel_id) VALUES (?1, ?2)",
         params![frame_id, channel_id],
     )?;
+    exclude_pre_reset_photos(
+        &transaction,
+        &enrollment_id,
+        &frame_id,
+        &channel_id,
+        &household_id,
+    )?;
     let claimed = transaction.execute(
         "UPDATE device_enrollments
          SET status = 'claimed', household_id = ?1, frame_id = ?2,
@@ -634,6 +641,13 @@ pub fn claim_device(
         "INSERT INTO frame_subscriptions (frame_id, channel_id) VALUES (?1, ?2)",
         params![frame_id, default_channel_id],
     )?;
+    exclude_pre_reset_photos(
+        &transaction,
+        &enrollment_id,
+        &frame_id,
+        &default_channel_id,
+        &household_id,
+    )?;
     let updated = transaction.execute(
         "UPDATE device_enrollments
          SET status = 'claimed', household_id = ?1, frame_id = ?2,
@@ -651,6 +665,27 @@ pub fn claim_device(
         frame_id,
         place_name: place_name.to_owned(),
     })
+}
+
+/// Reclaiming a reset appliance starts empty. Older channel-based photos lack
+/// explicit delivery plans and would otherwise be downloaded again immediately.
+/// Keep the household library and other frames intact; new deliveries still work.
+fn exclude_pre_reset_photos(
+    db: &Connection,
+    enrollment: &str,
+    frame: &str,
+    channel: &str,
+    household: &str,
+) -> rusqlite::Result<()> {
+    db.execute(
+        "INSERT OR IGNORE INTO frame_photo_removals (frame_id, photo_id)
+         SELECT ?1, p.id FROM photos p JOIN channels c ON c.id=p.channel_id
+         WHERE p.channel_id=?2 AND c.household_id=?3
+           AND NOT EXISTS (SELECT 1 FROM photo_delivery_plans d WHERE d.photo_id=p.id)
+           AND EXISTS (SELECT 1 FROM device_resets r WHERE r.enrollment_id=?4 AND r.state='complete')",
+        params![frame, channel, household, enrollment],
+    )?;
+    Ok(())
 }
 
 pub fn owner_context(
