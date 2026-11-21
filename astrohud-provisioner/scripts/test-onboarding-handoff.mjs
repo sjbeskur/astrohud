@@ -6,6 +6,7 @@ const {default: puppeteer} = await import(process.env.PUPPETEER_MODULE || 'puppe
 const previewDir = process.env.ASTROHUD_PORTAL_PREVIEW_DIR || '/tmp/memory-lane-onboarding-preview';
 const bootstrapToken = 'test-bootstrap-abcdefghijklmnopqrstuvwxyz0123456789';
 const portal = (await readFile(`${previewDir}/astrohud-connecting-preview.html`, 'utf8')).replaceAll('#test-bootstrap', '#' + bootstrapToken);
+const portalHeaders = JSON.parse(await readFile(`${previewDir}/astrohud-connecting-preview-headers.json`, 'utf8'));
 const onboard = await readFile(new URL('../../astrohud-rest/static/onboard.html', import.meta.url), 'utf8');
 const theme = await readFile(new URL('../../astrohud-rest/static/astrohud-theme.css', import.meta.url), 'utf8');
 const browser = await puppeteer.launch({executablePath: process.env.CHROME_PATH || '/usr/bin/google-chrome', headless: true, args: ['--no-sandbox']});
@@ -26,7 +27,7 @@ try {
       if (request.method() === 'OPTIONS') return request.respond({status: 204, headers: cors});
       if (url.hostname === '10.42.0.1') {
         if (url.pathname === '/api/status') return json({state: scenario === 'failed-wifi' ? 'failed' : 'connected', message: 'Test connection failed'});
-        return request.respond({status: 200, contentType: 'text/html', body: portal});
+        return request.respond({status: 200, contentType: 'text/html', headers: portalHeaders, body: portal});
       }
       if (url.pathname === '/api/beta/bootstrap/handoff') {
         handoffRequests++;

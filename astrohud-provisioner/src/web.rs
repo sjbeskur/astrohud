@@ -162,11 +162,12 @@ fn handle_request(
                 return;
             }
 
-            respond(
+            respond_with_handoff(
                 request,
                 202,
                 "text/html; charset=utf-8",
                 connecting_page(ssid, &onboarding_url),
+                Some(&onboarding_url),
             );
             let manager = manager.clone();
             let identity = identity.clone();
@@ -192,12 +193,30 @@ fn handle_request(
                 }
             });
         }
-        (&Method::Get, "/") | (&Method::Get, "/index.html") => respond(
-            request,
-            200,
-            "text/html; charset=utf-8",
-            setup_page(identity, networks, &status.lock().expect("status lock")),
-        ),
+        (&Method::Get, "/") | (&Method::Get, "/index.html") => {
+            let current = status.lock().expect("status lock").clone();
+            if matches!(
+                current,
+                ProvisioningStatus::Applying | ProvisioningStatus::Connected
+            ) {
+                if let Ok(url) = onboarding_url(server_url, &identity.bootstrap_token) {
+                    respond_with_handoff(
+                        request,
+                        200,
+                        "text/html; charset=utf-8",
+                        connecting_page("your selected home Wi-Fi", &url),
+                        Some(&url),
+                    );
+                    return;
+                }
+            }
+            respond(
+                request,
+                200,
+                "text/html; charset=utf-8",
+                setup_page(identity, networks, &current),
+            );
+        }
         _ => {
             // HTTP connectivity probes should lead straight to the portal.
             let response = Response::empty(StatusCode(302))
@@ -234,17 +253,42 @@ fn validate_credentials(ssid: &str, password: &str) -> Result<(), String> {
 }
 
 fn respond(request: Request, status: u16, content_type: &str, body: String) {
+    respond_with_handoff(request, status, content_type, body, None);
+}
+
+fn content_security_policy(onboarding_url: Option<&str>) -> String {
+    let mut policy =
+        "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'".to_owned();
+    if let Some(url) = onboarding_url
+        .and_then(|value| Url::parse(value).ok())
+        .filter(|url| matches!(url.scheme(), "http" | "https"))
+    {
+        // Only this configured service origin may receive readiness requests.
+        // Never include the bootstrap fragment, path, or user credentials.
+        policy.push_str(&format!(
+            "; connect-src 'self' {}",
+            url.origin().ascii_serialization()
+        ));
+    }
+    policy
+}
+
+fn respond_with_handoff(
+    request: Request,
+    status: u16,
+    content_type: &str,
+    body: String,
+    onboarding_url: Option<&str>,
+) {
     let started = std::time::Instant::now();
     let is_page = content_type.starts_with("text/html");
+    let policy = content_security_policy(onboarding_url);
     let mut response = Response::from_string(body).with_status_code(StatusCode(status));
     for (name, value) in [
         ("Content-Type", content_type),
         ("Cache-Control", "no-store"),
         ("X-Content-Type-Options", "nosniff"),
-        (
-            "Content-Security-Policy",
-            "default-src 'self'; style-src 'unsafe-inline'; script-src 'unsafe-inline'",
-        ),
+        ("Content-Security-Policy", policy.as_str()),
     ] {
         response.add_header(Header::from_bytes(name, value).expect("static header"));
     }
@@ -570,6 +614,64 @@ mod tests {
     use super::*;
 
     #[test]
+    fn reloading_during_connection_keeps_the_handoff_and_real_policy() {
+        use std::io::Write;
+        let identity = DeviceIdentity {
+            device_code: "AB23CD".into(),
+            setup_ssid: "Memory-Lane-AB23CD".into(),
+            setup_password: "23456789ABCDEFGH".into(),
+            device_id: "00000000-0000-4000-8000-000000000000".into(),
+            device_credential: "test-device-credential-abcdefghijklmnopqrstuvwxyz".into(),
+            bootstrap_token: "test-bootstrap-token-abcdefghijklmnopqrstuvwxyz0123456789".into(),
+        };
+        for status in [
+            ProvisioningStatus::Applying,
+            ProvisioningStatus::Connected,
+            ProvisioningStatus::Ready,
+        ] {
+            let connecting = matches!(
+                status,
+                ProvisioningStatus::Applying | ProvisioningStatus::Connected
+            );
+            let server = Server::http("127.0.0.1:0").unwrap();
+            let address = server.server_addr().to_ip().unwrap();
+            let client = thread::spawn(move || {
+                let mut socket = std::net::TcpStream::connect(address).unwrap();
+                socket
+                    .set_read_timeout(Some(Duration::from_secs(5)))
+                    .unwrap();
+                socket
+                    .write_all(b"GET / HTTP/1.1\r\nHost: 10.42.0.1\r\nConnection: close\r\n\r\n")
+                    .unwrap();
+                let mut response = String::new();
+                socket.read_to_string(&mut response).unwrap();
+                response
+            });
+            handle_request(
+                server.recv().unwrap(),
+                &identity,
+                &NetworkManager::new(crate::network::ProvisioningPaths::default()),
+                &[],
+                "https://app.astrohud.com",
+                Arc::new(Mutex::new(status)),
+                Arc::new(AtomicBool::new(false)),
+            );
+            let response = client.join().unwrap();
+            let (headers, body) = response.split_once("\r\n\r\n").unwrap();
+            if connecting {
+                assert!(headers.contains("connect-src 'self' https://app.astrohud.com"));
+                assert!(!headers.contains(&identity.bootstrap_token));
+                assert!(body.contains("id=\"continue-setup\""));
+                assert!(!body.contains("id=\"wifi-form\""));
+            } else {
+                assert!(!headers.contains("connect-src"));
+                assert!(body.contains("id=\"wifi-form\""));
+                assert!(!body.contains(&identity.bootstrap_token));
+            }
+        }
+    }
+
+    #[test]
     fn credentials_are_bounded() {
         assert!(validate_credentials("Home", "correct horse").is_ok());
         assert!(validate_credentials("", "correct horse").is_err());
@@ -653,5 +755,8 @@ mod tests {
             ),
         )
         .expect("write connecting preview");
+        std::fs::write(directory.join("astrohud-connecting-preview-headers.json"),
+            serde_json::json!({"Content-Security-Policy": content_security_policy(Some("https://app.astrohud.com/onboard.html#test-bootstrap")), "Cache-Control":"no-store", "X-Content-Type-Options":"nosniff"}).to_string())
+            .expect("write real connecting response policy");
     }
 }

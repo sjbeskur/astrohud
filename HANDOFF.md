@@ -1,5 +1,35 @@
 # Memory Lane handoff
 
+## iPhone captive window closed; handoff policy fix installed — 2026-11-20
+
+User reported the phone returned to Camera after submitting household Wi-Fi,
+then the TV showed its second QR. New trial binary was verified running; this
+was not an old-build problem. This confirms the captive window closed, so its
+JavaScript cannot continue. A seamless one-scan captive flow is NOT validated.
+
+Separately found a defect in our implementation: portal response CSP defaulted
+connect-src to self and blocked hosted readiness polling. Earlier intercepted
+browser tests omitted the real response headers. Fixed the connecting policy
+to allow only self and configured service origin (no token/path/credentials in
+header), and kept the connecting page on root/index reloads while Applying or
+Connected. Logs showed a discovery/root reload immediately after POST 202.
+The browser regression now uses real policy headers; it passed. A real HTTP
+test covers response policy plus reloads, and all 19 provisioner tests passed
+(4 manual previews ignored). ARM64 provisioner rebuilt successfully.
+
+Installed ONLY corrected trial provisioner on .57, SHA256
+d9a480bb11b319602713b532bfc15ed7634321a70b9858809ed64316d6eac27a.
+Prior trial binary is retained as
+/opt/memory-lane/local-tests/release-0.2/astrohud-provisioner.before-handoff-policy.
+Viewer was not restarted; identity, Wi-Fi, updater state and signed provisioner
+were verified unchanged. Hosted v0.5.7 needs no change for this correction.
+
+User advised: after first Wi-Fi QR joins the setup network, open Safari at
+http://10.42.0.1 BEFORE entering home Wi-Fi, to try the regular-browser handoff.
+This is a manual workaround, not a completed seamless onboarding redesign.
+Phone behavior from a normal Safari tab remains unvalidated. Do not reset the
+Pi automatically; leave attended tests to the user. TV QR remains a fallback.
+
 ## Local Pi release trial installed; hosted v0.5.7 live — 2026-11-20
 
 User explicitly authorized installation on .57 for an attended factory-reset

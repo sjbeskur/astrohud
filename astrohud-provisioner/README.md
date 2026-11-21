@@ -43,8 +43,19 @@ allows cross-origin readiness reads only from `http://10.42.0.1`; it does not
 claim devices, grant owner access or enable cross-origin access to other API
 routes. Missing internet, an older hosted API or failed Wi-Fi leave the manual
 button/fallback available. Losing the AP alone never triggers navigation.
+The connecting page's response policy permits requests only to itself and the
+configured hosted origin; a portal reload during a connection keeps that page
+instead of returning to the Wi-Fi form. Browser checks use the actual response
+policy, and a real HTTP regression checks the reload path.
 Both provisioner and hosted changes are needed for automatic continuation;
 the manual link remains compatible with the previous hosted API.
+
+In the attended iPhone trial the captive window closed and returned to Camera
+after Wi-Fi submission. That window cannot continue running the handoff. The
+regular-browser workaround is to join using the first Wi-Fi QR, then open
+`http://10.42.0.1/` in Safari before entering household Wi-Fi. This keeps setup
+in a browser tab, but adds a manual step and still needs an attended test.
+Do not describe captive-window onboarding as reliably requiring only one scan.
 
 After generating portal previews, run `node scripts/test-onboarding-handoff.mjs`
 with `PUPPETEER_MODULE` pointing to an installed Puppeteer module. It uses
