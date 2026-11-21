@@ -27,6 +27,23 @@ remove the symbol without another decode; setup and idle suppress the overlay.
 Wi-Fi guard fix below is included. No hosted push, Pi install, R2 publication,
 factory reset or Wi-Fi disruption has been performed for these changes.
 
+Validation: 115 active Rust tests passed across frame, provisioner, API/admin;
+seven manual rendering tests remain ignored in the normal suite. Separate SDL
+Wi-Fi preview/removal check passed, as did four Wi-Fi guard and three passive
+CEC Python checks. Synthetic browser test passed readiness gating, old API
+manual fallback, failed Wi-Fi and household confirmation at phone/desktop
+widths. Pi ARM64 cross-build succeeded. Logs: /tmp/astrohud-release-tests.log,
+/tmp/astrohud-release-pi-build.log. Symbol previews:
+/tmp/memory-lane-wifi-preview/wifi-{connected,offline,unknown}.png.
+Prepared frame SHA256 4908d257d53409f050d26ed5dde7e71a6826c19e2c692e01d919b7c815db30d8;
+provisioner d2fa5b44717ae54676934d47c454fc59c2270530ece872bf255ea42a0edf0029.
+Orange branch retired to archive/orange-pi-abandoned-2026-11-20. Fully merged
+local feature branches were removed; old display-idle worktree is detached at
+e6263e3 for historical diagnostics. Remote branches remain unchanged. Next:
+review/apply the prepared local Pi trial and arrange matching hosted handoff
+deployment before an attended phone setup test. Do not reset the device just
+to demonstrate the Wi-Fi icon or remove photos from the household library.
+
 ## Local Pi Wi-Fi failure and post-reset photos investigated — 2026-11-20
 
 User power-cycled to recover Wi-Fi, then reported old photos in both TV and app
